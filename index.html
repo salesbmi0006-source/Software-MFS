@@ -8289,7 +8289,7 @@ function generateHSReportWithTaxBreakdown(){
 }
 
 // ==================== SECURITY SYSTEM ====================
-let securityData = {enabled:false,adminUsers:[],guestUsers:[],currentUser:null,locked:false};
+let securityData = {enabled:true,adminUsers:[{username:'saif@g.com',password:'6363',active:true}],guestUsers:[],currentUser:null,locked:false};
 const PERM_LABELS = {
   records:'📋 Records (View/Add/Edit)',dashboard:'📊 Dashboard',ledger:'📒 Ledger',
   fbr:'🧾 FBR/Tax',reports:'📄 Reports',quotation:'💬 Quotation',parties:'👥 Parties',cheques:'🏦 Cheques',
