@@ -9274,7 +9274,17 @@ function saveCrmData(){
 }
 function getCrmProfile(partyName){
   if(!crmData[partyName]) crmData[partyName] = {birthday:'', notes:[], meetings:[], visits:[]};
-  return crmData[partyName];
+  // Defensive fix: Firebase Realtime Database drops empty-array fields on
+  // save/load, so a profile pulled from the cloud can come back missing
+  // notes/meetings/visits entirely if that list was empty when last
+  // synced. Backfill any missing fields here so renderCrmTab()'s .slice()
+  // calls never hit undefined.
+  const p = crmData[partyName];
+  if(!Array.isArray(p.notes)) p.notes = [];
+  if(!Array.isArray(p.meetings)) p.meetings = [];
+  if(!Array.isArray(p.visits)) p.visits = [];
+  if(typeof p.birthday !== 'string') p.birthday = '';
+  return p;
 }
 function renderCrmTab(){
   const q = (document.getElementById('crm-party-search')?.value||'').trim();
