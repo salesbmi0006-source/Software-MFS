@@ -3726,37 +3726,20 @@ async function backupToDropbox(){
 }
 
 async function doBackup(){
-  if(typeof requirePermission==='function' && !requirePermission('backup','Download Backup')) return;
   toast('Preparing backup (including PDF invoices)...','info');
   const data = await buildFullBackupData();
   const json = JSON.stringify(data, null, 2);
-  let finalStr = json, filenameSuffix = '';
-  const wantsEncrypted = confirm('🔐 Password-protect this backup file?\n\nOK = Yes, set a password (recommended)\nCancel = No, save as a plain file');
-  if(wantsEncrypted){
-    const pwd1 = prompt('Enter a password to protect this backup:');
-    if(pwd1){
-      const pwd2 = prompt('Confirm the password:');
-      if(pwd2!==pwd1){
-        toast('Passwords did not match — saving WITHOUT encryption.','warning');
-      } else {
-        finalStr = await encryptBackupJson(json, pwd1);
-        filenameSuffix = '_encrypted';
-      }
-    } else {
-      toast('No password entered — saving WITHOUT encryption.','info');
-    }
-  }
-  const blob = new Blob([finalStr], {type:'application/json'});
+  const blob = new Blob([json], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const prefix = settings.backupPrefix||'SAU_Backup';
   const dt = new Date().toISOString().slice(0,16).replace(/:/g,'-');
   a.href = url;
-  a.download = `${prefix}_${dt}${filenameSuffix}.json`;
+  a.download = `${prefix}_${dt}.json`;
   a.click();
   URL.revokeObjectURL(url);
   safeSetItem('sau_last_backup_date', new Date().toISOString());
-  logAudit('backup','System',`Full backup downloaded${filenameSuffix?' (password-protected)':''} (${(data.digitalInvoices||[]).length} PDF invoices, ${(data.documentManager||[]).length} documents)`, undefined, undefined);
+  logAudit('backup','System',`Full backup downloaded (${(data.digitalInvoices||[]).length} PDF invoices, ${(data.documentManager||[]).length} documents)`, undefined, undefined);
   toast('Backup downloaded! (includes '+(data.digitalInvoices||[]).length+' PDF invoices)','success');
 }
 async function applyRestoredBackupData(data){
@@ -3851,7 +3834,6 @@ async function applyRestoredBackupData(data){
   renderCurrentTab();
 }
 function importBackup(e){
-  if(typeof requirePermission==='function' && !requirePermission('backup','Restore Backup')){ e.target.value=''; return; }
   const file = e.target.files[0];
   if(!file) return;
   const fileMB = (file.size/1024/1024).toFixed(1);
@@ -3882,24 +3864,6 @@ function importBackup(e){
         console.error('JSON parse error:', parseErr);
         e.target.value='';
         return;
-      }
-      // === Encrypted (password-protected) backup? Decrypt it first. ===
-      if(data && data.sauEncrypted){
-        removeOverlay();
-        const pwd = prompt('🔐 This backup is password-protected.\n\nEnter the backup password:');
-        if(!pwd){ toast('Import cancelled — password required.','warning'); e.target.value=''; return; }
-        setProgress(25, 'Decrypting backup...');
-        document.body.appendChild(loadingDiv);
-        try{
-          const decryptedStr = await decryptBackupJson(data, pwd);
-          data = JSON.parse(decryptedStr);
-        }catch(decErr){
-          removeOverlay();
-          toast('❌ Wrong password or corrupted backup file.','error');
-          console.error('Decrypt error:', decErr);
-          e.target.value='';
-          return;
-        }
       }
       // Validate it's actually a SAU backup
       if(!data || typeof data !== 'object' || !Array.isArray(data.db)){
@@ -3965,14 +3929,14 @@ function restoreEmbedded(silent=false){
   renderAll();
   if(!silent) toast('Embedded backup restored!','success');
 }
-async function resetAllWithAdminGate(){
-  if(typeof requirePermission==='function' && !requirePermission('delete','Reset All Data')) return;
+function resetAllWithAdminGate(){
+  // Determine admin password requirement
+  let validPwd = null;
   if(typeof securityData!=='undefined' && securityData.adminUsers && securityData.adminUsers.length){
     // Use any active admin's password
     const pwd = prompt('🔒 ADMIN PASSWORD REQUIRED\n\nThis will permanently delete ALL data (records, ledger, cheques, parties, contacts, digital invoices, rate lists, everything).\n\nEnter Admin password to confirm:');
     if(pwd===null){ toast('Cancelled','info'); return; }
-    const pwdHash = await hashPassword(pwd);
-    const admin = securityData.adminUsers.find(u=>u.password===pwdHash && u.active);
+    const admin = securityData.adminUsers.find(u=>u.password===pwd && u.active);
     if(!admin){ toast('❌ Wrong admin password. Reset cancelled.','error'); return; }
   } else {
     // No admin set up yet - require typing exact confirmation phrase instead
@@ -3980,7 +3944,6 @@ async function resetAllWithAdminGate(){
     if(pwd!=='RESET ALL DATA'){ toast('Cancelled — confirmation text did not match','info'); return; }
   }
   if(!confirm('FINAL CONFIRMATION:\n\nThis will erase EVERYTHING permanently. This cannot be undone.\n\nAre you absolutely sure?')) return;
-  logAudit('reset_all','System',`ALL DATA RESET by ${securityData.currentUser?securityData.currentUser.username:'operator'}`);
   db=[]; cheques=[]; ledgerData=[]; fbrParties=[];
   digitalInvoices=[]; partyContacts={}; invoiceSendStatus={}; hsStockData={};
   if(typeof rateLists!=='undefined') rateLists={};
@@ -4464,11 +4427,9 @@ function bulkSetInvoice(){
   toast(`Invoice ${invNo} set for selected records`,'success');
 }
 function bulkDelete(){
-  if(typeof requirePermission==='function' && !requirePermission('delete','Bulk Delete Records')) return;
   if(!selectedIds.size){toast('No records selected','warning');return;}
   if(!confirm(`Delete ${selectedIds.size} selected records?`)) return;
   const idxArr = [...selectedIds].sort((a,b)=>b-a);
-  logAudit('bulk_delete','DC/Invoice',`Bulk deleted ${idxArr.length} DC records`);
   idxArr.forEach(idx=>db.splice(idx,1));
   saveData(); clearSelection(); renderRecords();
   toast(`${idxArr.length} records deleted`,'warning');
@@ -4739,14 +4700,6 @@ async function saveDC(){
   const dcNo = document.getElementById('dc-dcno').value.trim();
   const party = document.getElementById('dc-party').value.trim();
   if(!date||!dcNo||!party){toast('Date, DC No, and Party are required!','warning');return;}
-  // === Duplicate DC Number check (DC No must be unique — Invoice No is allowed to repeat) ===
-  const dupIdx = db.findIndex((r,i)=> (r.dcNo||'').trim().toLowerCase()===dcNo.toLowerCase() && i!==editingDcIdx);
-  if(dupIdx!==-1){
-    const dup = db[dupIdx];
-    if(!confirm(`⚠️ DC No "${dcNo}" already exists!\n\nExisting: ${dup.partyName||''} — ${dup.date||''}\n\nDC numbers should be unique. Do you still want to continue and save this DC?`)){
-      return;
-    }
-  }
   const items = getItemsFromTable();
   if(!items.length){toast('Add at least one item!','warning');return;}
   // === Check if party exists in fbrParties ===
@@ -4873,7 +4826,6 @@ function syncLedgerFromDB(){
 }
 
 function deleteRecord(idx){
-  if(typeof requirePermission==='function' && !requirePermission('delete','Delete DC Record')) return;
   if(!confirm('Delete this DC record?')) return;
   const rec = db[idx];
   logAudit('delete','DC/Invoice',`DC #${rec.dcNo} (${rec.partyName}) deleted`, rec, undefined);
@@ -8337,94 +8289,7 @@ function generateHSReportWithTaxBreakdown(){
 }
 
 // ==================== SECURITY SYSTEM ====================
-let securityData = {enabled:true,adminUsers:[{username:'saif@g.com',password:'6363',active:true}],guestUsers:[],currentUser:null,locked:false,sessionTimeoutMinutes:15};
-
-// ---- Password hashing (SHA-256) ----
-async function hashPassword(pwd){
-  const enc = new TextEncoder().encode(String(pwd||''));
-  const buf = await crypto.subtle.digest('SHA-256', enc);
-  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
-}
-function isHashedPassword(pwd){ return typeof pwd==='string' && /^[a-f0-9]{64}$/.test(pwd); }
-async function migrateLegacyPasswords(){
-  let changed = false;
-  for(const list of [securityData.adminUsers||[], securityData.guestUsers||[]]){
-    for(const u of list){
-      if(u.password && !isHashedPassword(u.password)){
-        u.password = await hashPassword(u.password);
-        changed = true;
-      }
-    }
-  }
-  if(changed) saveSecurity();
-}
-
-// ---- Login attempt limiting (brute-force protection) ----
-const LOGIN_MAX_ATTEMPTS = 5;
-const LOGIN_LOCKOUT_MS = 5*60*1000;
-function getLoginLockState(){
-  try{ return JSON.parse(localStorage.getItem('sau_login_lock')||'{"attempts":0,"lockUntil":0}'); }
-  catch(e){ return {attempts:0,lockUntil:0}; }
-}
-function setLoginLockState(state){ safeSetItem('sau_login_lock', JSON.stringify(state)); }
-
-// ---- Session timeout (auto-lock after inactivity) ----
-let sessionTimeoutTimer = null;
-function resetSessionTimer(){
-  if(!securityData.enabled || !securityData.currentUser) return;
-  if(sessionTimeoutTimer) clearTimeout(sessionTimeoutTimer);
-  const minutes = securityData.sessionTimeoutMinutes || 15;
-  sessionTimeoutTimer = setTimeout(()=>{
-    if(securityData.currentUser && !securityData.locked){
-      logAudit('auto_lock','Security',`Session auto-locked after ${minutes} min of inactivity (user: ${securityData.currentUser.username})`);
-      lockScreen();
-    }
-  }, minutes*60*1000);
-}
-['mousemove','keydown','click','touchstart','scroll'].forEach(evt=>{
-  document.addEventListener(evt, ()=>{ if(securityData.enabled && securityData.currentUser && !securityData.locked) resetSessionTimer(); }, {passive:true});
-});
-
-// ---- Permission enforcement (defense-in-depth, not just UI hiding) ----
-function hasPermission(perm){
-  if(!securityData.enabled) return true;
-  const user = securityData.currentUser;
-  if(!user) return false;
-  if(user.role==='admin') return true;
-  return (user.permissions||[]).includes(perm);
-}
-function requirePermission(perm, actionLabel){
-  if(hasPermission(perm)) return true;
-  toast(`⛔ You do not have permission for: ${actionLabel||perm}`,'error');
-  logAudit('permission_denied','Security',`Blocked attempt — "${actionLabel||perm}" by ${securityData.currentUser?securityData.currentUser.username:'unknown/not logged in'}`);
-  return false;
-}
-
-// ---- Backup file encryption (AES-256-GCM, password-derived key via PBKDF2) ----
-async function deriveBackupKey(password, saltBytes){
-  const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), {name:'PBKDF2'}, false, ['deriveKey']);
-  return crypto.subtle.deriveKey(
-    {name:'PBKDF2', salt:saltBytes, iterations:150000, hash:'SHA-256'},
-    keyMaterial, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']
-  );
-}
-function bufToB64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
-function b64ToBytes(s){ return Uint8Array.from(atob(s), c=>c.charCodeAt(0)); }
-async function encryptBackupJson(jsonStr, password){
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await deriveBackupKey(password, salt);
-  const cipherBuf = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, new TextEncoder().encode(jsonStr));
-  return JSON.stringify({sauEncrypted:true, version:1, salt:bufToB64(salt), iv:bufToB64(iv), data:bufToB64(cipherBuf)});
-}
-async function decryptBackupJson(encObj, password){
-  const salt = b64ToBytes(encObj.salt);
-  const iv = b64ToBytes(encObj.iv);
-  const key = await deriveBackupKey(password, salt);
-  const plainBuf = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, b64ToBytes(encObj.data));
-  return new TextDecoder().decode(plainBuf);
-}
+let securityData = {enabled:true,adminUsers:[{username:'saif@g.com',password:'6363',active:true}],guestUsers:[],currentUser:null,locked:false};
 const PERM_LABELS = {
   records:'📋 Records (View/Add/Edit)',dashboard:'📊 Dashboard',ledger:'📒 Ledger',
   fbr:'🧾 FBR/Tax',reports:'📄 Reports',quotation:'💬 Quotation',parties:'👥 Parties',cheques:'🏦 Cheques',
@@ -8451,8 +8316,6 @@ function loadSecurity(){
   if(d) securityData = JSON.parse(d);
   if(!securityData.adminUsers) securityData.adminUsers=[];
   if(!securityData.guestUsers) securityData.guestUsers=[];
-  if(!securityData.sessionTimeoutMinutes) securityData.sessionTimeoutMinutes=15;
-  migrateLegacyPasswords();
 }
 function saveSecurity(){
   safeSetItem('sau_security', JSON.stringify(securityData));
@@ -8474,47 +8337,39 @@ function hideLoginScreen(){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app-content').style.display='block';
 }
-async function doLogin(){
-  const errEl = document.getElementById('login-error');
+function doLogin(){
   const uname = document.getElementById('login-username').value.trim();
   const pass = document.getElementById('login-password').value;
-  const passHash = await hashPassword(pass);
-  const admin = securityData.adminUsers.find(u=>u.username===uname&&u.password===passHash&&u.active);
+  const errEl = document.getElementById('login-error');
+  // Check admin users
+  const admin = securityData.adminUsers.find(u=>u.username===uname&&u.password===pass&&u.active);
   if(admin){
     securityData.currentUser={...admin, role:'admin'};
-    securityData.locked=false;
     saveSecurity(); hideLoginScreen();
     toast(`Welcome Admin: ${admin.username}`,'success');
     applyUserPermissions();
-    logAudit('login','Security',`Admin logged in: ${admin.username}`);
-    resetSessionTimer();
     return;
   }
-  const guest = securityData.guestUsers.find(u=>u.username===uname&&u.password===passHash&&u.active);
+  // Check guest users
+  const guest = securityData.guestUsers.find(u=>u.username===uname&&u.password===pass&&u.active);
   if(guest){
     securityData.currentUser={...guest, role:'guest'};
-    securityData.locked=false;
     saveSecurity(); hideLoginScreen();
     toast(`Welcome: ${guest.username}`,'info');
     applyUserPermissions();
-    logAudit('login','Security',`Guest logged in: ${guest.username}`);
-    resetSessionTimer();
     return;
   }
-  errEl.textContent = `❌ Invalid username or password`;
+  errEl.textContent='❌ Invalid username or password';
 }
 function doLogout(){
   if(!confirm('Logout?')) return;
-  if(securityData.currentUser) logAudit('logout','Security',`Logged out: ${securityData.currentUser.username}`);
   securityData.currentUser=null;
-  if(sessionTimeoutTimer) clearTimeout(sessionTimeoutTimer);
   saveSecurity();
   if(securityData.enabled) showLoginScreen();
   else toast('Logged out','info');
 }
 function lockScreen(){
   securityData.locked=true; saveSecurity();
-  if(sessionTimeoutTimer) clearTimeout(sessionTimeoutTimer);
   showLoginScreen();
   toast('Screen locked','info');
 }
@@ -8591,16 +8446,6 @@ function renderSecuritySettings(){
     <div class="settings-section-title">👤 Guest Users (Custom Permissions)</div>
     <div id="guest-users-list"></div>
     <button class="btn btn-green btn-sm mt-8" onclick="openAddUserModal('guest')">➕ Add Guest User</button>
-  </div>
-
-  <!-- Session Timeout -->
-  <div class="settings-section">
-    <div class="settings-section-title">⏱️ Auto-Lock (Session Timeout)</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Screen locks automatically after this many minutes of no activity (mouse/keyboard).</div>
-    <div class="flex-gap">
-      <input type="number" id="session-timeout-input" min="1" max="240" value="${sd.sessionTimeoutMinutes||15}" style="width:100px;">
-      <button class="btn btn-neon btn-sm" onclick="saveSessionTimeout()">💾 Save</button>
-    </div>
   </div>`;
 
   // Render admin list
@@ -8630,16 +8475,7 @@ function renderSecuritySettings(){
       </div>
     </div>`).join(''):'<div style="color:var(--text3);font-size:12px;">No guest users yet</div>';
 }
-function saveSessionTimeout(){
-  const val = parseInt(document.getElementById('session-timeout-input').value);
-  if(!val || val<1 || val>240){ toast('Enter a value between 1 and 240 minutes','warning'); return; }
-  securityData.sessionTimeoutMinutes = val;
-  saveSecurity();
-  logAudit('security_settings','Security',`Session timeout set to ${val} minutes`);
-  resetSessionTimer();
-  toast(`Auto-lock set to ${val} minutes`,'success');
-}
-async function toggleSecurity(){
+function toggleSecurity(){
   if(!securityData.enabled){
     if(!securityData.adminUsers.length){
       toast('Add at least one Admin user first!','warning');
@@ -8647,15 +8483,13 @@ async function toggleSecurity(){
     }
     securityData.enabled=true;
     saveSecurity(); renderSecuritySettings();
-    logAudit('security_enabled','Security','Security was enabled');
     toast('Security enabled! Login required on next open.','success');
   } else {
+    // Must be admin to disable
     const pwd=prompt('Enter your Admin password to disable security:');
     if(pwd===null) return;
-    const pwdHash = await hashPassword(pwd);
-    const admin=securityData.adminUsers.find(u=>u.password===pwdHash&&u.active);
+    const admin=securityData.adminUsers.find(u=>u.password===pwd&&u.active);
     if(!admin){toast('Wrong password!','error');return;}
-    logAudit('security_disabled','Security',`Security was disabled by ${admin.username}`);
     securityData.enabled=false; securityData.currentUser=null;
     saveSecurity(); renderSecuritySettings();
     toast('Security disabled','warning');
@@ -8678,9 +8512,7 @@ function openAddUserModal(role, editIdx=-1){
   document.getElementById('user-modal-edit-idx').value=editIdx;
   const existing = editIdx>=0 ? (role==='admin'?securityData.adminUsers[editIdx]:securityData.guestUsers[editIdx]) : null;
   document.getElementById('user-modal-username').value=existing?existing.username:'';
-  const pwdEl = document.getElementById('user-modal-password');
-  pwdEl.value='';
-  pwdEl.placeholder = existing ? 'Leave blank to keep current password' : 'Password (min 4 chars)';
+  document.getElementById('user-modal-password').value=existing?existing.password:'';
   document.getElementById('user-modal-approval-role').value=existing?(existing.approvalRole||''):'';
   // Permissions checkboxes
   const perms = existing?existing.permissions||PERM_ALL:PERM_ALL;
@@ -8696,27 +8528,20 @@ function openAddUserModal(role, editIdx=-1){
   }
   openModal('userManageModal');
 }
-async function saveUserModal(){
+function saveUserModal(){
   const role=document.getElementById('user-modal-role').value;
   const editIdx=parseInt(document.getElementById('user-modal-edit-idx').value);
   const username=document.getElementById('user-modal-username').value.trim();
   const password=document.getElementById('user-modal-password').value.trim();
-  if(!username || (editIdx<0 && !password)){toast('Username and password required','warning');return;}
-  if(password && password.length<4){toast('Password must be at least 4 characters','warning');return;}
+  if(!username||!password){toast('Username and password required','warning');return;}
   let permissions=PERM_ALL;
   if(role==='guest'){
     permissions=Object.keys(PERM_LABELS).filter(k=>document.querySelector(`[name="user-perm-${k}"]`)?.checked);
   }
-  let passwordHash;
-  const existing = editIdx>=0 ? (role==='admin'?securityData.adminUsers[editIdx]:securityData.guestUsers[editIdx]) : null;
-  if(password) passwordHash = await hashPassword(password);
-  else if(existing) passwordHash = existing.password;
-  else { toast('Password required','warning'); return; }
-  const userObj={username,password:passwordHash,active:existing?existing.active:true,permissions,role,approvalRole:document.getElementById('user-modal-approval-role').value};
+  const userObj={username,password,active:true,permissions,role,approvalRole:document.getElementById('user-modal-approval-role').value};
   if(editIdx>=0){
     if(role==='admin') securityData.adminUsers[editIdx]=userObj;
     else securityData.guestUsers[editIdx]=userObj;
-    logAudit('user_updated','Security',`User updated: ${username} (${role})`);
     toast('User updated','success');
   } else {
     if(role==='admin'){
@@ -8725,7 +8550,6 @@ async function saveUserModal(){
     } else {
       securityData.guestUsers.push(userObj);
     }
-    logAudit('user_created','Security',`User created: ${username} (${role})`);
     toast('User added','success');
   }
   saveSecurity(); closeModal('userManageModal'); renderSecuritySettings();
@@ -8734,17 +8558,13 @@ function editUser(role,idx){openAddUserModal(role,idx);}
 function toggleUserActive(role,idx){
   const arr=role==='admin'?securityData.adminUsers:securityData.guestUsers;
   arr[idx].active=!arr[idx].active;
-  logAudit('user_status','Security',`User ${arr[idx].username} set to ${arr[idx].active?'active':'inactive'}`);
   saveSecurity(); renderSecuritySettings();
   toast('User status updated','info');
 }
 function deleteUser(role,idx){
   if(!confirm('Delete this user?')) return;
-  const arr=role==='admin'?securityData.adminUsers:securityData.guestUsers;
-  const uname = arr[idx]?.username;
   if(role==='admin') securityData.adminUsers.splice(idx,1);
   else securityData.guestUsers.splice(idx,1);
-  logAudit('user_deleted','Security',`User deleted: ${uname} (${role})`);
   saveSecurity(); renderSecuritySettings();
   toast('User deleted','warning');
 }
