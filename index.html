@@ -445,6 +445,30 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div class="card-header"><div class="card-title">📅 Year-wise Summary</div></div>
     <div id="yearwise-summary"></div>
   </div>
+
+  <!-- ====== PHASE 1: ADVANCED ANALYTICS ====== -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">💹 Profit Margin Analysis</div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-neon btn-xs" onclick="showProfitMarginView('item')" id="pm-tab-item">By Item</button>
+        <button class="btn btn-xs" onclick="showProfitMarginView('party')" id="pm-tab-party">By Party</button>
+      </div>
+    </div>
+    <div id="profit-margin-analysis"></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">⏰ Party-wise Outstanding Aging</div></div>
+    <div id="aging-report"></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">🔄 Stock Turnover Ratio</div></div>
+    <div id="stock-turnover"></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">💰 Cash Flow Projection (Next 30 Days)</div></div>
+    <div id="cashflow-projection"></div>
+  </div>
 </div>
 
 <!-- ====== LEDGER TAB ====== -->
@@ -615,7 +639,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       </select>
     </div>
     <div class="tbl-wrap">
-      <table><thead><tr><th>Sr#</th><th>Cheque/Ref No</th><th>Date</th><th>Total Amount</th><th>Deduction</th><th>Net Amount</th><th>Linked Invoices</th><th>Actions</th></tr></thead>
+      <table><thead><tr><th>Sr#</th><th>Cheque/Ref No</th><th>Date</th><th>Total Amount</th><th>Deduction</th><th>Net Amount</th><th>Linked Invoices</th><th>Approval</th><th>Actions</th></tr></thead>
       <tbody id="chequesTbody"></tbody></table>
     </div>
   </div>
@@ -922,9 +946,21 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div class="settings-section-title">✅ Approval Workflow</div>
     <div class="toggle-wrap" style="margin-bottom:8px;">
       <label class="toggle"><input type="checkbox" id="ap-enabled" onchange="toggleApprovalWorkflow()"><span class="toggle-slider"></span></label>
-      <label style="margin:0;">Enable multi-stage approval (Staff → Manager → Accounts → Director)</label>
+      <label style="margin:0;">Enable multi-stage approval for DC (Staff → Manager → Accounts → Director)</label>
     </div>
-    <div style="font-size:12px;color:var(--text2);">When enabled, new DC records require sequential approval before being marked ready. Assign each user's approval role from Security → Manage Users.</div>
+    <div class="toggle-wrap" style="margin-bottom:8px;">
+      <label class="toggle"><input type="checkbox" id="ap-po-enabled" onchange="toggleModuleApproval('po','ap-po-enabled')"><span class="toggle-slider"></span></label>
+      <label style="margin:0;">Enable multi-stage approval for Purchase Orders</label>
+    </div>
+    <div class="toggle-wrap" style="margin-bottom:8px;">
+      <label class="toggle"><input type="checkbox" id="ap-exp-enabled" onchange="toggleModuleApproval('expense','ap-exp-enabled')"><span class="toggle-slider"></span></label>
+      <label style="margin:0;">Enable multi-stage approval for Expenses</label>
+    </div>
+    <div class="toggle-wrap" style="margin-bottom:8px;">
+      <label class="toggle"><input type="checkbox" id="ap-chq-enabled" onchange="toggleModuleApproval('cheque','ap-chq-enabled')"><span class="toggle-slider"></span></label>
+      <label style="margin:0;">Enable multi-stage approval for Cheques</label>
+    </div>
+    <div style="font-size:12px;color:var(--text2);">When enabled, new records in that module require sequential approval (Staff → Manager → Accounts → Director) before being usable/ready. A Purchase Order can't be received until fully approved. Assign each user's approval role from Security → Manage Users.</div>
   </div>
 
   <!-- Auto Number Generator (Module 9) -->
@@ -1657,7 +1693,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     </div>
     <div id="po-status-summary" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
     <div class="search-bar" style="display:flex;gap:8px;flex-wrap:wrap;">
-      <input type="text" id="po-search" placeholder="Search PO no, supplier..." oninput="renderPOTab()" style="flex:1;min-width:200px;">
+      <input type="text" id="po-search" placeholder="Search PO no, party, buyer, item, qty, amount..." oninput="renderPOTab()" style="flex:1;min-width:200px;">
       <select id="po-status-filter" onchange="renderPOTab()">
         <option value="">All Statuses</option>
         <option value="Pending">Pending</option>
@@ -1667,7 +1703,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     </div>
     <div style="overflow-x:auto;margin-top:10px;">
       <table class="items-table">
-        <thead><tr><th>PO No</th><th>Supplier</th><th>Date</th><th>Expiry</th><th>Items</th><th>Ordered Value</th><th>Remaining Qty</th><th>Balance Value</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>PO No</th><th>Party</th><th>Buyer</th><th>Date</th><th>Terms</th><th>Items</th><th>Ordered Value</th><th>Remaining Qty</th><th>Balance Value</th><th>Status</th><th>Approval</th><th></th></tr></thead>
         <tbody id="poTableBody"></tbody>
       </table>
     </div>
@@ -1682,29 +1718,58 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <input type="hidden" id="po-edit-idx" value="-1">
     <div class="form-row">
       <div class="form-group"><label>PO No *</label><div style="display:flex;gap:6px;"><input type="text" id="po-no" placeholder="PO Number" style="flex:1;"><button type="button" class="btn btn-neon btn-xs" onclick="autoFillNumber('po','po-no')" title="Auto-generate (continues from the last PO number issued)">🔢</button></div></div>
-      <div class="form-group"><label>Supplier Name *</label><input type="text" id="po-supplier" placeholder="Supplier / vendor name"></div>
+      <div class="form-group"><label>Party Name *</label><input type="text" id="po-supplier" list="party-list" placeholder="Select or type party name" oninput="onPOPartyChange()"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2;"><label>Party Address <span style="font-weight:400;color:var(--text3);">(auto-filled from Party record)</span></label><textarea id="po-address" rows="2" placeholder="Address will auto-fill when party is selected — editable"></textarea></div>
+      <div class="form-group"><label>Buyer / Purchaser Name <span style="font-weight:400;color:var(--text3);">(person at party who raised this PO)</span></label><input type="text" id="po-buyer" list="po-buyer-list" placeholder="e.g. Mr. Ahmed (Purchase Officer)"><datalist id="po-buyer-list"></datalist></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>PO Date</label><input type="date" id="po-date"></div>
       <div class="form-group"><label>Expiry Date</label><input type="date" id="po-expiry"></div>
+      <div class="form-group"><label>Payment Terms (days from Invoice Date)</label><input type="number" id="po-terms" placeholder="e.g. 30" title="Used for payment-due alerts once this PO is invoiced"></div>
     </div>
     <div class="divider"></div>
     <div style="font-weight:700;color:var(--neon2);margin-bottom:8px;">Items</div>
     <div class="form-row">
       <div class="form-group" style="flex:2;"><label>Item</label><input type="text" id="po-item-name" list="stock-item-list" placeholder="Item name"></div>
+      <div class="form-group"><label>HS Code</label><input type="text" id="po-item-hscode" placeholder="HS Code"></div>
       <div class="form-group"><label>Qty</label><input type="number" id="po-item-qty" placeholder="0"></div>
       <div class="form-group"><label>Rate</label><input type="number" step="0.01" id="po-item-rate" placeholder="0.00"></div>
       <div class="form-group" style="align-self:flex-end;"><button type="button" class="btn btn-neon btn-sm" onclick="addPOItemRow()">➕ Add</button></div>
     </div>
     <datalist id="stock-item-list"></datalist>
     <div style="overflow-x:auto;">
-      <table class="items-table"><thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Value</th><th></th></tr></thead><tbody id="po-items-tbody"></tbody></table>
+      <table class="items-table"><thead><tr><th>Item</th><th>HS Code</th><th>Qty</th><th>Rate</th><th>Value</th><th></th></tr></thead><tbody id="po-items-tbody"></tbody></table>
     </div>
     <div class="form-group"><label>Notes</label><textarea id="po-notes" rows="2"></textarea></div>
   </div>
   <div class="modal-footer">
     <button class="btn btn-green" onclick="savePO()">💾 Save PO</button>
     <button class="btn btn-neon" onclick="closeModal('poModal')">Cancel</button>
+  </div>
+</div>
+</div>
+
+<!-- PO TIMELINE / LIVE DETAIL MODAL -->
+<div class="modal-overlay" id="poTimelineModal">
+<div class="modal modal-lg">
+  <div class="modal-header"><h3 id="poTimelineTitle">🕒 PO Timeline</h3><button class="close-btn" onclick="closeModal('poTimelineModal')">✕</button></div>
+  <div class="modal-body" id="poTimelineBody"></div>
+  <div class="modal-footer">
+    <button class="btn btn-neon" onclick="closeModal('poTimelineModal')">Close</button>
+  </div>
+</div>
+</div>
+
+<!-- LOAD ITEMS FROM PO PICKER MODAL (used inside DC modal) -->
+<div class="modal-overlay" id="poPickerModal">
+<div class="modal modal-lg">
+  <div class="modal-header"><h3 id="poPickerTitle">📋 Load Items from PO</h3><button class="close-btn" onclick="closeModal('poPickerModal')">✕</button></div>
+  <div class="modal-body" id="poPickerBody"></div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="confirmPOPicker()">➕ Add Selected to DC</button>
+    <button class="btn btn-neon" onclick="closeModal('poPickerModal')">Cancel</button>
   </div>
 </div>
 </div>
@@ -1803,7 +1868,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       </div>
       <div id="exp-total" style="font-size:12px;color:var(--text3);margin:6px 0;"></div>
       <div style="overflow-x:auto;">
-        <table class="items-table"><thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Mode</th><th>Notes</th><th></th></tr></thead><tbody id="expensesTbody"></tbody></table>
+        <table class="items-table"><thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Mode</th><th>Notes</th><th>Approval</th><th></th></tr></thead><tbody id="expensesTbody"></tbody></table>
       </div>
     </div>
     <div class="card">
@@ -2150,13 +2215,16 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       <div class="form-group"><label>Transport / Cargo Adda</label><input type="text" id="pd-transport-adda" placeholder="e.g. Daewoo, New Ittefaq Cargo"></div>
       <div class="form-group"><label>Transport Contact</label><input type="text" id="pd-transport-contact" placeholder="Phone number"></div>
     </div>
-    <div class="form-group">
-      <label>Pay Status</label>
-      <select id="pd-pay-status">
-        <option value="">-- Select --</option>
-        <option value="Pay">Pay</option>
-        <option value="To Pay">To Pay</option>
-      </select>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Pay Status</label>
+        <select id="pd-pay-status">
+          <option value="">-- Select --</option>
+          <option value="Pay">Pay</option>
+          <option value="To Pay">To Pay</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Payment Terms (days from Invoice Date)</label><input type="number" id="pd-payment-terms" placeholder="e.g. 30" title="Used for payment-due alerts and aging"></div>
     </div>
     <div class="divider"></div>
     <label>Attention / Contact Persons</label>
@@ -2531,7 +2599,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div class="form-row">
       <div class="form-group"><label>Party Name *</label><input type="text" id="dc-party" list="party-list" placeholder="Select or type party name"><datalist id="party-list"></datalist><datalist id="employee-list"></datalist></div>
       <div class="form-group"><label>Unit Name</label><input type="text" id="dc-unit" placeholder="Unit/Branch"></div>
-      <div class="form-group"><label>PO No</label><input type="text" id="dc-pono" placeholder="Purchase Order No"></div>
+      <div class="form-group"><label>PO No</label><div style="display:flex;gap:6px;"><input type="text" id="dc-pono" placeholder="Purchase Order No" style="flex:1;"><button type="button" class="btn btn-neon btn-xs" onclick="openPOPickerFromDC()" title="Auto-fill party & items from this PO">📋 Load from PO</button></div></div>
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -2986,7 +3054,8 @@ const DEFAULT_SETTINGS = {
   backupFolder:'', defaultFilter:'all', pageTitle:'SAU CORPORATION | FULL MANAGEMENT',
   perPage:'100', theme:'cyan', defaultTax:'18', currency:'PKR',
   furtherTax:'3', defaultUom:'Pcs', openingQty:0, openingAmt:0, mode:'dark',
-  pdfFullDetails:true, pdfReportOrder:'invoice', approvalWorkflowEnabled:false
+  pdfFullDetails:true, pdfReportOrder:'invoice', approvalWorkflowEnabled:false,
+  poApprovalWorkflowEnabled:false, expApprovalWorkflowEnabled:false, chqApprovalWorkflowEnabled:false
 };
 
 function loadSettings(){
@@ -3182,7 +3251,7 @@ async function buildFullBackupData(){
     digitalInvoices: diWithPdf,
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
     savedQuotations, quotSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
-    stockItems, stockMovements, purchaseOrders, warehousesList, expenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
+    stockItems, stockMovements, purchaseOrders, partyPaymentTerms, warehousesList, expenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     documentManager: docsWithBlob,
     securityData: (typeof securityData!=='undefined'?securityData:null),
     backupDate:new Date().toISOString(), version:'20.0'
@@ -3369,7 +3438,7 @@ function buildCloudSyncData(){
     db, cheques, ledgerData, fbrParties, settings,
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
     savedQuotations, quotSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
-    stockItems, stockMovements, purchaseOrders, warehousesList, expenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
+    stockItems, stockMovements, purchaseOrders, partyPaymentTerms, warehousesList, expenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     securityData: (typeof securityData!=='undefined'?securityData:null),
     updatedAt: new Date().toISOString(),
     updatedBy: (typeof securityData!=='undefined' && securityData.currentUser) ? securityData.currentUser.username : (settings.operatorName||'Operator'),
@@ -3793,6 +3862,7 @@ async function applyRestoredBackupData(data){
   if(data.stockItems) { stockItems = data.stockItems; saveStockItems(); }
   if(data.stockMovements) { stockMovements = data.stockMovements; saveStockMovements(); }
   if(data.purchaseOrders) { purchaseOrders = data.purchaseOrders; savePurchaseOrders(); }
+  if(data.partyPaymentTerms) { partyPaymentTerms = data.partyPaymentTerms; savePartyPaymentTerms(); }
   if(data.warehousesList) { warehousesList = data.warehousesList; saveWarehousesList(); }
   if(data.expenses) { expenses = data.expenses; saveExpenses(); }
   if(data.bankAccounts) { bankAccounts = data.bankAccounts; saveBankAccounts(); }
@@ -4070,7 +4140,7 @@ function renderTabContent(id){
   if(id==='parties'){ syncPartiesFromDB(); renderParties(); }
   if(id==='cheques') { renderCheques(); renderAllPayments(); }
   if(id==='hscodes'){ renderHSCodes(); renderHsStockComparison(); }
-  if(id==='settings') { applySettings(); renderAutoNumberConfig(); const abf=document.getElementById('ab-frequency'); if(abf) abf.value = advancedBackupSettings.frequency; renderBackupVersionsList(); const ape=document.getElementById('ap-enabled'); if(ape) ape.checked = !!settings.approvalWorkflowEnabled; }
+  if(id==='settings') { applySettings(); renderAutoNumberConfig(); const abf=document.getElementById('ab-frequency'); if(abf) abf.value = advancedBackupSettings.frequency; renderBackupVersionsList(); const ape=document.getElementById('ap-enabled'); if(ape) ape.checked = !!settings.approvalWorkflowEnabled; const apPo=document.getElementById('ap-po-enabled'); if(apPo) apPo.checked = !!settings.poApprovalWorkflowEnabled; const apExp=document.getElementById('ap-exp-enabled'); if(apExp) apExp.checked = !!settings.expApprovalWorkflowEnabled; const apChq=document.getElementById('ap-chq-enabled'); if(apChq) apChq.checked = !!settings.chqApprovalWorkflowEnabled; }
   if(id==='digitalinvoices'){ renderDigitalInvoices(); updateDiCount(); }
   if(id==='security') renderSecuritySettings();
   if(id==='reports'){ renderRateListsHub(); renderRateListBasketSummary(); }
@@ -5082,8 +5152,219 @@ function renderDashboard(){
   renderPartySummaryChart(5);
   // Year-wise summary
   renderYearwiseSummary();
+  // Phase 1: Advanced Analytics
+  renderProfitMarginAnalysis();
+  renderAgingReport();
+  renderStockTurnover();
+  renderCashFlowProjection();
 }
 
+// ==================== PHASE 1: ADVANCED ANALYTICS ====================
+let pmView = 'item';
+function showProfitMarginView(v){
+  pmView = v;
+  const itBtn = document.getElementById('pm-tab-item');
+  const pBtn = document.getElementById('pm-tab-party');
+  if(itBtn) itBtn.className = v==='item' ? 'btn btn-neon btn-xs' : 'btn btn-xs';
+  if(pBtn) pBtn.className = v==='party' ? 'btn btn-neon btn-xs' : 'btn btn-xs';
+  renderProfitMarginAnalysis();
+}
+function getAvgPurchaseRate(itemName){
+  if(!itemName) return null;
+  let totalQty=0, totalCost=0;
+  purchaseOrders.forEach(po=>{
+    (po.items||[]).forEach(it=>{
+      if(it.name!==itemName) return;
+      const q = it.received>0 ? it.received : 0;
+      if(q>0){ totalQty+=q; totalCost+=q*(it.rate||0); }
+    });
+  });
+  if(totalQty>0) return totalCost/totalQty;
+  totalQty=0; totalCost=0;
+  purchaseOrders.forEach(po=>{
+    (po.items||[]).forEach(it=>{
+      if(it.name!==itemName) return;
+      totalQty+=(it.qty||0); totalCost+=(it.qty||0)*(it.rate||0);
+    });
+  });
+  return totalQty>0 ? totalCost/totalQty : null;
+}
+function renderProfitMarginAnalysis(){
+  const el = document.getElementById('profit-margin-analysis');
+  if(!el) return;
+  const cur = settings.currency||'PKR';
+  const active = db.filter(r=>!r.cancelled);
+  const groups = {};
+  active.forEach(r=>{
+    (r.items||[]).forEach(it=>{
+      const key = pmView==='item' ? (it.name||'Unknown') : (r.partyName||'Unknown');
+      if(!groups[key]) groups[key]={revenue:0, cost:0, hasCost:false};
+      const qty = parseFloat(it.qty||0);
+      const rev = qty*parseFloat(it.rate||0);
+      groups[key].revenue += rev;
+      const costRate = getAvgPurchaseRate(it.name);
+      if(costRate!==null){ groups[key].cost += qty*costRate; groups[key].hasCost = true; }
+    });
+  });
+  const rows = Object.keys(groups).map(k=>{
+    const g = groups[k];
+    const margin = g.revenue - g.cost;
+    const marginPct = (g.hasCost && g.revenue>0) ? (margin/g.revenue*100) : null;
+    return {key:k, ...g, margin, marginPct};
+  }).sort((a,b)=>b.revenue-a.revenue).slice(0,25);
+  if(!rows.length){ el.innerHTML='<div style="color:var(--text3);padding:12px;">No data available yet.</div>'; return; }
+  el.innerHTML = `<div class="tbl-wrap"><table><thead><tr>
+    <th>${pmView==='item'?'Item':'Party'}</th><th>Revenue</th><th>Est. Cost</th><th>Est. Margin</th><th>Margin %</th>
+  </tr></thead><tbody>
+  ${rows.map(r=>`<tr>
+    <td>${r.key}</td>
+    <td style="text-align:right;">${cur} ${fmt(r.revenue)}</td>
+    <td style="text-align:right;">${r.hasCost?cur+' '+fmt(r.cost):'<span style="color:var(--text3);">N/A</span>'}</td>
+    <td style="text-align:right;color:${r.hasCost?(r.margin>=0?'var(--success)':'var(--danger)'):'var(--text3)'};">${r.hasCost?cur+' '+fmt(r.margin):'-'}</td>
+    <td style="text-align:right;color:${r.hasCost?(r.marginPct>=0?'var(--success)':'var(--danger)'):'var(--text3)'};">${r.hasCost?r.marginPct.toFixed(1)+'%':'-'}</td>
+  </tr>`).join('')}
+  </tbody></table></div>
+  <div style="margin-top:6px;font-size:11px;color:var(--text3);">Cost is estimated from Purchase Order rates (received qty preferred, else ordered qty). Items/parties with no PO history show "N/A" — add a Purchase Order with rates for accurate margins.</div>`;
+}
+function renderAgingReport(){
+  const el = document.getElementById('aging-report');
+  if(!el) return;
+  const cur = settings.currency||'PKR';
+  const today = new Date();
+  const invoiced = db.filter(r=>!r.cancelled && r.invNo);
+  const unpaid = invoiced.filter(r=>!cheques.some(c=>(c.invoices||[]).includes(r.invNo)));
+  const byParty = {};
+  unpaid.forEach(r=>{
+    const refDate = r.invDate || r.date;
+    if(!refDate) return;
+    const days = Math.floor((today - new Date(refDate))/(1000*60*60*24));
+    const bucket = days<=30 ? 'b0' : days<=60 ? 'b1' : 'b2';
+    const p = r.partyName || 'Unknown';
+    if(!byParty[p]) byParty[p] = {b0:0,b1:0,b2:0,total:0,maxOverdue:-Infinity};
+    const amt = getDCTotal(r);
+    byParty[p][bucket] += amt;
+    byParty[p].total += amt;
+    const terms = (typeof partyPaymentTerms!=='undefined' && partyPaymentTerms[p]) || settings.defaultPaymentTerms || 30;
+    const overdueDays = days - terms;
+    if(overdueDays > byParty[p].maxOverdue) byParty[p].maxOverdue = overdueDays;
+  });
+  const parties = Object.keys(byParty).sort((a,b)=>byParty[b].total-byParty[a].total);
+  if(!parties.length){ el.innerHTML='<div style="color:var(--neon4);padding:12px;">✓ No outstanding invoices.</div>'; return; }
+  const totals = parties.reduce((s,p)=>{s.b0+=byParty[p].b0;s.b1+=byParty[p].b1;s.b2+=byParty[p].b2;s.total+=byParty[p].total;return s;},{b0:0,b1:0,b2:0,total:0});
+  el.innerHTML = `<div class="tbl-wrap"><table><thead><tr>
+    <th>Party</th><th>0-30 Days</th><th>31-60 Days</th><th>60+ Days</th><th>Total</th><th>Terms</th><th>Status</th>
+  </tr></thead><tbody>
+  ${parties.map(p=>{
+    const g = byParty[p];
+    const terms = (typeof partyPaymentTerms!=='undefined' && partyPaymentTerms[p]) || null;
+    const statusHtml = g.maxOverdue>0 ? `<span style="color:var(--danger);font-weight:700;">⚠️ ${Math.round(g.maxOverdue)}d overdue</span>` : `<span style="color:var(--success);">On time</span>`;
+    return `<tr>
+      <td>${p}</td>
+      <td style="text-align:right;">${g.b0?cur+' '+fmt(g.b0):'-'}</td>
+      <td style="text-align:right;color:var(--warning);">${g.b1?cur+' '+fmt(g.b1):'-'}</td>
+      <td style="text-align:right;color:var(--danger);">${g.b2?cur+' '+fmt(g.b2):'-'}</td>
+      <td style="text-align:right;font-weight:700;">${cur} ${fmt(g.total)}</td>
+      <td style="text-align:center;">${terms?terms+'d':'-'}</td>
+      <td>${statusHtml}</td>
+    </tr>`;
+  }).join('')}
+  </tbody></table></div>
+  <div style="margin-top:6px;font-size:12px;display:flex;gap:12px;flex-wrap:wrap;">
+    <span>0-30: <strong>${cur} ${fmt(totals.b0)}</strong></span>
+    <span style="color:var(--warning);">31-60: <strong>${cur} ${fmt(totals.b1)}</strong></span>
+    <span style="color:var(--danger);">60+: <strong>${cur} ${fmt(totals.b2)}</strong></span>
+  </div>
+  <div style="margin-top:4px;font-size:11px;color:var(--text3);">"Status" uses each party's own Payment Terms (set in Party Dispatch Info, or on the party's PO) — falls back to 30 days if none is set.</div>`;
+}
+function renderStockTurnover(){
+  const el = document.getElementById('stock-turnover');
+  if(!el) return;
+  if(!stockItems.length){ el.innerHTML='<div style="color:var(--text3);padding:12px;">No stock items added yet.</div>'; return; }
+  const rows = stockItems.map(it=>{
+    const {purchase, sale} = getItemMovementTotals(it.id);
+    const opening = it.openingQty||0;
+    const closing = opening + purchase - sale;
+    const avgStock = (opening + closing)/2;
+    const ratio = avgStock>0 ? sale/avgStock : null;
+    return {name:it.name, sale, avgStock, ratio};
+  }).filter(r=>r.sale>0 || r.avgStock>0)
+    .sort((a,b)=>(b.ratio||0)-(a.ratio||0));
+  if(!rows.length){ el.innerHTML='<div style="color:var(--text3);padding:12px;">No stock movement data yet.</div>'; return; }
+  el.innerHTML = `<div class="tbl-wrap"><table><thead><tr>
+    <th>Item</th><th>Units Sold</th><th>Avg Stock</th><th>Turnover Ratio</th><th>Status</th>
+  </tr></thead><tbody>
+  ${rows.slice(0,25).map(r=>{
+    let status='No stock base', color='var(--text3)';
+    if(r.ratio!==null){
+      if(r.ratio>=3){ status='Fast-moving'; color='var(--success)'; }
+      else if(r.ratio>=1){ status='Moderate'; color='var(--warning)'; }
+      else { status='Slow-moving'; color='var(--danger)'; }
+    }
+    return `<tr>
+      <td>${r.name}</td>
+      <td style="text-align:right;">${r.sale}</td>
+      <td style="text-align:right;">${r.avgStock.toFixed(1)}</td>
+      <td style="text-align:right;">${r.ratio!==null?r.ratio.toFixed(2):'-'}</td>
+      <td style="color:${color};">${status}</td>
+    </tr>`;
+  }).join('')}
+  </tbody></table></div>
+  <div style="margin-top:6px;font-size:11px;color:var(--text3);">Turnover Ratio = Units Sold ÷ Average Stock. Higher ratio = faster-moving inventory.</div>`;
+}
+function renderCashFlowProjection(){
+  const el = document.getElementById('cashflow-projection');
+  if(!el) return;
+  const cur = settings.currency||'PKR';
+  const today = new Date();
+  const invoiced = db.filter(r=>!r.cancelled && r.invNo);
+  const unpaid = invoiced.filter(r=>!cheques.some(c=>(c.invoices||[]).includes(r.invNo)));
+  let totalDays=0, count=0;
+  invoiced.forEach(r=>{
+    const chq = cheques.find(c=>(c.invoices||[]).includes(r.invNo));
+    if(chq && chq.date && (r.invDate||r.date)){
+      const d = (new Date(chq.date) - new Date(r.invDate||r.date))/(1000*60*60*24);
+      if(d>=0){ totalDays+=d; count++; }
+    }
+  });
+  const avgCollectionDays = count>0 ? totalDays/count : 30;
+  let overdue=0, within30=0, notYetDue=0;
+  unpaid.forEach(r=>{
+    const refDate = r.invDate||r.date;
+    if(!refDate) return;
+    const daysOut = (today - new Date(refDate))/(1000*60*60*24);
+    const amt = getDCTotal(r);
+    if(daysOut>=avgCollectionDays) overdue+=amt;
+    else if(daysOut>=avgCollectionDays-30) within30+=amt;
+    else notYetDue+=amt;
+  });
+  const expectedInflow = overdue+within30;
+  const cutoff = new Date(today); cutoff.setDate(cutoff.getDate()-30);
+  const recentExp = expenses.filter(e=>e.date && new Date(e.date)>=cutoff);
+  const recentExpTotal = recentExp.reduce((s,e)=>s+(e.amount||0),0);
+  let pendingPOValue = 0;
+  purchaseOrders.forEach(po=>{
+    (po.items||[]).forEach(it=>{
+      const pend = Math.max(0,(it.qty||0)-(it.received||0));
+      pendingPOValue += pend*(it.rate||0);
+    });
+  });
+  const expectedOutflow = recentExpTotal + pendingPOValue;
+  const net = expectedInflow - expectedOutflow;
+  el.innerHTML = `
+    <div class="stats-grid" style="grid-template-columns:repeat(2,1fr);">
+      <div class="stat-card c4"><div class="stat-val" style="font-size:15px;">${cur} ${fmt(expectedInflow)}</div><div class="stat-label">📥 Expected Inflow</div></div>
+      <div class="stat-card c3"><div class="stat-val" style="font-size:15px;">${cur} ${fmt(expectedOutflow)}</div><div class="stat-label">📤 Expected Outflow</div></div>
+    </div>
+    <div style="margin-top:8px;font-size:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+      <div>Overdue (collect ASAP): <strong style="color:var(--danger);">${cur} ${fmt(overdue)}</strong></div>
+      <div>Due within ~30 days: <strong style="color:var(--warning);">${cur} ${fmt(within30)}</strong></div>
+      <div>Recent expense run-rate: <strong>${cur} ${fmt(recentExpTotal)}</strong></div>
+      <div>Pending PO payables: <strong>${cur} ${fmt(pendingPOValue)}</strong></div>
+    </div>
+    <div class="divider"></div>
+    <div style="text-align:right;font-size:15px;font-weight:700;color:${net>=0?'var(--success)':'var(--danger)'};">Net Projected: ${cur} ${fmt(net)}</div>
+    <div style="margin-top:6px;font-size:11px;color:var(--text3);">Estimate based on avg. historical collection time (~${avgCollectionDays.toFixed(0)} days), last 30-day expense run-rate, and pending PO commitments. Not-yet-due outstanding: ${cur} ${fmt(notYetDue)}.</div>`;
+}
 
 function showMultiInvDCs(){
   const multiInvRecs = db.filter(r=>!r.cancelled && r.invNo && r.invNo.includes('/'));
@@ -5551,16 +5832,17 @@ function renderCheques(){
   list = universalSort(list, sortOrder, 'date', 'amount');
   const cur=settings.currency||'PKR';
   if(!cheques.length){
-    document.getElementById('chequesTbody').innerHTML = `<tr><td colspan="8" class="text-center" style="padding:20px;color:var(--text3);">No cheques recorded yet. Register a payment from a DC record (💳 button) or click "Add Cheque" above.</td></tr>`;
+    document.getElementById('chequesTbody').innerHTML = `<tr><td colspan="9" class="text-center" style="padding:20px;color:var(--text3);">No cheques recorded yet. Register a payment from a DC record (💳 button) or click "Add Cheque" above.</td></tr>`;
     return;
   }
   if(!list.length){
-    document.getElementById('chequesTbody').innerHTML = `<tr><td colspan="8" class="text-center" style="padding:20px;color:var(--neon3);">No cheque found matching "${search}". Total cheques in system: ${cheques.length}</td></tr>`;
+    document.getElementById('chequesTbody').innerHTML = `<tr><td colspan="9" class="text-center" style="padding:20px;color:var(--neon3);">No cheque found matching "${search}". Total cheques in system: ${cheques.length}</td></tr>`;
     return;
   }
   document.getElementById('chequesTbody').innerHTML = list.map((c,i)=>{
     const net=(c.amount||0)-(c.deduction||0);
     const invs=(c.invoices||[]).join(', ')||'-';
+    const chqIdx = cheques.indexOf(c);
     return `<tr>
       <td style="color:var(--text3);font-size:11px;">${i+1}</td>
       <td><strong style="color:var(--neon);">${c.chequeNo}</strong></td>
@@ -5569,11 +5851,12 @@ function renderCheques(){
       <td style="text-align:right;">${fmt(c.deduction||0)}</td>
       <td style="text-align:right;color:var(--neon4);">${cur} ${fmt(net)}</td>
       <td style="max-width:200px;">${invs}</td>
+      <td>${otherApprovalBadge('cheque', chqIdx)}</td>
       <td>
-        <button class="btn btn-neon btn-xs" onclick="viewChequeDetails(${cheques.indexOf(c)})">🔍</button>
+        <button class="btn btn-neon btn-xs" onclick="viewChequeDetails(${chqIdx})">🔍</button>
         <button class="btn btn-purple btn-xs" onclick="showPartyChequeLedger('${c.party||''}')">📒</button>
-        <button class="btn btn-yellow btn-xs" onclick="editCheque(${cheques.indexOf(c)})">✏️</button>
-        <button class="btn btn-red btn-xs" onclick="deleteCheque(${cheques.indexOf(c)})">🗑️</button>
+        <button class="btn btn-yellow btn-xs" onclick="editCheque(${chqIdx})">✏️</button>
+        <button class="btn btn-red btn-xs" onclick="deleteCheque(${chqIdx})">🗑️</button>
       </td>
     </tr>`;
   }).join('');
@@ -5650,7 +5933,7 @@ function saveCheque(){
       });
     }
   }
-  if(!isNaN(idx)&&idx>=0){ logAudit('edit','Cheque',`Cheque ${obj.chequeNo} updated`, cheques[idx], obj); cheques[idx]=obj; } else { cheques.push(obj); logAudit('create','Cheque',`Cheque ${obj.chequeNo} added — amount ${obj.amount}`, undefined, obj); }
+  if(!isNaN(idx)&&idx>=0){ logAudit('edit','Cheque',`Cheque ${obj.chequeNo} updated`, cheques[idx], obj); cheques[idx]=obj; } else { cheques.push(obj); initApprovalForEntity('cheque', obj); logAudit('create','Cheque',`Cheque ${obj.chequeNo} added — amount ${obj.amount}`, undefined, obj); }
   document.getElementById('cheque-edit-idx').value='';
   saveData(); renderCheques(); closeModal('addChequeModal'); populateChequeList();
   toast('Cheque saved & ledger synced ✓','success');
@@ -6356,6 +6639,7 @@ function init(){
   loadAutoNumberSettings();
   loadStockModule();
   loadPurchaseOrders();
+  loadPartyPaymentTerms();
   loadWarehouses();
   loadExpenses();
   loadBankModule();
@@ -7645,6 +7929,7 @@ function openAddPartyDispatchModal(partyName){
   document.getElementById('pd-transport-adda').value = existing.transportAdda||'';
   document.getElementById('pd-transport-contact').value = existing.transportContact||'';
   document.getElementById('pd-pay-status').value = existing.payStatus||'';
+  document.getElementById('pd-payment-terms').value = partyPaymentTerms[existing.partyName]||'';
   renderPdAttentionList(existing.attentionPersons||[]);
   openModal('partyDispatchEditModal');
 }
@@ -7674,6 +7959,7 @@ function savePartyDispatchInfo(){
   const transportAdda = document.getElementById('pd-transport-adda').value.trim();
   const transportContact = document.getElementById('pd-transport-contact').value.trim();
   const payStatus = document.getElementById('pd-pay-status').value;
+  const paymentTerms = parseFloat(document.getElementById('pd-payment-terms').value)||null;
   const persons = [...document.querySelectorAll('[data-pd-row]')].map(row=>({
     name: row.querySelector('.pd-attn-name').value.trim(),
     phone: row.querySelector('.pd-attn-phone').value.trim()
@@ -7686,6 +7972,8 @@ function savePartyDispatchInfo(){
     transportAdda, transportContact, payStatus,
     envelope: existing ? existing.envelope : null
   };
+  if(paymentTerms) partyPaymentTerms[key] = paymentTerms; else delete partyPaymentTerms[key];
+  savePartyPaymentTerms();
   savePartyDispatchData();
   closeModal('partyDispatchEditModal');
   searchPartyLookup();
@@ -10051,34 +10339,71 @@ function closeScannerModal(){
   closeModal('scannerModal');
 }
 
-// ==================== MODULE 12: PURCHASE ORDER MODULE ====================
-let purchaseOrders = []; // {id, poNo, supplier, date, expiry, items:[{name,qty,rate,received}], notes}
+// ==================== MODULE 12: PURCHASE ORDER MODULE (Party PO → DC → Invoice linked) ====================
+let purchaseOrders = []; // {id, poNo, supplier(=party), address, buyer, terms, date, expiry, items:[{name,hscode,qty,rate,received}], notes}
 let poTempItems = [];
+let poPickerCtx = null; // {po, remaining:{itemName:qty}}
 function loadPurchaseOrders(){
   const d = localStorage.getItem('sau_purchase_orders');
   purchaseOrders = d ? JSON.parse(d) : [];
 }
 function savePurchaseOrders(){ safeSetItem('sau_purchase_orders', JSON.stringify(purchaseOrders)); }
+// Sums qty already put on DCs (dc-pono) against a given PO, per item description. excludeIdx = db index to skip (the DC currently being edited).
+function getPODispatchedMap(poNo, excludeIdx){
+  const map = {};
+  if(!poNo) return map;
+  db.forEach((r,i)=>{
+    if(i===excludeIdx) return;
+    if(r.cancelled) return;
+    if((r.poNo||'').trim()!==poNo) return;
+    (r.items||[]).forEach(it=>{
+      if(!it.desc) return;
+      map[it.desc] = (map[it.desc]||0) + (parseFloat(it.qty)||0);
+    });
+  });
+  return map;
+}
 function computePOStatus(po){
-  const totalQty = po.items.reduce((s,i)=>s+i.qty,0);
-  const totalRecv = po.items.reduce((s,i)=>s+(i.received||0),0);
-  if(totalRecv<=0) return 'Pending';
-  if(totalRecv>=totalQty) return 'Completed';
+  const map = getPODispatchedMap(po.poNo);
+  const totalQty = po.items.reduce((s,i)=>s+(parseFloat(i.qty)||0),0);
+  const totalFulfilled = po.items.reduce((s,i)=>s+(parseFloat(i.received)||0)+(map[i.name]||0),0);
+  if(totalFulfilled<=0) return 'Pending';
+  if(totalFulfilled>=totalQty) return 'Completed';
   return 'Partial';
 }
 function getItemPendingPOQty(itemName){
   let pending = 0;
   purchaseOrders.forEach(po=>{
+    const map = getPODispatchedMap(po.poNo);
     po.items.forEach(i=>{
-      if(i.name===itemName) pending += Math.max(0, i.qty - (i.received||0));
+      if(i.name===itemName) pending += Math.max(0, (parseFloat(i.qty)||0) - (parseFloat(i.received)||0) - (map[i.name]||0));
     });
   });
   return pending;
+}
+function onPOPartyChange(){
+  const party = document.getElementById('po-supplier').value.trim();
+  if(!party) return;
+  const addrEl = document.getElementById('po-address');
+  if(addrEl && !addrEl.dataset.userEdited){
+    const fp = fbrParties.find(p=>p.partyName===party);
+    const pd = (typeof partyDispatchData!=='undefined') ? partyDispatchData[party] : null;
+    addrEl.value = (pd&&pd.address) || (fp&&fp.address) || '';
+  }
+  const termsEl = document.getElementById('po-terms');
+  if(termsEl && !termsEl.value && typeof partyPaymentTerms!=='undefined' && partyPaymentTerms[party]) termsEl.value = partyPaymentTerms[party];
+  const bl = document.getElementById('po-buyer-list');
+  if(bl && typeof partyContacts!=='undefined'){
+    const contacts = partyContacts[party]||[];
+    bl.innerHTML = contacts.map(c=>`<option value="${c.name}">`).join('');
+  }
 }
 function openPOModal(idx){
   document.getElementById('po-edit-idx').value = idx!==undefined ? idx : -1;
   document.getElementById('poModalTitle').textContent = idx!==undefined ? '✏️ Edit Purchase Order' : '➕ New Purchase Order';
   document.getElementById('po-no').value=''; document.getElementById('po-supplier').value='';
+  document.getElementById('po-address').value=''; document.getElementById('po-address').dataset.userEdited='';
+  document.getElementById('po-buyer').value=''; document.getElementById('po-terms').value='';
   document.getElementById('po-date').value = new Date().toISOString().slice(0,10);
   document.getElementById('po-expiry').value=''; document.getElementById('po-notes').value='';
   poTempItems = [];
@@ -10086,10 +10411,14 @@ function openPOModal(idx){
     const po = purchaseOrders[idx];
     document.getElementById('po-no').value=po.poNo;
     document.getElementById('po-supplier').value=po.supplier;
+    document.getElementById('po-address').value=po.address||'';
+    document.getElementById('po-buyer').value=po.buyer||'';
+    document.getElementById('po-terms').value=po.terms||'';
     document.getElementById('po-date').value=po.date;
     document.getElementById('po-expiry').value=po.expiry||'';
     document.getElementById('po-notes').value=po.notes||'';
     poTempItems = JSON.parse(JSON.stringify(po.items));
+    onPOPartyChange();
   }
   const dl = document.getElementById('stock-item-list');
   dl.innerHTML = stockItems.map(i=>`<option value="${i.name}">`).join('');
@@ -10098,31 +10427,39 @@ function openPOModal(idx){
 }
 function addPOItemRow(){
   const name = document.getElementById('po-item-name').value.trim();
+  const hscode = document.getElementById('po-item-hscode').value.trim();
   const qty = parseFloat(document.getElementById('po-item-qty').value)||0;
   const rate = parseFloat(document.getElementById('po-item-rate').value)||0;
   if(!name||!qty){ toast('Item name and qty required','warning'); return; }
-  poTempItems.push({name, qty, rate, received:0});
-  document.getElementById('po-item-name').value=''; document.getElementById('po-item-qty').value=''; document.getElementById('po-item-rate').value='';
+  poTempItems.push({name, hscode, qty, rate, received:0});
+  document.getElementById('po-item-name').value=''; document.getElementById('po-item-hscode').value=''; document.getElementById('po-item-qty').value=''; document.getElementById('po-item-rate').value='';
   renderPOItemsTable();
 }
 function removePOItemRow(i){ poTempItems.splice(i,1); renderPOItemsTable(); }
 function renderPOItemsTable(){
   const tbody = document.getElementById('po-items-tbody');
   const cur = settings.currency||'PKR';
-  tbody.innerHTML = poTempItems.map((it,i)=>`<tr><td>${it.name}</td><td>${it.qty}</td><td>${cur} ${fmt(it.rate)}</td><td>${cur} ${fmt(it.qty*it.rate)}</td><td><button type="button" class="btn btn-xs btn-red" onclick="removePOItemRow(${i})">✕</button></td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text3);">No items added</td></tr>';
+  tbody.innerHTML = poTempItems.map((it,i)=>`<tr><td>${it.name}</td><td>${it.hscode||'-'}</td><td>${it.qty}</td><td>${cur} ${fmt(it.rate)}</td><td>${cur} ${fmt(it.qty*it.rate)}</td><td><button type="button" class="btn btn-xs btn-red" onclick="removePOItemRow(${i})">✕</button></td></tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text3);">No items added</td></tr>';
 }
 function savePO(){
   const idx = parseInt(document.getElementById('po-edit-idx').value);
   const poNo = document.getElementById('po-no').value.trim();
   const supplier = document.getElementById('po-supplier').value.trim();
-  if(!poNo||!supplier){ toast('PO No and Supplier required','warning'); return; }
+  if(!poNo||!supplier){ toast('PO No and Party required','warning'); return; }
   if(!poTempItems.length){ toast('Add at least one item','warning'); return; }
   const po = {
     id: (idx>=0 && purchaseOrders[idx]) ? purchaseOrders[idx].id : 'PO'+Date.now(),
-    poNo, supplier, date:document.getElementById('po-date').value, expiry:document.getElementById('po-expiry').value,
+    poNo, supplier, address:document.getElementById('po-address').value.trim(), buyer:document.getElementById('po-buyer').value.trim(),
+    terms: parseFloat(document.getElementById('po-terms').value)||null,
+    date:document.getElementById('po-date').value, expiry:document.getElementById('po-expiry').value,
     notes:document.getElementById('po-notes').value.trim(), items: poTempItems
   };
-  if(idx>=0) purchaseOrders[idx]=po; else purchaseOrders.push(po);
+  if(idx>=0) purchaseOrders[idx]=po; else { purchaseOrders.push(po); initApprovalForEntity('po', po); }
+  // remember this party's payment terms for future POs/invoices if none set yet
+  if(po.terms && typeof partyPaymentTerms!=='undefined' && !partyPaymentTerms[supplier]){
+    partyPaymentTerms[supplier] = po.terms;
+    if(typeof savePartyPaymentTerms==='function') savePartyPaymentTerms();
+  }
   savePurchaseOrders();
   logAudit(idx>=0?'edit':'create','Purchase Order',`PO ${po.poNo} (${po.supplier}) saved`, undefined, po);
   renderPOTab();
@@ -10141,7 +10478,7 @@ function deletePO(idx){
 function openPOReceiveModal(idx){
   const po = purchaseOrders[idx];
   document.getElementById('pr-po-idx').value = idx;
-  document.getElementById('po-receive-items').innerHTML = po.items.map((it,i)=>`
+  document.getElementById('po-receive-items').innerHTML = `<div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Use this only for manual/legacy stock-in. Items already dispatched to this party via a linked DC are tracked automatically and don't need to be entered here.</div>` + po.items.map((it,i)=>`
     <div class="form-row">
       <div class="form-group" style="flex:2;"><label>${it.name} (Ordered: ${it.qty}, Received so far: ${it.received||0})</label></div>
       <div class="form-group"><label>Receive Now</label><input type="number" id="pr-recv-${i}" placeholder="0" max="${it.qty-(it.received||0)}"></div>
@@ -10151,6 +10488,11 @@ function openPOReceiveModal(idx){
 function savePOReceive(){
   const idx = parseInt(document.getElementById('pr-po-idx').value);
   const po = purchaseOrders[idx];
+  if(isEntityLocked('po', po)){
+    toast(`This PO is still ${APPROVAL_LABELS[po.approvalStatus]||po.approvalStatus} — it must be fully approved before receiving stock.`,'warning');
+    closeModal('poReceiveModal');
+    return;
+  }
   po.items.forEach((it,i)=>{
     const val = parseFloat(document.getElementById(`pr-recv-${i}`).value)||0;
     if(val>0){
@@ -10168,6 +10510,50 @@ function savePOReceive(){
   renderPOTab();
   toast('Received quantities updated & stock movement logged','success');
 }
+// Live PO timeline: every DC + invoice raised against this PO, item-by-item match status
+function openPOTimeline(idx){
+  const po = purchaseOrders[idx];
+  if(!po) return;
+  document.getElementById('poTimelineTitle').textContent = `🕒 PO ${po.poNo} — ${po.supplier} — Live Timeline`;
+  const cur = settings.currency||'PKR';
+  const linkedDCs = db.map((r,i)=>({r,i})).filter(x=>(x.r.poNo||'').trim()===po.poNo).sort((a,b)=>(a.r.date||'').localeCompare(b.r.date||''));
+  const map = getPODispatchedMap(po.poNo);
+  const itemRows = po.items.map(it=>{
+    const dispatched = (map[it.name]||0)+(parseFloat(it.received)||0);
+    const remaining = Math.max(0,(parseFloat(it.qty)||0)-dispatched);
+    const done = remaining<=0;
+    return `<tr>
+      <td>${it.name}${it.hscode?` <span style="color:var(--text3);font-size:10px;">(HS ${it.hscode})</span>`:''}</td>
+      <td>${it.qty}</td><td>${dispatched}</td>
+      <td style="color:${done?'var(--success)':'var(--warning)'};font-weight:700;">${remaining}</td>
+      <td>${done?'✅ Matched':'⏳ Pending'}</td>
+    </tr>`;
+  }).join('');
+  const dcRows = linkedDCs.length ? linkedDCs.map(x=>{
+    const total = getDCTotal(x.r);
+    return `<tr>
+      <td>${x.r.date||'-'}</td><td>${x.r.dcNo||'-'}</td><td>${x.r.invNo||'-'}</td><td>${x.r.invDate||'-'}</td>
+      <td>${(x.r.items||[]).map(it=>`${it.desc} (${it.qty})`).join(', ')}</td>
+      <td style="text-align:right;">${cur} ${fmt(total)}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="6" style="text-align:center;color:var(--text3);">No DC raised against this PO yet</td></tr>`;
+  document.getElementById('poTimelineBody').innerHTML = `
+    <div class="form-row" style="font-size:12px;">
+      <div><strong>Party:</strong> ${po.supplier}</div>
+      <div><strong>Buyer:</strong> ${po.buyer||'-'}</div>
+      <div><strong>PO Date:</strong> ${po.date||'-'}</div>
+      <div><strong>Terms:</strong> ${po.terms?po.terms+' days':'-'}</div>
+    </div>
+    <div class="divider"></div>
+    <strong style="color:var(--neon2);">Item Match Status</strong>
+    <div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>Item</th><th>Ordered</th><th>Dispatched</th><th>Remaining</th><th>Status</th></tr></thead>
+    <tbody>${itemRows}</tbody></table></div>
+    <div class="divider"></div>
+    <strong style="color:var(--neon2);">DC / Invoice History (chronological)</strong>
+    <div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>DC Date</th><th>DC No</th><th>Invoice No</th><th>Invoice Date</th><th>Items</th><th>Amount</th></tr></thead>
+    <tbody>${dcRows}</tbody></table></div>`;
+  openModal('poTimelineModal');
+}
 function renderPOTab(){
   const q = (document.getElementById('po-search')?.value||'').toLowerCase();
   const statusFilter = document.getElementById('po-status-filter')?.value||'';
@@ -10179,22 +10565,87 @@ function renderPOTab(){
   const poColors = {Pending:'#8892b0', Partial:'#f0a500', Completed:'#00e676'};
   if(summaryEl) summaryEl.innerHTML = Object.keys(counts).map(s=>`<span class="badge" style="background:${poColors[s]}22;color:${poColors[s]};border:1px solid ${poColors[s]};padding:4px 10px;">${s}: ${counts[s]}</span>`).join('');
   if(statusFilter) list = list.filter(x=>x.status===statusFilter);
-  if(q) list = list.filter(x=>[x.po.poNo,x.po.supplier].join(' ').toLowerCase().includes(q));
+  if(q) list = list.filter(x=>{
+    const itemBits = x.po.items.map(i=>`${i.name} ${i.qty} ${i.rate} ${i.qty*i.rate}`).join(' ');
+    return [x.po.poNo,x.po.supplier,x.po.buyer,itemBits].join(' ').toLowerCase().includes(q);
+  });
   list.sort((a,b)=>(b.po.date||'').localeCompare(a.po.date||''));
   const tbody = document.getElementById('poTableBody');
   if(!tbody) return;
-  if(!list.length){ tbody.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:20px;">No purchase orders yet</td></tr>'; return; }
+  if(!list.length){ tbody.innerHTML='<tr><td colspan="12" style="text-align:center;color:var(--text3);padding:20px;">No purchase orders yet</td></tr>'; return; }
   tbody.innerHTML = list.map(x=>{
+    const map = getPODispatchedMap(x.po.poNo);
     const orderedValue = x.po.items.reduce((s,i)=>s+i.qty*i.rate,0);
-    const remainingQty = x.po.items.reduce((s,i)=>s+Math.max(0,i.qty-(i.received||0)),0);
-    const balanceValue = x.po.items.reduce((s,i)=>s+Math.max(0,i.qty-(i.received||0))*i.rate,0);
+    const remainingQty = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-(parseFloat(i.received)||0)-(map[i.name]||0)),0);
+    const balanceValue = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-(parseFloat(i.received)||0)-(map[i.name]||0))*i.rate,0);
     return `<tr>
-      <td>${x.po.poNo}</td><td>${x.po.supplier}</td><td>${x.po.date||'-'}</td><td>${x.po.expiry||'-'}</td>
+      <td>${x.po.poNo}</td><td>${x.po.supplier}</td><td>${x.po.buyer||'-'}</td><td>${x.po.date||'-'}</td><td>${x.po.terms?x.po.terms+'d':'-'}</td>
       <td>${x.po.items.length}</td><td>${cur} ${fmt(orderedValue)}</td><td>${remainingQty}</td><td>${cur} ${fmt(balanceValue)}</td>
       <td><span class="badge" style="background:${poColors[x.status]}22;color:${poColors[x.status]};border:1px solid ${poColors[x.status]};">${x.status}</span></td>
-      <td><button class="btn btn-xs btn-green" onclick="openPOReceiveModal(${x.idx})">📥</button> <button class="btn btn-xs btn-neon" onclick="openPOModal(${x.idx})">✏️</button> <button class="btn btn-xs btn-red" onclick="deletePO(${x.idx})">🗑️</button></td>
+      <td>${otherApprovalBadge('po', x.idx)}</td>
+      <td><button class="btn btn-xs btn-neon" onclick="openPOTimeline(${x.idx})">🕒</button> <button class="btn btn-xs btn-green" onclick="openPOReceiveModal(${x.idx})">📥</button> <button class="btn btn-xs btn-neon" onclick="openPOModal(${x.idx})">✏️</button> <button class="btn btn-xs btn-red" onclick="deletePO(${x.idx})">🗑️</button></td>
     </tr>`;
   }).join('');
+}
+
+// ==================== PO ⇄ DC AUTO-LINK: load PO items into a DC, party payment terms ====================
+let partyPaymentTerms = {}; // { partyName: days }
+function loadPartyPaymentTerms(){
+  const d = localStorage.getItem('sau_party_payment_terms');
+  partyPaymentTerms = d ? JSON.parse(d) : {};
+}
+function savePartyPaymentTerms(){ safeSetItem('sau_party_payment_terms', JSON.stringify(partyPaymentTerms)); }
+function getPartyTerms(partyName){ return partyPaymentTerms[partyName] || null; }
+// Called from the DC modal's "Load from PO" button
+function openPOPickerFromDC(){
+  const poNo = (document.getElementById('dc-pono')?.value||'').trim();
+  if(!poNo){ toast('Enter the PO No first','warning'); return; }
+  const po = purchaseOrders.find(p=>p.poNo===poNo);
+  if(!po){ toast(`No Purchase Order found with No "${poNo}"`,'warning'); return; }
+  // auto-fill party if DC party is empty
+  const partyEl = document.getElementById('dc-party');
+  if(partyEl && !partyEl.value.trim()) partyEl.value = po.supplier;
+  const excludeIdx = editingDcIdx!==null && editingDcIdx!==undefined ? editingDcIdx : undefined;
+  const map = getPODispatchedMap(po.poNo, excludeIdx);
+  poPickerCtx = {po, map};
+  const cur = settings.currency||'PKR';
+  const allDone = po.items.every(it=>Math.max(0,(parseFloat(it.qty)||0)-(parseFloat(it.received)||0)-(map[it.name]||0))<=0);
+  document.getElementById('poPickerTitle').textContent = `📋 PO ${po.poNo} — ${po.supplier}${po.buyer?' (Buyer: '+po.buyer+')':''}`;
+  document.getElementById('poPickerBody').innerHTML = (allDone ? `<div style="color:var(--success);margin-bottom:8px;">✅ This PO's quantities are already fully matched by earlier DCs — nothing pending.</div>` : '') +
+    `<div style="overflow-x:auto;"><table class="items-table"><thead><tr><th></th><th>Item</th><th>HS Code</th><th>Ordered</th><th>Already Dispatched</th><th>Remaining</th><th>Qty to add now</th><th>Rate</th></tr></thead><tbody>
+    ${po.items.map((it,i)=>{
+      const dispatched = (map[it.name]||0)+(parseFloat(it.received)||0);
+      const remaining = Math.max(0,(parseFloat(it.qty)||0)-dispatched);
+      return `<tr>
+        <td><input type="checkbox" class="po-pick-chk" data-i="${i}" ${remaining>0?'checked':''} ${remaining<=0?'disabled':''}></td>
+        <td>${it.name}</td><td>${it.hscode||'-'}</td><td>${it.qty}</td><td>${dispatched}</td>
+        <td style="color:${remaining>0?'var(--warning)':'var(--success)'};">${remaining}</td>
+        <td><input type="number" class="po-pick-qty" data-i="${i}" value="${remaining}" max="${remaining}" min="0" style="width:80px;" ${remaining<=0?'disabled':''}></td>
+        <td>${cur} ${fmt(it.rate)}</td>
+      </tr>`;
+    }).join('')}
+    </tbody></table></div>
+    <div style="font-size:11px;color:var(--text3);margin-top:8px;">If a party's PO qty for an item isn't fully covered by this DC, the leftover stays "Remaining" and will show up again next time you load items from this PO — status stays Partial until everything matches.</div>`;
+  openModal('poPickerModal');
+}
+function confirmPOPicker(){
+  if(!poPickerCtx){ closeModal('poPickerModal'); return; }
+  const {po} = poPickerCtx;
+  let added = 0;
+  document.querySelectorAll('#poPickerBody .po-pick-chk').forEach(chk=>{
+    if(!chk.checked) return;
+    const i = parseInt(chk.dataset.i);
+    const it = po.items[i];
+    const qtyInput = document.querySelector(`#poPickerBody .po-pick-qty[data-i="${i}"]`);
+    const qty = parseFloat(qtyInput?.value)||0;
+    if(qty<=0) return;
+    addItemRow({desc:it.name, hscode:it.hscode||'', uom:it.uom||settings.defaultUom||'Pcs', qty, rate:it.rate, tax:settings.defaultTax||18});
+    added++;
+  });
+  updateGrandTotal();
+  closeModal('poPickerModal');
+  if(added) toast(`${added} item(s) added from PO ${po.poNo}`,'success');
+  else toast('No items selected','warning');
 }
 
 // ==================== MODULE 13: MULTI WAREHOUSE ====================
@@ -10339,7 +10790,7 @@ function saveExpense(){
     employee: document.getElementById('exp-employee').value.trim(),
     notes: document.getElementById('exp-notes').value.trim()
   };
-  if(idx>=0) expenses[idx]=exp; else expenses.push(exp);
+  if(idx>=0) expenses[idx]=exp; else { expenses.push(exp); initApprovalForEntity('expense', exp); }
   saveExpenses();
   logAudit(idx>=0?'edit':'create','Expense',`${exp.category} expense of ${exp.amount} logged`, undefined, exp);
   renderExpensesTab();
@@ -10370,10 +10821,11 @@ function renderExpensesTab(){
   if(totalEl) totalEl.textContent = `${list.length} entries — Total: ${cur} ${fmt(total)}`;
   const tbody = document.getElementById('expensesTbody');
   if(!tbody) return;
-  if(!list.length){ tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:16px;">No expenses logged yet</td></tr>'; return; }
+  if(!list.length){ tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:16px;">No expenses logged yet</td></tr>'; return; }
   tbody.innerHTML = list.map(x=>`<tr>
     <td>${x.e.date}</td><td>${EXPENSE_ICONS[x.e.category]||''} ${x.e.category}${x.e.employee?(' — '+x.e.employee):''}</td>
     <td>${cur} ${fmt(x.e.amount)}</td><td>${x.e.mode}</td><td>${x.e.notes||'-'}</td>
+    <td>${otherApprovalBadge('expense', x.idx)}</td>
     <td><button class="btn btn-xs btn-neon" onclick="openExpenseModal(${x.idx})">✏️</button> <button class="btn btn-xs btn-red" onclick="deleteExpense(${x.idx})">🗑️</button></td>
   </tr>`).join('');
   renderExpenseReport();
@@ -11171,6 +11623,82 @@ function approvalWorkflowHtml(idx){
   }
   const historyHtml = (rec.approvalHistory||[]).map(h=>`<div style="font-size:11px;color:var(--text3);">${new Date(h.date).toLocaleString()} — ${h.stage} (${h.by}): ${h.action}${h.reason?(' — '+h.reason):''}</div>`).join('');
   return `<div class="accent-box mt-8"><div style="display:flex;justify-content:space-between;align-items:center;"><span><strong>Approval Status:</strong> ${APPROVAL_LABELS[status]||status}</span>${buttons}</div>${historyHtml?('<div style="margin-top:6px;">'+historyHtml+'</div>'):''}</div>`;
+}
+
+// ==================== PHASE 2: APPROVAL WORKFLOW EXPANSION (Purchase Order / Expense / Cheque) ====================
+// Reuses the same 4-stage logic (APPROVAL_STAGES/APPROVAL_LABELS/APPROVAL_NEXT_ROLE/getCurrentApprovalRole/canApproveStage)
+// defined above for DC approval (Module 23) — generalized so it can drive multiple modules.
+const APPROVAL_MODULES = {
+  po: { getArray:()=>purchaseOrders, settingKey:'poApprovalWorkflowEnabled', idLabel:r=>`PO ${r.poNo}`, save:()=>savePurchaseOrders(), render:()=>renderPOTab() },
+  expense: { getArray:()=>expenses, settingKey:'expApprovalWorkflowEnabled', idLabel:r=>`Expense (${r.category}, ${r.amount})`, save:()=>saveExpenses(), render:()=>renderExpensesTab() },
+  cheque: { getArray:()=>cheques, settingKey:'chqApprovalWorkflowEnabled', idLabel:r=>`Cheque ${r.chequeNo}`, save:()=>saveData(), render:()=>renderCheques() }
+};
+function toggleModuleApproval(moduleKey, checkboxId){
+  const mod = APPROVAL_MODULES[moduleKey];
+  settings[mod.settingKey] = document.getElementById(checkboxId).checked;
+  safeSetItem('sau_settings', JSON.stringify(settings));
+  toast(`Approval workflow for ${moduleKey.toUpperCase()} ${settings[mod.settingKey]?'enabled':'disabled'}`,'success');
+}
+function initApprovalForEntity(moduleKey, rec){
+  const mod = APPROVAL_MODULES[moduleKey];
+  if(!mod || !settings[mod.settingKey]) return;
+  rec.approvalStatus = 'pending_manager';
+  rec.approvalHistory = [{stage:'Staff', by:securityData.currentUser?securityData.currentUser.username:'Unknown', date:new Date().toISOString(), action:'created'}];
+}
+function isEntityLocked(moduleKey, rec){
+  // True if approval is enabled for this module and the record hasn't finished approval yet.
+  const mod = APPROVAL_MODULES[moduleKey];
+  if(!mod || !settings[mod.settingKey]) return false;
+  return !!(rec && rec.approvalStatus && rec.approvalStatus!=='approved');
+}
+function approveOtherEntity(moduleKey, idx){
+  const mod = APPROVAL_MODULES[moduleKey];
+  const rec = mod.getArray()[idx];
+  if(!rec || !rec.approvalStatus || rec.approvalStatus==='approved') return;
+  const stageOrder = ['pending_manager','pending_accounts','pending_director'];
+  const curIdx = stageOrder.indexOf(rec.approvalStatus);
+  const nextStatus = curIdx<stageOrder.length-1 ? stageOrder[curIdx+1] : 'approved';
+  rec.approvalStatus = nextStatus;
+  rec.approvalHistory = rec.approvalHistory||[];
+  rec.approvalHistory.push({stage:APPROVAL_NEXT_ROLE[stageOrder[curIdx]], by:securityData.currentUser?securityData.currentUser.username:'Unknown', date:new Date().toISOString(), action:'approved'});
+  logAudit('edit','Approval Workflow',`${mod.idLabel(rec)} approved by ${APPROVAL_NEXT_ROLE[stageOrder[curIdx]]} — now ${APPROVAL_LABELS[nextStatus]}`, undefined, undefined);
+  mod.save(); mod.render();
+  toast(`Approved! Status: ${APPROVAL_LABELS[nextStatus]}`,'success');
+}
+function rejectOtherEntity(moduleKey, idx){
+  const reason = prompt('Reason for rejection:');
+  if(reason===null) return;
+  const mod = APPROVAL_MODULES[moduleKey];
+  const rec = mod.getArray()[idx];
+  rec.approvalStatus = 'rejected';
+  rec.approvalHistory = rec.approvalHistory||[];
+  rec.approvalHistory.push({stage:getCurrentApprovalRole()||'Admin', by:securityData.currentUser?securityData.currentUser.username:'Unknown', date:new Date().toISOString(), action:'rejected', reason});
+  logAudit('edit','Approval Workflow',`${mod.idLabel(rec)} rejected — ${reason}`, undefined, undefined);
+  mod.save(); mod.render();
+  toast('Rejected','warning');
+}
+function resubmitOtherEntity(moduleKey, idx){
+  const mod = APPROVAL_MODULES[moduleKey];
+  const rec = mod.getArray()[idx];
+  rec.approvalStatus = 'pending_manager';
+  rec.approvalHistory = rec.approvalHistory||[];
+  rec.approvalHistory.push({stage:'Staff', by:securityData.currentUser?securityData.currentUser.username:'Unknown', date:new Date().toISOString(), action:'resubmitted'});
+  mod.save(); mod.render();
+  toast('Resubmitted for approval','success');
+}
+function otherApprovalBadge(moduleKey, idx){
+  const mod = APPROVAL_MODULES[moduleKey];
+  if(!settings[mod.settingKey]) return '';
+  const rec = mod.getArray()[idx];
+  if(!rec || !rec.approvalStatus) return '<span style="font-size:10px;color:var(--text3);">-</span>';
+  const status = rec.approvalStatus;
+  let buttons = '';
+  if(status==='rejected'){
+    buttons = `<button class="btn btn-neon btn-xs" onclick="resubmitOtherEntity('${moduleKey}',${idx})" title="Resubmit">🔄</button>`;
+  } else if(status!=='approved' && canApproveStage(status)){
+    buttons = `<button class="btn btn-green btn-xs" onclick="approveOtherEntity('${moduleKey}',${idx})" title="Approve (${APPROVAL_NEXT_ROLE[status]})">✅</button> <button class="btn btn-red btn-xs" onclick="rejectOtherEntity('${moduleKey}',${idx})" title="Reject">❌</button>`;
+  }
+  return `<div style="display:flex;flex-direction:column;gap:2px;align-items:flex-start;"><span class="badge" style="font-size:10px;white-space:nowrap;">${APPROVAL_LABELS[status]||status}</span><span>${buttons}</span></div>`;
 }
 
 // ==================== MODULE 24: NOTIFICATION CENTER ====================
