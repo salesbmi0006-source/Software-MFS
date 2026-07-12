@@ -4,6 +4,28 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SAU CORPORATION | FULL MANAGEMENT v31</title>
+<link id="pwa-manifest-link" rel="manifest" href="">
+<script>
+// PHASE 14 — inline Web App Manifest (single-file app, so it's built as a
+// data: URI at runtime rather than a separate manifest.json). Lets Android
+// Chrome/Edge offer "Add to Home Screen" / "Install app" when this page is
+// hosted over https://. Does nothing harmful if the browser ignores it.
+(function(){
+  try{
+    const manifest = {
+      name:"SAU Corporation - Full Management",
+      short_name:"SAU Corp",
+      start_url:".",
+      display:"standalone",
+      background_color:"#0d1117",
+      theme_color:"#0d1117",
+      icons:[]
+    };
+    const blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+    document.getElementById('pwa-manifest-link').setAttribute('href', URL.createObjectURL(blob));
+  }catch(e){}
+})();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -252,6 +274,8 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
   .btn{padding:6px 10px;font-size:11px;}
   .modal-body{padding:10px;}
   #clock{display:none;}
+  #globalSearchInput{width:150px!important;}
+  #globalSearchResults{width:260px!important;}
 }
 /* Tabs inside modal */
 .modal-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:14px;flex-wrap:wrap;}
@@ -281,7 +305,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div class="form-group"><label>Password</label><input type="password" id="login-password" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <div id="login-error" style="color:var(--neon3);font-size:12px;margin-bottom:10px;min-height:18px;"></div>
     <button class="btn btn-purple" style="width:100%;padding:12px;font-size:14px;" onclick="doLogin()">🔓 Login</button>
-    <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--text3);">SAU CORPORATION v13 | Management System</div>
+    <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--text3);">SAU CORPORATION v31 | Management System</div>
   </div>
 </div>
 <!-- APP CONTENT -->
@@ -292,6 +316,10 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <p id="hdr-sub">DC & Invoice Management System v31</p>
   </div>
   <div id="header-center">
+    <div style="position:relative;display:inline-block;" id="globalSearchWrap">
+      <input type="text" id="globalSearchInput" placeholder="🔍 Search Party / DC / Invoice / Item..." oninput="runGlobalSearch()" onkeydown="if(event.key==='Enter')goToFullAiSearch()" style="width:220px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--radius2);padding:6px 10px;font-size:12px;">
+      <div id="globalSearchResults" style="display:none;position:absolute;top:110%;left:0;width:340px;max-height:420px;overflow-y:auto;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius2);box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:500;padding:6px;"></div>
+    </div>
     <div style="position:relative;display:inline-block;">
       <button class="btn btn-sm" id="notifBellBtn" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);position:relative;" onclick="toggleNotifPanel()">🔔<span id="notifBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:var(--neon3);color:#fff;border-radius:50%;font-size:9px;padding:1px 5px;font-weight:700;"></span></button>
       <div id="notifPanel" style="display:none;position:absolute;top:110%;left:0;width:320px;max-height:400px;overflow-y:auto;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius2);box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:500;padding:10px;"></div>
@@ -302,6 +330,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <button class="btn btn-yellow btn-sm" onclick="openModal('settingsModal')">⚙️ Settings</button>
     <button class="btn btn-sm" id="modeToggleBtn" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);" onclick="toggleModeQuick()" title="Toggle Dark/Light Mode">🌙</button>
     <button class="btn btn-sm" style="background:var(--bg3);border:1px solid var(--neon2);color:var(--neon2);" onclick="enterFieldMode()" title="Simplified screen for field sales staff">📱 Field Mode</button>
+    <button class="btn btn-sm" style="background:var(--bg3);border:1px solid var(--neon4);color:var(--neon4);" onclick="openEmpLoginModal()" title="Employee login — see only your own dispatch/attendance/commission">👤 Employee Login</button>
   </div>
   <div id="header-right">
     <div id="autosave-dot" title="Auto-save active"></div>
@@ -351,6 +380,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
 
     <div class="tab-group-label">Finance</div>
     <div class="tab" onclick="showTab('cheques')" id="tab-cheques">🏦 Cheques</div>
+    <div class="tab" onclick="showTab('salesreturns')" id="tab-salesreturns">🔄 Sales Returns</div>
     <div class="tab" onclick="showTab('bank')" id="tab-bank">🏛️ Bank</div>
     <div class="tab" onclick="showTab('expenses')" id="tab-expenses">💸 Expenses</div>
     <div class="tab" onclick="showTab('receipts')" id="tab-receipts">🧾 Receipts</div>
@@ -669,6 +699,24 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
   </div>
 </div>
 
+<!-- ====== PHASE 10: SALES RETURN / CREDIT NOTE TAB ====== -->
+<div class="tab-panel" id="panel-salesreturns">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">🔄 Sales Return / Credit Note</div>
+      <button class="btn btn-green btn-sm" onclick="openSalesReturnModal()">➕ New Sales Return</button>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="sr-search" placeholder="Search Credit Note No, party, invoice..." oninput="renderSalesReturnsTab()" style="max-width:320px;">
+    </div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>Credit Note No</th><th>Date</th><th>Party</th><th>Against Inv/DC</th><th>Items</th><th>Total Credit</th><th>Reason</th><th>Actions</th></tr></thead>
+      <tbody id="srTbody"></tbody></table>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:8px;">Saving a Sales Return automatically creates a <strong>Credit Note</strong> ledger entry (reduces party's outstanding balance) and adds the returned quantity back into <strong>Stock</strong> (matched by item name).</div>
+  </div>
+</div>
+
 <!-- ====== HS CODES TAB ====== -->
 <div class="tab-panel" id="panel-hscodes">
   <div class="grid2">
@@ -791,6 +839,14 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     </div>
     <div class="form-group"><label>Address (full)</label><textarea id="set-address" rows="2" placeholder="Full address..."></textarea></div>
     <div class="divider"></div>
+    <div class="form-group">
+      <label>Company Logo <span style="font-weight:400;color:var(--text3);">(shows automatically on Invoice / Quotation / DC / all PDF reports)</span></label>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:4px;">
+        <div id="set-logo-preview" style="width:70px;height:70px;border:1px dashed var(--border2);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fff;"></div>
+        <input type="file" id="set-logo-file" accept="image/png,image/jpeg" onchange="handleLogoUpload()" style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius2);padding:6px;">
+        <button type="button" class="btn btn-red btn-xs" onclick="removeCompanyLogo()">🗑️ Remove Logo</button>
+      </div>
+    </div>
     <div class="form-group">
       <label>PDF Company Details (per field)</label>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-top:6px;">
@@ -1362,6 +1418,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
         <select id="emp-money-type">
           <option value="advance">💵 Advance</option>
           <option value="bonus">🎁 Bonus</option>
+          <option value="commission">📈 Commission</option>
         </select>
       </div>
       <div class="form-group"><label>Note</label><input type="text" id="emp-money-note" placeholder="Reason (optional)"></div>
@@ -1369,6 +1426,11 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     </div>
     <div id="emp-money-log" style="font-size:12px;color:var(--text2);max-height:100px;overflow-y:auto;"></div>
     <div class="divider"></div>
+    <div style="font-size:13px;font-weight:700;color:var(--neon2);margin-bottom:8px;">🔐 Employee Dashboard Login <span style="font-weight:400;color:var(--text3);">(optional — lets this employee log in and see only their own dispatch/attendance/commission)</span></div>
+    <div class="form-row">
+      <div class="form-group"><label>Username</label><input type="text" id="emp-username" placeholder="e.g. employee's phone or short name"></div>
+      <div class="form-group"><label>Password</label><input type="text" id="emp-password" placeholder="Set a password"></div>
+    </div>
     <div class="form-group"><label>Documents (CNIC copy, contract, etc.)</label><input type="file" id="emp-doc" accept="image/*,.pdf" multiple onchange="handleEmpDocUpload()" style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius2);padding:6px;"><div id="emp-doc-list" style="font-size:12px;color:var(--text2);margin-top:6px;"></div></div>
   </div>
   <div class="modal-footer">
@@ -1691,6 +1753,36 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
   </div>
   <div class="modal-footer">
     <button class="btn btn-neon" onclick="closeModal('rateHistoryModal')">Close</button>
+  </div>
+</div>
+</div>
+
+<!-- PHASE 10: SALES RETURN / CREDIT NOTE MODAL -->
+<div class="modal-overlay" id="salesReturnModal">
+<div class="modal modal-lg">
+  <div class="modal-header"><h3>🔄 New Sales Return / Credit Note</h3><button class="close-btn" onclick="closeModal('salesReturnModal')">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="sr-edit-id">
+    <div class="form-row">
+      <div class="form-group"><label>Credit Note No</label><input type="text" id="sr-cnno" placeholder="CN-1001"></div>
+      <div class="form-group"><label>Date</label><input type="date" id="sr-date"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Party</label><input type="text" id="sr-party" list="sr-party-list" placeholder="Party name"><datalist id="sr-party-list"></datalist></div>
+      <div class="form-group"><label>Against DC/Invoice No (optional)</label><div style="display:flex;gap:6px;"><input type="text" id="sr-invno" placeholder="e.g. 2046" style="flex:1;"><button type="button" class="btn btn-neon btn-xs" onclick="loadInvoiceForSR()" title="Auto-fill party & items from this invoice">📋 Load from Invoice</button></div></div>
+    </div>
+    <div class="form-group"><label>Reason for Return</label><textarea id="sr-reason" rows="2" placeholder="e.g. Damaged goods, wrong item sent, quality issue..."></textarea></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 6px;">
+      <strong>Returned Items</strong>
+      <button type="button" class="btn btn-neon btn-xs" onclick="addSRItemRow()">➕ Add Item</button>
+    </div>
+    <div class="tbl-wrap"><table class="items-table"><thead><tr><th>Description</th><th>UOM</th><th>Qty</th><th>Rate</th><th>Tax%</th><th>Total</th><th></th></tr></thead>
+      <tbody id="sr-items-tbody"></tbody></table></div>
+    <div style="text-align:right;margin-top:8px;font-size:15px;" class="neon-text"><strong>Total Credit: <span id="sr-total">0</span></strong></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="saveSalesReturn()">💾 Save Credit Note</button>
+    <button class="btn btn-neon" onclick="closeModal('salesReturnModal')">Cancel</button>
   </div>
 </div>
 </div>
@@ -2852,6 +2944,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
           <option value="payment">Payment (Credit)</option>
           <option value="debit_note">Debit Note (Debit)</option>
           <option value="bill">Bill (Debit)</option>
+          <option value="credit_note">Credit Note (Credit) — PHASE 10</option>
         </select>
       </div>
       <div class="form-group"><label>Cheque/Ref No</label><div style="display:flex;gap:6px;"><input type="text" id="led-ref" placeholder="Reference number" style="flex:1;"><button type="button" class="btn btn-neon btn-xs" title="Auto-generate Receipt/Payment Voucher No" onclick="autoFillNumber(document.getElementById('led-type').value==='payment'?'receipt':'payment','led-ref')">🔢</button></div></div>
@@ -3116,13 +3209,35 @@ const DEFAULT_SETTINGS = {
   perPage:'100', theme:'cyan', defaultTax:'18', currency:'PKR',
   furtherTax:'3', defaultUom:'Pcs', openingQty:0, openingAmt:0, mode:'dark',
   pdfFullDetails:true, pdfReportOrder:'invoice', approvalWorkflowEnabled:false,
-  poApprovalWorkflowEnabled:false, expApprovalWorkflowEnabled:false, chqApprovalWorkflowEnabled:false
+  poApprovalWorkflowEnabled:false, expApprovalWorkflowEnabled:false, chqApprovalWorkflowEnabled:false,
+  logoBase64:''
 };
 
 function loadSettings(){
   const s = localStorage.getItem('sau_settings');
   settings = s ? {...DEFAULT_SETTINGS,...JSON.parse(s)} : {...DEFAULT_SETTINGS};
   applySettings();
+}
+function handleLogoUpload(){
+  const input = document.getElementById('set-logo-file');
+  if(!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  if(file.size > 1.5*1024*1024){ toast('Logo image is large — please use a smaller file (under 1.5MB) for faster PDFs','warning'); }
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    settings.logoBase64 = e.target.result;
+    safeSetItem('sau_settings', JSON.stringify(settings));
+    document.getElementById('set-logo-preview').innerHTML = `<img src="${settings.logoBase64}" style="max-width:100%;max-height:100%;">`;
+    toast('Logo saved — it will now show on Invoice/Quotation/DC and PDF reports','success');
+  };
+  reader.readAsDataURL(file);
+}
+function removeCompanyLogo(){
+  settings.logoBase64 = '';
+  safeSetItem('sau_settings', JSON.stringify(settings));
+  document.getElementById('set-logo-preview').innerHTML = '';
+  document.getElementById('set-logo-file').value = '';
+  toast('Logo removed','warning');
 }
 function saveSettings(e){
   if(e) e.preventDefault();
@@ -3158,6 +3273,8 @@ function applySettings(){
   document.getElementById('hdr-sub').textContent = 'DC & Invoice Management v31 | NTN: '+(settings.ntn||'');
   document.getElementById('operator-name').textContent = settings.operatorName||'OPERATOR';
   document.title = settings.pageTitle||'SAU CORPORATION';
+  const logoPrev = document.getElementById('set-logo-preview');
+  if(logoPrev) logoPrev.innerHTML = settings.logoBase64 ? `<img src="${settings.logoBase64}" style="max-width:100%;max-height:100%;">` : '';
   // Fill settings form
   const fields = {
     'set-company':'companyName','set-operator':'operatorName','set-ntn':'ntn',
@@ -3312,7 +3429,7 @@ async function buildFullBackupData(){
     digitalInvoices: diWithPdf,
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
     savedQuotations, quotSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
-    stockItems, stockMovements, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
+    stockItems, stockMovements, salesReturns, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     documentManager: docsWithBlob,
     securityData: (typeof securityData!=='undefined'?securityData:null),
     backupDate:new Date().toISOString(), version:'20.0'
@@ -3499,7 +3616,7 @@ function buildCloudSyncData(){
     db, cheques, ledgerData, fbrParties, settings,
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
     savedQuotations, quotSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
-    stockItems, stockMovements, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
+    stockItems, stockMovements, salesReturns, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     securityData: (typeof securityData!=='undefined'?securityData:null),
     updatedAt: new Date().toISOString(),
     updatedBy: (typeof securityData!=='undefined' && securityData.currentUser) ? securityData.currentUser.username : (settings.operatorName||'Operator'),
@@ -3558,6 +3675,105 @@ function hideCloudLoadingOverlay(reason){
     return; // keep overlay up until we're sure it's genuinely empty (see promptFirstTimeCloudSetup)
   }
   ov.remove();
+}
+// PHASE 14 — shown only in the rare case where THIS device made changes while
+// offline AND another device also pushed changes to the cloud during that
+// same window. Neither copy is silently thrown away — a human picks.
+let offlineConflictRemoteData = null;
+function showOfflineConflictModal(remoteData){
+  offlineConflictRemoteData = remoteData;
+  if(document.getElementById('offline-conflict-overlay')) return;
+  const ov = document.createElement('div');
+  ov.id = 'offline-conflict-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);color:#fff;display:flex;align-items:center;justify-content:center;text-align:center;font-family:sans-serif;z-index:999999;padding:20px;';
+  const remoteWho = remoteData.updatedBy||'another device';
+  const remoteWhen = remoteData.updatedAt ? new Date(remoteData.updatedAt).toLocaleString() : '-';
+  ov.innerHTML = `<div style="max-width:480px;background:#151b23;border:1px solid #333;border-radius:12px;padding:24px;">
+    <div style="font-size:40px;margin-bottom:10px;">⚠️</div>
+    <h2 style="margin:0 0 10px;">Offline hote hue dono taraf changes hue hain</h2>
+    <p style="opacity:.85;line-height:1.6;font-size:14px;">Aap internet na hone ki wajah se offline the aur is dauran kuch save kiya. Isi dauran <strong>${remoteWho}</strong> ne bhi (${remoteWhen}) cloud par changes bheje. Dono ek sath khud khud merge nahi ho saktay — kaunsi copy rakhni hai, chunein:</p>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px;">
+      <button onclick="resolveOfflineConflictKeepMine()" style="padding:12px;border-radius:8px;border:none;background:#2563eb;color:#fff;cursor:pointer;font-weight:600;">📤 Meri (is device ki) changes rakhein — cloud par bhejein</button>
+      <button onclick="resolveOfflineConflictKeepTheirs()" style="padding:12px;border-radius:8px;border:none;background:#444;color:#fff;cursor:pointer;">📥 Unki (${remoteWho}) changes le lein — meri offline change chhod dein</button>
+    </div>
+    <p style="opacity:.6;font-size:11px;margin-top:14px;">Tip: agar pakka nahi hai, pehle "JSON Backup" le lein (Settings) taake koi bhi copy permanently na khoye.</p>
+  </div>`;
+  document.body.appendChild(ov);
+}
+function resolveOfflineConflictKeepMine(){
+  pendingCloudSyncDirty = false;
+  document.getElementById('offline-conflict-overlay')?.remove();
+  pushLocalDataToCloud();
+  toast('Aapki offline changes cloud par bhej di gayi hain.','success');
+  offlineConflictRemoteData = null;
+}
+async function resolveOfflineConflictKeepTheirs(){
+  if(!offlineConflictRemoteData) return;
+  cloudApplyingRemote = true;
+  try{
+    await applyRestoredBackupData(offlineConflictRemoteData);
+    cloudLastAppliedUpdatedAt = offlineConflictRemoteData.updatedAt;
+    pendingCloudSyncDirty = false;
+    toast('Dusre device ki changes apply kar di gayi hain — aapki offline change is jagah replace ho gayi.','warning');
+  } finally {
+    cloudApplyingRemote = false;
+    document.getElementById('offline-conflict-overlay')?.remove();
+    offlineConflictRemoteData = null;
+  }
+}
+
+// PHASE 14 — Browser online/offline events give an instant nudge (rather than
+// waiting for the existing ~3-20s backoff retry loop in initRealtimeSync) and
+// keep the header status honest the moment the network actually drops.
+window.addEventListener('online', ()=>{
+  toast('🌐 Internet wapis aa gaya — sync ho raha hai…','info');
+  if(!cloudSyncReady && typeof initRealtimeSync==='function') initRealtimeSync();
+  else if(pendingCloudSyncDirty) scheduleCloudPush();
+});
+window.addEventListener('offline', ()=>{
+  setCloudStatus('📴 Offline — internet connection nahi hai. Changes is device par save ho rahe hain.');
+});
+
+// PHASE 14 — best-effort Service Worker so the already-loaded page (and the
+// external CDN scripts it depends on: jsPDF, Firebase, Google Identity
+// Services, fonts) stay cached and the app SHELL can still open without
+// internet. This only works when the page is served over http(s) from a real
+// origin — browsers block Service Workers entirely on file:// pages, so this
+// silently does nothing there instead of throwing an error.
+function registerOfflineServiceWorker(){
+  if(!('serviceWorker' in navigator)) return;
+  if(location.protocol==='file:'){
+    console.info('PWA offline caching skipped: page opened as a local file (file://). Host it on a real https:// URL for offline app-shell caching to work.');
+    return;
+  }
+  try{
+    const swSource = `
+      const CACHE_NAME='sau-corp-shell-v1';
+      self.addEventListener('install', e=>{ self.skipWaiting(); });
+      self.addEventListener('activate', e=>{ self.clients.claim(); });
+      self.addEventListener('fetch', e=>{
+        if(e.request.method!=='GET') return;
+        e.respondWith(
+          caches.match(e.request).then(cached=>{
+            const fetchPromise = fetch(e.request).then(networkRes=>{
+              if(networkRes && networkRes.status===200){
+                caches.open(CACHE_NAME).then(cache=>cache.put(e.request, networkRes.clone()));
+              }
+              return networkRes;
+            }).catch(()=>cached);
+            return cached || fetchPromise;
+          })
+        );
+      });
+    `;
+    const blob = new Blob([swSource], {type:'application/javascript'});
+    const swUrl = URL.createObjectURL(blob);
+    navigator.serviceWorker.register(swUrl).then(()=>{
+      console.info('Offline app-shell caching enabled.');
+    }).catch(err=>{
+      console.info('Service Worker registration skipped (not supported on this browser/host):', err.message);
+    });
+  }catch(e){ /* never let PWA setup break the main app */ }
 }
 // Only reachable after we've re-checked and the cloud is STILL empty after a
 // delay — i.e. this really does look like a brand-new/blank database, not a
@@ -3636,6 +3852,28 @@ async function initRealtimeSync(){
       hideCloudLoadingOverlay('done');
       return; // already applied, nothing new
     }
+    // PHASE 14 — OFFLINE-FIRST SAFETY: if WE have local changes made while
+    // offline that haven't been pushed yet (pendingCloudSyncDirty), don't
+    // blindly overwrite them with whatever the cloud snapshot says — that
+    // would silently discard the offline work the instant the connection
+    // came back. Figure out whether anyone else ALSO changed the cloud data
+    // during our offline window first.
+    if(pendingCloudSyncDirty){
+      if(cloudLastAppliedUpdatedAt===null || data.updatedAt===cloudLastAppliedUpdatedAt){
+        // Nobody else touched the cloud while we were offline — safe to just
+        // flush our queued local edits up automatically, no prompt needed.
+        pendingCloudSyncDirty = false;
+        pushLocalDataToCloud();
+        hideCloudLoadingOverlay('done');
+        return;
+      } else {
+        // Real conflict: another device ALSO changed data during our offline
+        // window. Neither copy should be silently discarded — ask the user.
+        showOfflineConflictModal(data);
+        hideCloudLoadingOverlay('done');
+        return;
+      }
+    }
     // Genuinely new data from another device/browser — apply it live.
     cloudApplyingRemote = true;
     try{
@@ -3664,13 +3902,25 @@ async function initRealtimeSync(){
 // safeSetItem below) so that any change anywhere in the app — Save DC,
 // Invoice, Party, Delete, Edit, Status change, etc. — goes to the cloud
 // within ~1.2s of the last change, without any button press.
+let pendingCloudSyncDirty = false;   // PHASE 14: true when a local change happened while offline/not-yet-connected — flushed automatically once back online
+let lastOfflineToastAt = 0;
 function scheduleCloudPush(){
   if(cloudApplyingRemote) return; // we're mid-way applying someone else's update — don't echo it straight back
   if(!cloudSyncReady){
-    // CLOUD-ONLY GUARD: there is no local storage fallback anymore, so a
-    // change made while not yet connected to Firebase has nowhere durable to
-    // go. Warn clearly instead of silently "saving" into thin air.
-    toast('⚠️ Cloud sy connect nahi — ye change save nahi hoga jab tak internet wapis na aaye. Refresh na karein.','error');
+    // OFFLINE-FIRST QUEUE (Phase 14): the change is already safe in localStorage
+    // (safeSetItem wrote it before calling us). We just remember that a cloud
+    // push is owed, and flush it automatically the moment connectivity/Firebase
+    // comes back (see the 'online' listener and retryCloudConnectionIfNeeded below)
+    // — no button press needed, and no more than one toast every 20s so it
+    // doesn't spam while several offline edits happen back to back.
+    pendingCloudSyncDirty = true;
+    setCloudStatus('📴 Offline — changes saved on this device, will sync automatically once internet is back');
+    const now = Date.now();
+    if(now - lastOfflineToastAt > 20000){
+      lastOfflineToastAt = now;
+      toast('📴 No internet — this change is saved on your device and will sync automatically once you\'re back online.','warning');
+    }
+    retryCloudConnectionIfNeeded();
     return;
   }
   clearTimeout(cloudPushDebounceTimer);
@@ -3922,6 +4172,7 @@ async function applyRestoredBackupData(data){
   if(data.receiptDB || data.receiptSettings){ document.getElementById('receiptsFrame')?.contentWindow?.postMessage({type:'sau-reload-receipts'},'*'); }
   if(data.stockItems) { stockItems = data.stockItems; saveStockItems(); }
   if(data.stockMovements) { stockMovements = data.stockMovements; saveStockMovements(); }
+  if(data.salesReturns) { salesReturns = data.salesReturns; saveSalesReturns(); }
   if(data.purchaseOrders) { purchaseOrders = data.purchaseOrders; savePurchaseOrders(); }
   if(data.partyPaymentTerms) { partyPaymentTerms = data.partyPaymentTerms; savePartyPaymentTerms(); }
   if(data.visitLogs) { visitLogs = data.visitLogs; saveVisitLogsToStorage(); }
@@ -4194,8 +4445,30 @@ function toast(msg, type='info'){
   c.appendChild(t);
   setTimeout(()=>t.remove(), 3000);
 }
-function openModal(id){ document.getElementById(id).classList.add('open'); }
-function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+// SYSTEM-WIDE FIX: previously every modal shared the same CSS z-index (5000), so
+// when one modal was opened from INSIDE another already-open modal (e.g. "Load
+// from PO" picker opened from the DC form, or any other nested popup), whichever
+// one happened to be written EARLIER in the HTML always rendered behind the other
+// — regardless of which one was actually opened last. That's why the PO item
+// picker was appearing "behind" the DC screen and couldn't be interacted with.
+// Fix: every time a modal opens, give it a fresh, higher z-index than anything
+// currently open, so the most-recently-opened modal is always on top — no matter
+// where it sits in the HTML. This covers ALL modals in the app (54+), not just
+// the one that was reported, so the same bug can't resurface elsewhere.
+let modalZCounter = 5000;
+function openModal(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  modalZCounter += 10;
+  el.style.zIndex = modalZCounter;
+  el.classList.add('open');
+}
+function closeModal(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.classList.remove('open');
+  el.style.zIndex = ''; // release back to the CSS default once closed
+}
 
 // ==================== PHASE 7: MULTI-USER CONFLICT LOCK ====================
 // Jab do log (alag devices/tabs se) same DC record edit karne ki koshish karein,
@@ -4282,6 +4555,7 @@ function renderTabContent(id){
   if(id==='crm') renderCrmTab();
   if(id==='sendcenter') renderSendCenter();
   if(id==='stock') renderStockTab();
+  if(id==='salesreturns') renderSalesReturnsTab();
   if(id==='purchaseorders') renderPOTab();
   if(id==='warehouses') renderWarehousesTab();
   if(id==='expenses') renderExpensesTab();
@@ -5677,7 +5951,7 @@ function renderLedger(){
     balance += debit-credit-ded;
     if(isDebit) totalBills+=e.amount;
     else { totalPaid+=e.amount; totalDed+=ded; }
-    const typeMap={bill:'<span class="badge badge-invoiced">Bill</span>',payment:'<span class="badge badge-paid">Payment</span>',debit_note:'<span class="badge badge-pending">Debit</span>'};
+    const typeMap={bill:'<span class="badge badge-invoiced">Bill</span>',payment:'<span class="badge badge-paid">Payment</span>',debit_note:'<span class="badge badge-pending">Debit</span>',credit_note:'<span class="badge badge-paid">Credit Note</span>'};
     let descCell = e.desc||e.narration||'';
     if(e.type==='bill' && e.dcNo) descCell = `<strong>DC:${e.dcNo}</strong>${e.poNo?' | PO:'+e.poNo:''}`;
     return `<tr>
@@ -6879,6 +7153,7 @@ function init(){
   loadSalarySlips();
   loadAutoNumberSettings();
   loadStockModule();
+  loadSalesReturns();
   loadPurchaseOrders();
   loadPartyPaymentTerms();
   loadVisitLogs();
@@ -6890,6 +7165,7 @@ function init(){
   setTimeout(()=>checkAutoBackupSchedule(), 3000);
   setTimeout(()=>updateNotifBadge(), 1000);
   setTimeout(()=>autoWeeklyIntegrityCheck(), 2500); // PHASE 6: weekly auto data-integrity check
+  setTimeout(()=>attemptSilentGDriveReconnect(), 1200); // PHASE-FIX: auto reconnect Google Drive without re-asking for the key
   syncLedgerFromDB();
   syncPartiesFromDB();
   populatePartyList(); populateMonthFilter();
@@ -6900,6 +7176,7 @@ function init(){
   updateClock();
   // Check security
   checkSecurityOnLoad();
+  registerOfflineServiceWorker(); // PHASE 14: offline-first PWA app-shell caching (best-effort)
   setTimeout(()=>{
     try{
       const n = getPOPaymentAlerts().length;
@@ -7031,6 +7308,13 @@ function executeMerge(){
 
 // ==================== PO NUMBER IN PDF ====================
 function pdfHeader(doc, title){
+  if(settings.logoBase64){
+    try{
+      const fmt = settings.logoBase64.includes('image/png') ? 'PNG' : 'JPEG';
+      const pageW = doc.internal.pageSize.getWidth();
+      doc.addImage(settings.logoBase64, fmt, pageW-32, 8, 20, 16);
+    }catch(e){ /* corrupt/unsupported image - skip silently, don't break the PDF */ }
+  }
   doc.setFontSize(14); doc.setFont(undefined,'bold');
   doc.text(settings.companyName||'SAU CORPORATION', 14, 15);
   let y = 22;
@@ -8579,6 +8863,7 @@ function buildQuotHTML(q, isBill, printSize){
   const width = isThermal ? `${quotSettings.thermalWidth||80}mm` : '190mm';
   return `<div style="font-family:Arial,sans-serif;font-size:${fs}px;width:${width};max-width:${width};margin:0 auto;padding:${quotSettings.margin||10}mm;">
     <div style="text-align:center;margin-bottom:8px;">
+      ${settings.logoBase64?`<img src="${settings.logoBase64}" style="max-height:${isThermal?'40px':'55px'};max-width:160px;margin-bottom:4px;">`:''}
       <div style="font-size:${fs+4}px;font-weight:bold;">${settings.companyName||'SAU CORPORATION'}</div>
       ${companyInfo}
     </div>
@@ -8711,6 +8996,7 @@ function buildDCChallanHTML(rec){
   </tr>`).join('');
   return `<div style="font-family:Arial,sans-serif;max-width:650px;margin:0 auto;padding:20px;color:#000;">
     <div style="text-align:center;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:10px;">
+      ${settings.logoBase64?`<img src="${settings.logoBase64}" style="max-height:60px;max-width:180px;margin-bottom:6px;">`:''}
       <div style="font-size:20px;font-weight:bold;">${settings.companyName||'SAU CORPORATION'}</div>
       ${settings.pdfFullDetails!==false?`<div style="font-size:12px;">${(settings.address||'').replace(/\n/g,' ')} | ${settings.phone||''}</div>`:''}
     </div>
@@ -9311,7 +9597,7 @@ let empTempDocs = [];
 function openEmployeeModal(idx){
   editingEmpIdx = (idx!==undefined) ? idx : null;
   document.getElementById('empModalTitle').textContent = (idx!==undefined) ? '✏️ Edit Employee' : '➕ Add Employee';
-  const ids=['emp-name','emp-designation','emp-cnic','emp-phone','emp-salary','emp-joining','emp-address','emp-emg-name','emp-emg-phone'];
+  const ids=['emp-name','emp-designation','emp-cnic','emp-phone','emp-salary','emp-joining','emp-address','emp-emg-name','emp-emg-phone','emp-username','emp-password'];
   ids.forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
   document.getElementById('emp-pic').value=''; document.getElementById('emp-pic-preview').innerHTML='';
   document.getElementById('emp-doc').value=''; document.getElementById('emp-doc-list').innerHTML='';
@@ -9327,6 +9613,8 @@ function openEmployeeModal(idx){
     document.getElementById('emp-address').value=e.address||'';
     document.getElementById('emp-emg-name').value=e.emergencyContact||'';
     document.getElementById('emp-emg-phone').value=e.emergencyPhone||'';
+    document.getElementById('emp-username').value=e.username||'';
+    document.getElementById('emp-password').value=e.password||'';
     if(e.picBase64) document.getElementById('emp-pic-preview').innerHTML=`<img src="${e.picBase64}" style="max-width:100px;max-height:100px;border-radius:6px;">`;
     empTempAttendance = e.attendance ? [...e.attendance] : [];
     empTempMoney = e.money ? [...e.money] : [];
@@ -9362,7 +9650,7 @@ function addMoneyEntry(){
 function renderEmpMoneyLog(){
   const el = document.getElementById('emp-money-log');
   if(!el) return;
-  const icons={advance:'💵',bonus:'🎁'};
+  const icons={advance:'💵',bonus:'🎁',commission:'📈'};
   el.innerHTML = empTempMoney.slice().reverse().map(m=>`<div>${icons[m.type]||''} ${m.date} — ${m.amount} ${m.note?('('+m.note+')'):''}</div>`).join('') || 'No entries yet';
 }
 async function handleEmpDocUpload(){
@@ -9387,6 +9675,12 @@ async function saveEmployee(){
   if(picInput.files && picInput.files[0]){
     picBase64 = await new Promise(res=>{const r=new FileReader(); r.onload=e=>res(e.target.result); r.readAsDataURL(picInput.files[0]);});
   }
+  const username = document.getElementById('emp-username').value.trim();
+  const password = document.getElementById('emp-password').value;
+  if(username && employees.some((e,i)=>e.username && e.username.toLowerCase()===username.toLowerCase() && i!==editingEmpIdx)){
+    toast('This username is already used by another employee — pick a different one','warning');
+    return;
+  }
   const emp = {
     name, designation:document.getElementById('emp-designation').value.trim(),
     cnic:document.getElementById('emp-cnic').value.trim(),
@@ -9396,6 +9690,7 @@ async function saveEmployee(){
     address:document.getElementById('emp-address').value.trim(),
     emergencyContact:document.getElementById('emp-emg-name').value.trim(),
     emergencyPhone:document.getElementById('emp-emg-phone').value.trim(),
+    username, password,
     picBase64, attendance: empTempAttendance, money: empTempMoney, documents: empTempDocs
   };
   if(editingEmpIdx!==null){ employees[editingEmpIdx] = {...employees[editingEmpIdx], ...emp}; logAudit('edit','Employee',`Employee ${emp.name} updated`, undefined, emp); toast('Employee updated!','success'); }
@@ -10645,6 +10940,161 @@ function openRateHistoryModal(idx){
   openModal('rateHistoryModal');
 }
 
+// ==================== PHASE 10: SALES RETURN / CREDIT NOTE MODULE ====================
+// Naya module: party se maal wapis aane par entry hoti hai, stock mein wapis add hoti
+// hai, aur ledger mein credit note automatically reflect hota hai.
+let salesReturns = [];
+let currentSRItems = [];
+function loadSalesReturns(){
+  const d = localStorage.getItem('sau_sales_returns');
+  salesReturns = d ? JSON.parse(d) : [];
+}
+function saveSalesReturns(){ safeSetItem('sau_sales_returns', JSON.stringify(salesReturns)); }
+function nextCreditNoteNo(){
+  const nums = salesReturns.map(r=>parseInt((r.cnNo||'').replace(/\D/g,''))||0);
+  const next = (nums.length?Math.max(...nums):1000)+1;
+  return 'CN-'+next;
+}
+function openSalesReturnModal(){
+  document.getElementById('sr-edit-id').value = '';
+  document.getElementById('sr-cnno').value = nextCreditNoteNo();
+  document.getElementById('sr-party').value = '';
+  document.getElementById('sr-invno').value = '';
+  document.getElementById('sr-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('sr-reason').value = '';
+  currentSRItems = [];
+  renderSRItemsTable();
+  const dl = document.getElementById('sr-party-list');
+  if(dl) dl.innerHTML = fbrParties.map(p=>`<option value="${p.partyName}">`).join('');
+  openModal('salesReturnModal');
+}
+// Pulls party + items straight from an existing DC/Invoice so the operator doesn't
+// have to retype everything — quantities default to the full invoiced qty and can
+// be edited down before saving (e.g. only 2 of 10 pieces were actually returned).
+function loadInvoiceForSR(){
+  const invNo = document.getElementById('sr-invno').value.trim();
+  if(!invNo){ toast('Enter DC/Invoice No first','warning'); return; }
+  const rec = db.find(r=>r.invNo===invNo || r.dcNo===invNo);
+  if(!rec){ toast(`No DC/Invoice found with No "${invNo}"`,'warning'); return; }
+  document.getElementById('sr-party').value = rec.partyName;
+  currentSRItems = (rec.items||[]).map(it=>({desc:it.desc, uom:it.uom||'', qty:parseFloat(it.qty)||0, rate:parseFloat(it.rate)||0, tax:parseFloat(it.tax)||0}));
+  renderSRItemsTable();
+  toast(`${currentSRItems.length} item(s) loaded from ${invNo} — edit quantities if only part was returned`,'success');
+}
+function addSRItemRow(){
+  currentSRItems.push({desc:'', uom:settings.defaultUom||'Pcs', qty:1, rate:0, tax:settings.defaultTax||0});
+  renderSRItemsTable();
+}
+function removeSRItemRow(i){
+  currentSRItems.splice(i,1);
+  renderSRItemsTable();
+}
+function updateSRItem(i, field, val){
+  currentSRItems[i][field] = (field==='qty'||field==='rate'||field==='tax') ? (parseFloat(val)||0) : val;
+  renderSRTotalOnly();
+}
+function renderSRTotalOnly(){
+  const total = currentSRItems.reduce((s,it)=>s+((it.qty||0)*(it.rate||0)*(1+(it.tax||0)/100)),0);
+  const totalEl = document.getElementById('sr-total');
+  if(totalEl) totalEl.textContent = (settings.currency||'PKR')+' '+fmt(total);
+}
+function renderSRItemsTable(){
+  const tbody = document.getElementById('sr-items-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = currentSRItems.map((it,i)=>`<tr>
+    <td><input type="text" value="${it.desc.replace(/"/g,'&quot;')}" oninput="updateSRItem(${i},'desc',this.value)" style="width:160px;"></td>
+    <td><input type="text" value="${(it.uom||'').replace(/"/g,'&quot;')}" oninput="updateSRItem(${i},'uom',this.value)" style="width:60px;"></td>
+    <td><input type="number" value="${it.qty}" min="0" oninput="updateSRItem(${i},'qty',this.value)" style="width:70px;"></td>
+    <td><input type="number" value="${it.rate}" min="0" oninput="updateSRItem(${i},'rate',this.value)" style="width:80px;"></td>
+    <td><input type="number" value="${it.tax}" min="0" oninput="updateSRItem(${i},'tax',this.value)" style="width:60px;"></td>
+    <td style="text-align:right;">${fmt((it.qty||0)*(it.rate||0)*(1+(it.tax||0)/100))}</td>
+    <td><button type="button" class="btn btn-xs btn-red" onclick="removeSRItemRow(${i})">🗑️</button></td>
+  </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:10px;">No items added — use "📋 Load from Invoice" or "➕ Add Item"</td></tr>';
+  renderSRTotalOnly();
+}
+function saveSalesReturn(){
+  const party = document.getElementById('sr-party').value.trim();
+  const cnNo = document.getElementById('sr-cnno').value.trim();
+  const invNo = document.getElementById('sr-invno').value.trim();
+  const date = document.getElementById('sr-date').value;
+  const reason = document.getElementById('sr-reason').value.trim();
+  if(!party){ toast('Party name required','warning'); return; }
+  if(!cnNo){ toast('Credit Note No required','warning'); return; }
+  if(!date){ toast('Date required','warning'); return; }
+  const validItems = currentSRItems.filter(it=>it.desc.trim() && it.qty>0);
+  if(!validItems.length){ toast('Add at least one returned item (with description & qty)','warning'); return; }
+  const total = validItems.reduce((s,it)=>s+((it.qty||0)*(it.rate||0)*(1+(it.tax||0)/100)),0);
+  const rec = {id:'SR'+uid(), cnNo, partyName:party, invNo, date, reason, items:JSON.parse(JSON.stringify(validItems)), total};
+  salesReturns.push(rec);
+  saveSalesReturns();
+
+  // Ledger: Credit Note reduces the party's outstanding balance, same as a payment would.
+  ledgerData.push({id:'L'+uid(), partyName:party, date, type:'credit_note', refNo:cnNo, invNo, dcNo:'', desc:`Sales Return / Credit Note ${cnNo}${invNo?' against '+invNo:''}`, amount:total, deduction:0, narration:reason});
+
+  // Stock: returned qty goes back into stock, matched by item name (case-insensitive).
+  let matchedCount = 0;
+  validItems.forEach(it=>{
+    const stockItem = stockItems.find(s=>s.name.trim().toLowerCase()===it.desc.trim().toLowerCase());
+    if(stockItem){
+      stockMovements.push({id:'MV'+Date.now()+Math.random().toString(36).slice(2,6), itemId:stockItem.id, date, type:'sales_return', qty:it.qty, rate:0, supplier:'', notes:`Sales Return ${cnNo}${invNo?' (Inv '+invNo+')':''}`, warehouse:stockItem.warehouse});
+      matchedCount++;
+    }
+  });
+  saveStockMovements();
+
+  logAudit('create','Sales Return',`Credit Note ${cnNo} for ${party} — amount ${fmt(total)}`, undefined, rec);
+  saveData();
+  closeModal('salesReturnModal');
+  renderSalesReturnsTab();
+  toast(`Credit Note ${cnNo} saved — ledger updated${matchedCount?`, ${matchedCount} item(s) added back to stock`:''}`,'success');
+}
+function deleteSalesReturn(id){
+  if(!confirm('Delete this Sales Return / Credit Note?\n\nNote: the ledger credit and stock-return entries already created will NOT be auto-reversed — adjust those manually in Ledger/Stock if needed.')) return;
+  const rec = salesReturns.find(r=>r.id===id);
+  if(rec) logAudit('delete','Sales Return',`Credit Note ${rec.cnNo} deleted`, rec, undefined);
+  salesReturns = salesReturns.filter(r=>r.id!==id);
+  saveSalesReturns();
+  renderSalesReturnsTab();
+  toast('Credit Note deleted (ledger/stock entries left as-is)','warning');
+}
+function viewSalesReturn(id){
+  const rec = salesReturns.find(r=>r.id===id);
+  if(!rec) return;
+  const cur = settings.currency||'PKR';
+  let html = `<div class="form-row" style="margin-bottom:12px;">
+    <div><label>Credit Note No</label><div class="accent-box"><strong>${rec.cnNo}</strong></div></div>
+    <div><label>Date</label><div class="accent-box">${fmtDate(rec.date)}</div></div>
+    <div><label>Party</label><div class="accent-box">${rec.partyName}</div></div>
+    <div><label>Against DC/Invoice</label><div class="accent-box">${rec.invNo||'-'}</div></div>
+  </div>
+  ${rec.reason?`<div class="accent-box mb-8"><strong>Reason:</strong> ${rec.reason}</div>`:''}
+  <div class="tbl-wrap"><table class="items-table"><thead><tr><th>Description</th><th>UOM</th><th>Qty</th><th>Rate</th><th>Tax%</th><th>Total</th></tr></thead><tbody>
+  ${rec.items.map(it=>`<tr><td>${it.desc}</td><td>${it.uom||'-'}</td><td>${it.qty}</td><td>${fmt(it.rate)}</td><td>${it.tax}%</td><td style="text-align:right;">${fmt((it.qty*it.rate)*(1+it.tax/100))}</td></tr>`).join('')}
+  </tbody></table></div>
+  <div style="text-align:right;margin-top:10px;font-size:15px;" class="neon-text"><strong>Total Credit: ${cur} ${fmt(rec.total)}</strong></div>`;
+  document.getElementById('qv-title').textContent = `🔄 Credit Note ${rec.cnNo}`;
+  document.getElementById('qv-body').innerHTML = html;
+  openModal('quickViewModal');
+}
+function renderSalesReturnsTab(){
+  const q = (document.getElementById('sr-search')?.value||'').toLowerCase();
+  let list = salesReturns.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  if(q) list = list.filter(r=>[r.cnNo,r.partyName,r.invNo].join(' ').toLowerCase().includes(q));
+  const cur = settings.currency||'PKR';
+  const tbody = document.getElementById('srTbody');
+  if(!tbody) return;
+  tbody.innerHTML = list.length ? list.map(r=>`<tr>
+    <td><strong>${r.cnNo}</strong></td>
+    <td>${fmtDate(r.date)}</td>
+    <td>${r.partyName}</td>
+    <td>${r.invNo||'-'}</td>
+    <td>${r.items.length}</td>
+    <td style="text-align:right;">${cur} ${fmt(r.total)}</td>
+    <td>${r.reason||'-'}</td>
+    <td><button class="btn btn-xs btn-neon" onclick="viewSalesReturn('${r.id}')">🔍</button> <button class="btn btn-xs btn-red" onclick="deleteSalesReturn('${r.id}')">🗑️</button></td>
+  </tr>`).join('') : '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:20px;">No sales returns / credit notes yet</td></tr>';
+}
+
 // ==================== MODULE 11: BARCODE / QR SYSTEM ====================
 let currentBqItemIdx = null;
 function openBarcodeQrModal(idx){
@@ -11689,6 +12139,29 @@ function runAiSearch(){
     ), headers:['Party','Balance'], tab:'ledger'});
   }
 
+  // --- PHASE 11: Parties (dedicated section, so a plain party-name search shows the party itself too) ---
+  if(p.keywords.length){
+    const partyMatches = fbrParties.filter(pt=>p.keywords.some(k=>pt.partyName.toLowerCase().includes(k)));
+    if(partyMatches.length){
+      sections.push({title:`👥 Parties (${partyMatches.length})`, rows: partyMatches.slice(0,50).map(pt=>{
+        const bal = getPartyOutstandingBalance(pt.partyName);
+        return `<tr><td>${pt.partyName}</td><td>${pt.ntn||'-'}</td><td>${cur} ${fmt(bal)}</td></tr>`;
+      }), headers:['Party','NTN','Outstanding'], tab:'parties'});
+    }
+  }
+
+  // --- PHASE 11: Items / Stock (dedicated section) ---
+  if(p.keywords.length){
+    const itemMatches = stockItems.filter(it=>p.keywords.some(k=>it.name.toLowerCase().includes(k)));
+    if(itemMatches.length){
+      sections.push({title:`📦 Stock Items (${itemMatches.length})`, rows: itemMatches.slice(0,50).map(it=>{
+        const {purchase, sale} = getItemMovementTotals(it.id);
+        const balance = (it.openingQty||0)+purchase-sale;
+        return `<tr><td>${it.name}</td><td>${it.category||'-'}</td><td>${balance}</td><td>${it.warehouse||'-'}</td></tr>`;
+      }), headers:['Item','Category','Balance','Warehouse'], tab:'stock'});
+    }
+  }
+
   if(!sections.length){ resultsEl.innerHTML = '<div style="color:var(--text3);font-size:12px;">No matching results. Try different keywords.</div>'; return; }
   resultsEl.innerHTML = sections.map(s=>`
     <div class="card" style="cursor:default;">
@@ -11911,6 +12384,74 @@ function checkAutoBackupSchedule(){
   }
 }
 
+// ==================== MODULE 28: EMPLOYEE ROLE-BASED DASHBOARD (Phase 12) ====================
+let currentEmployeeSession = null; // {name, idx} while an employee is logged into their own dashboard
+function openEmpLoginModal(){
+  document.getElementById('emplogin-username').value = '';
+  document.getElementById('emplogin-password').value = '';
+  document.getElementById('emplogin-error').style.display = 'none';
+  openModal('empLoginModal');
+}
+function employeeLogin(){
+  const u = document.getElementById('emplogin-username').value.trim();
+  const p = document.getElementById('emplogin-password').value;
+  const idx = employees.findIndex(e=>e.username && e.username.toLowerCase()===u.toLowerCase() && e.password===p);
+  if(idx<0 || !u){
+    document.getElementById('emplogin-error').style.display = 'block';
+    return;
+  }
+  currentEmployeeSession = {name: employees[idx].name, idx};
+  closeModal('empLoginModal');
+  renderEmployeeDashboard();
+  document.getElementById('employeeDashboardScreen').style.display = 'block';
+  logAudit('login','Employee',`${employees[idx].name} logged into their employee dashboard`, undefined, undefined);
+}
+function employeeLogout(){
+  currentEmployeeSession = null;
+  document.getElementById('employeeDashboardScreen').style.display = 'none';
+}
+function renderEmployeeDashboard(){
+  if(!currentEmployeeSession) return;
+  const emp = employees[currentEmployeeSession.idx];
+  if(!emp){ employeeLogout(); return; }
+  document.getElementById('emp-dash-name').textContent = emp.name;
+  const cur = settings.currency||'PKR';
+
+  // My Dispatches: DC records where the "Dispatch By" employee field matches this employee's name
+  const myDispatches = db.filter(r=>!r.cancelled && r.dispatch && r.dispatch.dispatchBy && r.dispatch.dispatchBy.trim().toLowerCase()===emp.name.trim().toLowerCase())
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  document.getElementById('emp-dash-dispatches').innerHTML = myDispatches.length ? myDispatches.slice(0,50).map(r=>`<tr>
+    <td>${r.date||'-'}</td><td>${r.dcNo||'-'}</td><td>${r.partyName||'-'}</td><td>${r.invNo||'-'}</td>
+  </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--text3);">No dispatches tagged to you yet — the office needs to set "Dispatch By" to your name on a DC for it to show here.</td></tr>';
+
+  // My Attendance
+  const myAttendance = (emp.attendance||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const presentCount = myAttendance.filter(a=>a.type==='present').length;
+  const leaveCount = myAttendance.filter(a=>a.type==='leave').length;
+  const absentCount = myAttendance.filter(a=>a.type==='absent').length;
+  const icons = {present:'✅',leave:'🏖️',absent:'❌'};
+  document.getElementById('emp-dash-attendance').innerHTML = myAttendance.length ? myAttendance.slice(0,30).map(a=>`<div>${icons[a.type]||''} ${a.date} — ${a.type}</div>`).join('') : 'No attendance entries logged yet.';
+
+  // My Commission / Bonus / Advance
+  const myMoney = (emp.money||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const moneyIcons = {advance:'💵',bonus:'🎁',commission:'📈'};
+  document.getElementById('emp-dash-money').innerHTML = myMoney.length ? myMoney.map(m=>`<tr>
+    <td>${m.date}</td><td>${moneyIcons[m.type]||''} ${m.type}</td><td>${cur} ${fmt(m.amount)}</td><td>${m.note||'-'}</td>
+  </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--text3);">No entries yet</td></tr>';
+  const commissionTotal = myMoney.filter(m=>m.type==='commission').reduce((s,m)=>s+(parseFloat(m.amount)||0),0);
+  const bonusTotal = myMoney.filter(m=>m.type==='bonus').reduce((s,m)=>s+(parseFloat(m.amount)||0),0);
+  const advanceTotal = myMoney.filter(m=>m.type==='advance').reduce((s,m)=>s+(parseFloat(m.amount)||0),0);
+
+  document.getElementById('emp-dash-summary').innerHTML = `
+    <div class="accent-box" style="text-align:center;"><div style="font-size:11px;color:var(--text3);">Dispatches</div><div style="font-size:20px;font-weight:700;color:var(--neon);">${myDispatches.length}</div></div>
+    <div class="accent-box" style="text-align:center;"><div style="font-size:11px;color:var(--text3);">Present Days</div><div style="font-size:20px;font-weight:700;color:var(--success);">${presentCount}</div></div>
+    <div class="accent-box" style="text-align:center;"><div style="font-size:11px;color:var(--text3);">Leave / Absent</div><div style="font-size:20px;font-weight:700;color:var(--warning);">${leaveCount}/${absentCount}</div></div>
+    <div class="accent-box" style="text-align:center;"><div style="font-size:11px;color:var(--text3);">Commission</div><div style="font-size:16px;font-weight:700;color:var(--neon2);">${cur} ${fmt(commissionTotal)}</div></div>
+    <div class="accent-box" style="text-align:center;"><div style="font-size:11px;color:var(--text3);">Bonus</div><div style="font-size:16px;font-weight:700;color:var(--neon2);">${cur} ${fmt(bonusTotal)}</div></div>
+    <div class="accent-box" style="text-align:center;"><div style="font-size:11px;color:var(--text3);">Advance Taken</div><div style="font-size:16px;font-weight:700;color:var(--danger);">${cur} ${fmt(advanceTotal)}</div></div>
+  `;
+}
+
 // ==================== MODULE 27: FIELD STAFF QUICK-ENTRY MODE (Phase 5) ====================
 let visitLogs = []; // {id, date, party, purpose, notes, followUp, followUpDate, loggedBy}
 let fieldOrderTempItems = [];
@@ -12026,13 +12567,16 @@ function renderFieldRecentVisits(){
 
 const GDRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const GDRIVE_FOLDER_NAME = 'SAU_Corporation_Backups';
-let gdriveClientId = localStorage.getItem('sau_gdrive_clientid') || '';
+// Default Client ID pre-filled so a fresh device/browser doesn't need it pasted in again manually.
+const GDRIVE_DEFAULT_CLIENT_ID = '190049440956-b8gsjugvr2dc971pppfurlidmb6irdee.apps.googleusercontent.com';
+let gdriveClientId = localStorage.getItem('sau_gdrive_clientid') || GDRIVE_DEFAULT_CLIENT_ID;
 let gdriveTokenClient = null;
 let gdriveAccessToken = null;
 let gdriveTokenExpiry = 0;
 let gdriveFolderId = localStorage.getItem('sau_gdrive_folderid') || '';
 let gdriveAutoSync = localStorage.getItem('sau_gdrive_autosync') === '1';
 let gdriveAccountEmail = localStorage.getItem('sau_gdrive_email') || '';
+let gdriveSilentAttempt = false; // true while a background (no-popup) reconnect is in flight — suppresses toasts
 
 function refreshGDriveSettingsUI(){
   const setupPanel = document.getElementById('gdrive-setup-panel');
@@ -12071,7 +12615,14 @@ function ensureGDriveTokenClient(){
     client_id: gdriveClientId,
     scope: GDRIVE_SCOPE + ' https://www.googleapis.com/auth/userinfo.email',
     callback: async (resp)=>{
-      if(resp.error){ toast('Google Drive connect failed: '+resp.error,'error'); return; }
+      const wasSilent = gdriveSilentAttempt; gdriveSilentAttempt = false;
+      if(resp.error){
+        // Silent background attempts fail quietly (e.g. no active Google session yet) —
+        // only show an error toast for a manual "Connect" click.
+        if(!wasSilent) toast('Google Drive connect failed: '+resp.error,'error');
+        refreshGDriveSettingsUI();
+        return;
+      }
       gdriveAccessToken = resp.access_token;
       gdriveTokenExpiry = Date.now() + ((resp.expires_in||3500)*1000);
       try{
@@ -12081,12 +12632,33 @@ function ensureGDriveTokenClient(){
       }catch(e){}
       await ensureGDriveFolder();
       refreshGDriveSettingsUI();
-      toast('Google Drive connected!','success');
+      if(!wasSilent) toast('Google Drive connected!','success');
       logAudit('backup','System','Google Drive connected for cloud backup', undefined, undefined);
     }
   });
   gdriveTokenClient._clientId = gdriveClientId;
   return gdriveTokenClient;
+}
+// PHASE-FIX: Google Drive tokens issued by Google Identity Services only last ~1 hour
+// and are never persisted to localStorage (by design, for security). Previously the
+// app had no way to get a fresh token without the user manually clicking "Connect"
+// and going through the full consent screen every single time. This silently asks
+// Google for a new token in the background using the browser's existing Google
+// session — no popup, no re-typing the key — as long as the user has connected at
+// least once before and hasn't revoked access. Called once on every app load.
+function attemptSilentGDriveReconnect(retriesLeft){
+  if(retriesLeft===undefined) retriesLeft = 8;
+  if(!gdriveClientId) return; // never set up — nothing to restore
+  if(gdriveAccessToken && Date.now() < gdriveTokenExpiry) return; // already have a valid token
+  if(!window.google || !google.accounts || !google.accounts.oauth2){
+    if(retriesLeft>0) setTimeout(()=>attemptSilentGDriveReconnect(retriesLeft-1), 700); // GIS script (async) still loading
+    return;
+  }
+  const tc = ensureGDriveTokenClient();
+  if(!tc) return;
+  gdriveSilentAttempt = true;
+  try{ tc.requestAccessToken({prompt:'', hint: gdriveAccountEmail||undefined}); }
+  catch(e){ gdriveSilentAttempt = false; console.warn('Silent Google Drive reconnect failed', e); }
 }
 function connectGoogleDrive(){
   const idInput = document.getElementById('gdrive-client-id');
@@ -12469,6 +13041,88 @@ document.addEventListener('click', (e)=>{
     panel.style.display='none';
   }
 });
+
+// ==================== PHASE 11: GLOBAL SEARCH BAR ====================
+// Header mein hamesha visible search box — Party / DC / Invoice / Item, sab ek
+// jagah se dhoondta hai. Chhota dropdown turant top matches dikhata hai; Enter
+// dabane ya "See all results" par poori AI Search tab mein pura result set khulta hai.
+function runGlobalSearch(){
+  const raw = document.getElementById('globalSearchInput').value.trim();
+  const q = raw.toLowerCase();
+  const box = document.getElementById('globalSearchResults');
+  if(!q){ box.style.display='none'; box.innerHTML=''; return; }
+
+  const results = [];
+
+  // Parties
+  fbrParties.filter(p=>(p.partyName||'').toLowerCase().includes(q)).slice(0,5).forEach(p=>{
+    results.push({icon:'👥', label:p.partyName, sub:'Party', action:`jumpToPartyLedger('${p.partyName.replace(/'/g,"\\'")}')`});
+  });
+
+  // DC / Invoice / Party-on-record
+  db.filter(r=>!r.cancelled && [r.dcNo,r.invNo,r.partyName].some(v=>(v||'').toLowerCase().includes(q))).slice(0,6).forEach(r=>{
+    results.push({icon:'🧾', label:`DC ${r.dcNo}${r.invNo?' / Inv '+r.invNo:''} — ${r.partyName}`, sub:fmtDate(r.date), action:`jumpToDCFromSearch(${db.indexOf(r)})`});
+  });
+
+  // Items / Stock
+  stockItems.filter(it=>(it.name||'').toLowerCase().includes(q)).slice(0,5).forEach(it=>{
+    results.push({icon:'📦', label:it.name, sub:'Stock Item', action:`jumpToStockItem('${it.id}')`});
+  });
+
+  let html = '';
+  if(!results.length){
+    html = '<div style="padding:10px;color:var(--text3);font-size:12px;">No quick matches — press Enter for a full AI Search.</div>';
+  } else {
+    html = results.map(r=>`<div onclick="${r.action}" style="padding:8px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <span style="font-size:12px;">${r.icon} ${r.label}</span><span style="color:var(--text3);font-size:10px;white-space:nowrap;">${r.sub}</span>
+    </div>`).join('');
+  }
+  html += `<div onclick="goToFullAiSearch()" style="padding:8px;margin-top:4px;border-top:1px solid var(--border2);text-align:center;cursor:pointer;color:var(--neon2);font-size:12px;">🔎 See all results in AI Search →</div>`;
+  box.innerHTML = html;
+  box.style.display = 'block';
+}
+function closeGlobalSearch(){
+  const box = document.getElementById('globalSearchResults');
+  if(box) box.style.display = 'none';
+}
+function jumpToPartyLedger(partyName){
+  closeGlobalSearch();
+  document.getElementById('globalSearchInput').value = '';
+  showTab('ledger');
+  setTimeout(()=>{ const sel=document.getElementById('ledgerPartySelect'); if(sel){ sel.value=partyName; renderLedger(); } }, 60);
+}
+function jumpToDCFromSearch(idx){
+  closeGlobalSearch();
+  document.getElementById('globalSearchInput').value = '';
+  showTab('records');
+  setTimeout(()=>{ if(typeof quickView==='function') quickView(idx); }, 60);
+}
+function jumpToStockItem(itemId){
+  closeGlobalSearch();
+  document.getElementById('globalSearchInput').value = '';
+  showTab('stock');
+  setTimeout(()=>{
+    const it = stockItems.find(i=>i.id===itemId);
+    const search = document.getElementById('stock-search');
+    if(search && it){ search.value = it.name; renderStockTab(); }
+  }, 60);
+}
+function goToFullAiSearch(){
+  const q = document.getElementById('globalSearchInput').value.trim();
+  closeGlobalSearch();
+  showTab('aisearch');
+  setTimeout(()=>{
+    const inp = document.getElementById('ai-search-input');
+    if(inp){ inp.value=q; runAiSearch(); }
+  }, 60);
+}
+document.addEventListener('click', (e)=>{
+  const box = document.getElementById('globalSearchResults');
+  const wrap = document.getElementById('globalSearchWrap');
+  if(box && box.style.display==='block' && wrap && !wrap.contains(e.target)){
+    box.style.display = 'none';
+  }
+});
 function renderNotifPanel(){
   const alerts = computeReminders();
   const panel = document.getElementById('notifPanel');
@@ -12802,6 +13456,42 @@ window.addEventListener('DOMContentLoaded', init);
 
 
 </script>
+<!-- ==================== EMPLOYEE ROLE-BASED DASHBOARD (Phase 12) ==================== -->
+<div class="modal-overlay" id="empLoginModal">
+<div class="modal">
+  <div class="modal-header"><h3>👤 Employee Login</h3><button class="close-btn" onclick="closeModal('empLoginModal')">✕</button></div>
+  <div class="modal-body">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">This is only for the office to hand an employee their own view — not the full system. Ask the office to set your username/password if you don't have one yet.</div>
+    <div class="form-group"><label>Username</label><input type="text" id="emplogin-username" placeholder="Your username" onkeydown="if(event.key==='Enter')document.getElementById('emplogin-password').focus()"></div>
+    <div class="form-group"><label>Password</label><input type="password" id="emplogin-password" placeholder="Your password" onkeydown="if(event.key==='Enter')employeeLogin()"></div>
+    <div id="emplogin-error" style="color:var(--danger);font-size:12px;display:none;">Wrong username or password.</div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="employeeLogin()">🔓 Login</button>
+    <button class="btn btn-neon" onclick="closeModal('empLoginModal')">Cancel</button>
+  </div>
+</div>
+</div>
+
+<div id="employeeDashboardScreen" style="display:none;position:fixed;inset:0;z-index:9000;background:var(--bg1,#0d1117);overflow-y:auto;">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border2);position:sticky;top:0;background:var(--bg1,#0d1117);z-index:2;">
+    <div style="font-weight:700;font-size:16px;color:var(--neon4);">👤 My Dashboard — <span id="emp-dash-name"></span></div>
+    <button class="btn btn-xs" style="background:transparent;border:1px solid var(--border2);color:var(--text2);" onclick="employeeLogout()">🔒 Logout</button>
+  </div>
+  <div style="padding:16px;max-width:640px;margin:0 auto;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px;" id="emp-dash-summary"></div>
+
+    <div style="font-weight:700;color:var(--neon2);margin:16px 0 6px;">🚚 My Dispatches</div>
+    <div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>Date</th><th>DC No</th><th>Party</th><th>Invoice</th></tr></thead><tbody id="emp-dash-dispatches"></tbody></table></div>
+
+    <div style="font-weight:700;color:var(--neon2);margin:16px 0 6px;">📅 My Attendance (last 30 entries)</div>
+    <div id="emp-dash-attendance" style="font-size:12px;color:var(--text2);"></div>
+
+    <div style="font-weight:700;color:var(--neon2);margin:16px 0 6px;">💰 My Commission / Bonus / Advance</div>
+    <div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Note</th></tr></thead><tbody id="emp-dash-money"></tbody></table></div>
+  </div>
+</div>
+
 <!-- ==================== FIELD STAFF QUICK-ENTRY MODE (Phase 5) ==================== -->
 <div id="fieldModeScreen" style="display:none;position:fixed;inset:0;z-index:9000;background:var(--bg1,#0d1117);overflow-y:auto;">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border2);position:sticky;top:0;background:var(--bg1,#0d1117);z-index:2;">
