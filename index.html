@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SAU CORPORATION | FULL MANAGEMENT v11.0</title>
+<title>SAU CORPORATION | FULL MANAGEMENT v31</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -12,6 +12,7 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-app-compat.js" crossorigin="anonymous" onerror="this.onerror=null;var s=document.createElement('script');s.crossOrigin='anonymous';s.src='https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.1/firebase-app-compat.min.js';document.head.appendChild(s);"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-auth-compat.js" crossorigin="anonymous" onerror="this.onerror=null;var s=document.createElement('script');s.crossOrigin='anonymous';s.src='https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.1/firebase-auth-compat.min.js';document.head.appendChild(s);"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-database-compat.js" crossorigin="anonymous" onerror="this.onerror=null;var s=document.createElement('script');s.crossOrigin='anonymous';s.src='https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.1/firebase-database-compat.min.js';document.head.appendChild(s);"></script>
 <style>
@@ -288,7 +289,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
 <div id="header">
   <div id="header-left">
     <h1 id="hdr-company">SAU CORPORATION</h1>
-    <p id="hdr-sub">DC & Invoice Management System v11.0</p>
+    <p id="hdr-sub">DC & Invoice Management System v31</p>
   </div>
   <div id="header-center">
     <div style="position:relative;display:inline-block;">
@@ -300,6 +301,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <button class="btn btn-green btn-sm" onclick="doBackup()">💾 Backup</button>
     <button class="btn btn-yellow btn-sm" onclick="openModal('settingsModal')">⚙️ Settings</button>
     <button class="btn btn-sm" id="modeToggleBtn" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);" onclick="toggleModeQuick()" title="Toggle Dark/Light Mode">🌙</button>
+    <button class="btn btn-sm" style="background:var(--bg3);border:1px solid var(--neon2);color:var(--neon2);" onclick="enterFieldMode()" title="Simplified screen for field sales staff">📱 Field Mode</button>
   </div>
   <div id="header-right">
     <div id="autosave-dot" title="Auto-save active"></div>
@@ -613,7 +615,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       <input type="text" id="partySearch" placeholder="Search parties..." oninput="renderParties()" style="max-width:300px;">
     </div>
     <div class="tbl-wrap">
-      <table><thead><tr><th>#</th><th>Party Name</th><th>NTN</th><th>Address</th><th>Total Invoiced</th><th>Actions</th></tr></thead>
+      <table><thead><tr><th>#</th><th>Party Name</th><th>NTN</th><th>Address</th><th>Total Invoiced</th><th>💳 Credit Limit / Outstanding</th><th>Risk Score</th><th>Actions</th></tr></thead>
       <tbody id="partiesTbody"></tbody></table>
     </div>
   </div>
@@ -991,11 +993,27 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div id="backup-versions-list" style="max-height:250px;overflow-y:auto;"></div>
     <div class="divider"></div>
     <div style="font-weight:700;color:var(--neon2);margin-bottom:8px;">☁️ Cloud Backup Connections</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">These require API credentials which haven't been connected yet. Once you provide keys, I can wire up real automatic syncing.</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">
-      <div class="accent-box" style="text-align:center;">
-        <div style="font-size:24px;">📁</div><div style="font-weight:700;margin:6px 0;">Google Drive</div>
-        <button type="button" class="btn btn-neon btn-xs" onclick="toast('Needs Google Drive API credentials — provide a key to enable','info')">Connect</button>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Google Drive is wired up for real automatic backup (like Firebase live sync). OneDrive/Dropbox/NAS still need their own API credentials before I can connect them.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+      <div class="accent-box" id="gdrive-connect-box" style="text-align:left;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><div style="font-size:24px;">📁</div><div style="font-weight:700;">Google Drive</div><span id="gdrive-status-badge" class="badge" style="margin-left:auto;background:#8892b022;color:#8892b0;border:1px solid #8892b0;">Not connected</span></div>
+        <div id="gdrive-setup-panel">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">One-time setup: create a free OAuth Client ID in <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--neon);">Google Cloud Console</a> (APIs & Services → Credentials → Create OAuth Client ID → Web application, add this page's URL under Authorized JavaScript origins), then paste it below.</div>
+          <input type="text" id="gdrive-client-id" placeholder="Google OAuth Client ID (ends with .apps.googleusercontent.com)" style="width:100%;margin-bottom:6px;">
+          <button type="button" class="btn btn-neon btn-xs" onclick="connectGoogleDrive()">🔌 Save & Connect</button>
+        </div>
+        <div id="gdrive-connected-panel" style="display:none;">
+          <div style="font-size:11px;color:var(--text2);margin-bottom:6px;" id="gdrive-account-info"></div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+            <label class="toggle"><input type="checkbox" id="gdrive-autosync" onchange="saveGDriveAutoSyncPref()"><span class="toggle-slider"></span></label>
+            <label style="margin:0;font-size:11px;">Also push to Drive on scheduled Auto-Backup (above)</label>
+          </div>
+          <div class="flex-gap" style="flex-wrap:wrap;">
+            <button type="button" class="btn btn-green btn-xs" onclick="uploadBackupToDrive('Manual')">📤 Backup Now</button>
+            <button type="button" class="btn btn-neon btn-xs" onclick="openGDriveBackupsModal()">📜 View Backups</button>
+            <button type="button" class="btn btn-red btn-xs" onclick="disconnectGoogleDrive()">🔌 Disconnect</button>
+          </div>
+        </div>
       </div>
       <div class="accent-box" style="text-align:center;">
         <div style="font-size:24px;">☁️</div><div style="font-weight:700;margin:6px 0;">OneDrive</div>
@@ -1011,6 +1029,17 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       </div>
     </div>
   </div>
+</div>
+
+<!-- GOOGLE DRIVE BACKUPS MODAL -->
+<div class="modal-overlay" id="gdriveBackupsModal">
+<div class="modal modal-lg">
+  <div class="modal-header"><h3>📜 Google Drive Backups (SAU_Corporation_Backups folder)</h3><button class="close-btn" onclick="closeModal('gdriveBackupsModal')">✕</button></div>
+  <div class="modal-body" id="gdrive-backups-list">Loading…</div>
+  <div class="modal-footer">
+    <button class="btn btn-neon" onclick="closeModal('gdriveBackupsModal')">Close</button>
+  </div>
+</div>
 </div>
 
 <!-- ====== DIGITAL INVOICES TAB ====== -->
@@ -1573,7 +1602,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
         <button class="btn btn-green btn-sm" onclick="openStockItemModal()">➕ Add Item</button>
       </div>
     </div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Note: Reserved & Pending PO columns will auto-populate once the Purchase Order module (coming next) is linked. For now they show manual entries only.</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Reserved = portion of current stock balance earmarked for open party Purchase Orders. Pending PO = total ordered-but-not-dispatched qty across open POs (⚠️ shows if it exceeds what's on hand). Both update automatically as POs/DCs change.</div>
     <div class="search-bar"><input type="text" id="stock-search" placeholder="Search item by name, category, barcode..." oninput="renderStockTab()"></div>
     <div style="overflow-x:auto;margin-top:10px;">
       <table class="items-table">
@@ -1625,7 +1654,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div class="form-row">
       <div class="form-group">
         <label>Movement Type</label>
-        <select id="sm-type">
+        <select id="sm-type" onchange="toggleStockRateField()">
           <option value="purchase">📥 Purchase (In)</option>
           <option value="sale">📤 Sale (Out)</option>
           <option value="adjustment_in">➕ Adjustment (In)</option>
@@ -1633,6 +1662,10 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
         </select>
       </div>
       <div class="form-group"><label>Quantity</label><input type="number" id="sm-qty" placeholder="0"></div>
+    </div>
+    <div class="form-row" id="sm-rate-row">
+      <div class="form-group"><label>💰 Purchase Rate (per unit) — PHASE 9</label><input type="number" id="sm-rate" placeholder="e.g. 620" min="0" step="0.01"></div>
+      <div class="form-group"><label>Supplier / Vendor</label><input type="text" id="sm-supplier" placeholder="Optional"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Warehouse</label><select id="sm-warehouse"></select></div>
@@ -1643,6 +1676,21 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
   <div class="modal-footer">
     <button class="btn btn-green" onclick="saveStockMovement()">💾 Log Movement</button>
     <button class="btn btn-neon" onclick="closeModal('stockMoveModal')">Cancel</button>
+  </div>
+</div>
+</div>
+
+<!-- PHASE 9: Item Purchase Rate History -->
+<div class="modal-overlay" id="rateHistoryModal">
+<div class="modal">
+  <div class="modal-header"><h3 id="rh-title">📈 Purchase Rate History</h3><button class="close-btn" onclick="closeModal('rateHistoryModal')">✕</button></div>
+  <div class="modal-body">
+    <div id="rh-summary" class="accent-box mb-8"></div>
+    <table><thead><tr><th>Date</th><th>Qty</th><th>Rate/Unit</th><th>Total</th><th>Supplier</th><th>Warehouse</th><th>Notes</th></tr></thead>
+      <tbody id="rh-tbody"></tbody></table>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-neon" onclick="closeModal('rateHistoryModal')">Close</button>
   </div>
 </div>
 </div>
@@ -1692,6 +1740,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       </div>
     </div>
     <div id="po-status-summary" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
+    <div id="po-payment-alerts"></div>
     <div class="search-bar" style="display:flex;gap:8px;flex-wrap:wrap;">
       <input type="text" id="po-search" placeholder="Search PO no, party, buyer, item, qty, amount..." oninput="renderPOTab()" style="flex:1;min-width:200px;">
       <select id="po-status-filter" onchange="renderPOTab()">
@@ -1703,7 +1752,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     </div>
     <div style="overflow-x:auto;margin-top:10px;">
       <table class="items-table">
-        <thead><tr><th>PO No</th><th>Party</th><th>Buyer</th><th>Date</th><th>Terms</th><th>Items</th><th>Ordered Value</th><th>Remaining Qty</th><th>Balance Value</th><th>Status</th><th>Approval</th><th></th></tr></thead>
+        <thead><tr><th>PO No</th><th>Party</th><th>Unit</th><th>Buyer</th><th>Date</th><th>Terms</th><th>Items</th><th>Ordered Value</th><th>Remaining Qty</th><th>Balance Value</th><th>Status</th><th>Approval</th><th></th></tr></thead>
         <tbody id="poTableBody"></tbody>
       </table>
     </div>
@@ -1719,15 +1768,25 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div class="form-row">
       <div class="form-group"><label>PO No *</label><div style="display:flex;gap:6px;"><input type="text" id="po-no" placeholder="PO Number" style="flex:1;"><button type="button" class="btn btn-neon btn-xs" onclick="autoFillNumber('po','po-no')" title="Auto-generate (continues from the last PO number issued)">🔢</button></div></div>
       <div class="form-group"><label>Party Name *</label><input type="text" id="po-supplier" list="party-list" placeholder="Select or type party name" oninput="onPOPartyChange()"></div>
+      <div class="form-group"><label>Unit <span style="font-weight:400;color:var(--text3);">(party's branch/site, if any)</span></label><input type="text" id="po-unit" list="po-unit-list" placeholder="e.g. Main Store / Unit-2"><datalist id="po-unit-list"></datalist></div>
     </div>
     <div class="form-row">
-      <div class="form-group" style="flex:2;"><label>Party Address <span style="font-weight:400;color:var(--text3);">(auto-filled from Party record)</span></label><textarea id="po-address" rows="2" placeholder="Address will auto-fill when party is selected — editable"></textarea></div>
-      <div class="form-group"><label>Buyer / Purchaser Name <span style="font-weight:400;color:var(--text3);">(person at party who raised this PO)</span></label><input type="text" id="po-buyer" list="po-buyer-list" placeholder="e.g. Mr. Ahmed (Purchase Officer)"><datalist id="po-buyer-list"></datalist></div>
+      <div class="form-group" style="flex:2;"><label>Party Address <span style="font-weight:400;color:var(--text3);">(auto-filled from Party record)</span></label><textarea id="po-address" rows="2" placeholder="Address will auto-fill when party is selected — editable" oninput="this.dataset.userEdited='1'"></textarea></div>
+      <div class="form-group"><label>Person Name <span style="font-weight:400;color:var(--text3);">(party's contact person, this PO is in their name)</span></label><input type="text" id="po-buyer" list="po-buyer-list" placeholder="e.g. Mr. Ahmed (Purchase Officer)"><datalist id="po-buyer-list"></datalist></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>PO Date</label><input type="date" id="po-date"></div>
-      <div class="form-group"><label>Expiry Date</label><input type="date" id="po-expiry"></div>
-      <div class="form-group"><label>Payment Terms (days from Invoice Date)</label><input type="number" id="po-terms" placeholder="e.g. 30" title="Used for payment-due alerts once this PO is invoiced"></div>
+      <div class="form-group"><label>Expiry Date (optional)</label><input type="date" id="po-expiry"></div>
+      <div class="form-group"><label>Payment Terms</label>
+        <select id="po-terms">
+          <option value="">-- Select --</option>
+          <option value="15">15 days</option>
+          <option value="30">30 days</option>
+          <option value="45">45 days</option>
+          <option value="60">60 days</option>
+          <option value="90">90 days</option>
+        </select>
+      </div>
     </div>
     <div class="divider"></div>
     <div style="font-weight:700;color:var(--neon2);margin-bottom:8px;">Items</div>
@@ -1736,11 +1795,12 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       <div class="form-group"><label>HS Code</label><input type="text" id="po-item-hscode" placeholder="HS Code"></div>
       <div class="form-group"><label>Qty</label><input type="number" id="po-item-qty" placeholder="0"></div>
       <div class="form-group"><label>Rate</label><input type="number" step="0.01" id="po-item-rate" placeholder="0.00"></div>
+      <div class="form-group"><label>Required By</label><input type="date" id="po-item-reqdate"></div>
       <div class="form-group" style="align-self:flex-end;"><button type="button" class="btn btn-neon btn-sm" onclick="addPOItemRow()">➕ Add</button></div>
     </div>
     <datalist id="stock-item-list"></datalist>
     <div style="overflow-x:auto;">
-      <table class="items-table"><thead><tr><th>Item</th><th>HS Code</th><th>Qty</th><th>Rate</th><th>Value</th><th></th></tr></thead><tbody id="po-items-tbody"></tbody></table>
+      <table class="items-table"><thead><tr><th>Item</th><th>HS Code</th><th>Qty</th><th>Rate</th><th>Required By</th><th>Value</th><th></th></tr></thead><tbody id="po-items-tbody"></tbody></table>
     </div>
     <div class="form-group"><label>Notes</label><textarea id="po-notes" rows="2"></textarea></div>
   </div>
@@ -2585,7 +2645,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <h3 id="dcModalTitle">➕ Add New DC</h3>
     <div class="flex-gap">
       <button class="btn btn-neon btn-sm" onclick="openOcrModal()">📷 OCR Auto-Fill</button>
-      <button class="close-btn" onclick="closeModal('addDcModal')">✕</button>
+      <button class="close-btn" onclick="closeDcModal()">✕</button>
     </div>
   </div>
   <div class="modal-body">
@@ -2728,7 +2788,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
   </div>
   <div class="modal-footer">
     <button class="btn btn-green" onclick="saveDC()">💾 Save DC</button>
-    <button class="btn btn-neon" onclick="closeModal('addDcModal')">Cancel</button>
+    <button class="btn btn-neon" onclick="closeDcModal()">Cancel</button>
   </div>
 </div>
 </div>
@@ -2831,6 +2891,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div class="form-group"><label>Party Name *</label><input type="text" id="party-name" list="party-list3" placeholder="Select existing or type new party name"><datalist id="party-list3"></datalist></div>
     <div class="form-group"><label>NTN</label><input type="text" id="party-ntn" placeholder="NTN number"></div>
     <div class="form-group"><label>Address</label><textarea id="party-address" rows="3" placeholder="Full address..."></textarea></div>
+    <div class="form-group"><label>💳 Credit Limit (PHASE 8)</label><input type="number" id="party-credit-limit" placeholder="e.g. 500000 (0 = no limit set)" min="0" step="1"><div style="font-size:11px;color:var(--text3);margin-top:3px;">Outstanding balance is ke cross hote hi warning aayegi.</div></div>
   </div>
   <div class="modal-footer">
     <button class="btn btn-green" onclick="saveParty()">💾 Save</button>
@@ -3094,7 +3155,7 @@ function saveSettings(e){
 }
 function applySettings(){
   document.getElementById('hdr-company').textContent = settings.companyName||'SAU CORPORATION';
-  document.getElementById('hdr-sub').textContent = 'DC & Invoice Management v11.0 | NTN: '+(settings.ntn||'');
+  document.getElementById('hdr-sub').textContent = 'DC & Invoice Management v31 | NTN: '+(settings.ntn||'');
   document.getElementById('operator-name').textContent = settings.operatorName||'OPERATOR';
   document.title = settings.pageTitle||'SAU CORPORATION';
   // Fill settings form
@@ -3251,7 +3312,7 @@ async function buildFullBackupData(){
     digitalInvoices: diWithPdf,
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
     savedQuotations, quotSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
-    stockItems, stockMovements, purchaseOrders, partyPaymentTerms, warehousesList, expenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
+    stockItems, stockMovements, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     documentManager: docsWithBlob,
     securityData: (typeof securityData!=='undefined'?securityData:null),
     backupDate:new Date().toISOString(), version:'20.0'
@@ -3438,7 +3499,7 @@ function buildCloudSyncData(){
     db, cheques, ledgerData, fbrParties, settings,
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
     savedQuotations, quotSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
-    stockItems, stockMovements, purchaseOrders, partyPaymentTerms, warehousesList, expenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
+    stockItems, stockMovements, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     securityData: (typeof securityData!=='undefined'?securityData:null),
     updatedAt: new Date().toISOString(),
     updatedBy: (typeof securityData!=='undefined' && securityData.currentUser) ? securityData.currentUser.username : (settings.operatorName||'Operator'),
@@ -3863,6 +3924,7 @@ async function applyRestoredBackupData(data){
   if(data.stockMovements) { stockMovements = data.stockMovements; saveStockMovements(); }
   if(data.purchaseOrders) { purchaseOrders = data.purchaseOrders; savePurchaseOrders(); }
   if(data.partyPaymentTerms) { partyPaymentTerms = data.partyPaymentTerms; savePartyPaymentTerms(); }
+  if(data.visitLogs) { visitLogs = data.visitLogs; saveVisitLogsToStorage(); }
   if(data.warehousesList) { warehousesList = data.warehousesList; saveWarehousesList(); }
   if(data.expenses) { expenses = data.expenses; saveExpenses(); }
   if(data.bankAccounts) { bankAccounts = data.bankAccounts; saveBankAccounts(); }
@@ -4134,13 +4196,81 @@ function toast(msg, type='info'){
 }
 function openModal(id){ document.getElementById(id).classList.add('open'); }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+// ==================== PHASE 7: MULTI-USER CONFLICT LOCK ====================
+// Jab do log (alag devices/tabs se) same DC record edit karne ki koshish karein,
+// to dusre user ko "Ye record abhi [User] edit kar raha hai" warning milti hai —
+// taake dono ki changes clash ho kar data loss na ho. Lock Firebase Realtime
+// Database mein rakha jata hai (recordLocks/{key}) taake ye alag devices ke
+// darmiyan bhi kaam kare, na ke sirf ek hi browser tab tak mehdood rahay.
+let activeRecordLockKey = null;
+let recordLockHeartbeatTimer = null;
+const RECORD_LOCK_TTL_MS = 90000; // 90s heartbeat se purana lock "stale" maan k ignore ho jata hai (e.g. tab crash ho gaya ho)
+function sanitizeLockKey(str){
+  return String(str||'').replace(/[.#$\[\]\/\s]+/g,'_').slice(0,120) || 'unknown';
+}
+function dcLockKey(rec, idx){
+  // DC No use karte hain (stable rehta hai) — DC No na ho to index par fallback.
+  return 'dc_' + sanitizeLockKey(rec && rec.dcNo ? rec.dcNo : ('idx'+idx));
+}
+function currentLockUserName(){
+  return (typeof securityData!=='undefined' && securityData.currentUser) ? securityData.currentUser.username : (settings.operatorName||'Operator');
+}
+// Modal kholne se pehle Firebase mein check karta hai ke koi aur to is record ko
+// edit nahi kar raha. Agar kar raha hai (aur lock stale nahi hai) to warning
+// dikhata hai aur user ko choice deta hai — chahay to phir bhi edit kar sakta hai.
+async function checkAndOpenWithLock(idx, openFn){
+  const rec = db[idx];
+  const key = dcLockKey(rec, idx);
+  if(!cloudDbRef){ openFn(); return; } // cloud connect nahi — check nahi ho sakta, seedha khol dein
+  try{
+    const snap = await cloudDbRef.ref('recordLocks/'+key).once('value');
+    const lock = snap.val();
+    const me = currentLockUserName();
+    const isStale = !lock || !lock.since || (Date.now()-lock.since) > RECORD_LOCK_TTL_MS;
+    if(lock && !isStale && lock.user && lock.user!==me){
+      const secsAgo = Math.max(1, Math.round((Date.now()-lock.since)/1000));
+      const proceed = confirm(`⚠️ Ye record abhi "${lock.user}" edit kar raha hai (${secsAgo}s pehle se).\n\nAgar aap bhi is waqt edit karein to dono ki changes clash ho sakti hain aur data loss ho sakta hai.\n\nPhir bhi edit karna chahte hain?`);
+      if(!proceed) return;
+    }
+    openFn();
+    acquireRecordLock(key);
+  }catch(e){
+    console.warn('Record lock check failed, opening anyway:', e);
+    openFn();
+  }
+}
+function acquireRecordLock(key){
+  if(!cloudDbRef) return;
+  activeRecordLockKey = key;
+  const ref = cloudDbRef.ref('recordLocks/'+key);
+  const write = ()=> ref.set({user:currentLockUserName(), since:Date.now()}).catch(()=>{});
+  write();
+  ref.onDisconnect().remove(); // tab/browser band ho jaye ya net kat jaye to lock khud-ba-khud hat jaye
+  clearInterval(recordLockHeartbeatTimer);
+  recordLockHeartbeatTimer = setInterval(write, 30000); // modal khula rehte hue har 30s lock refresh
+}
+function releaseRecordLock(){
+  clearInterval(recordLockHeartbeatTimer);
+  if(activeRecordLockKey && cloudDbRef){
+    cloudDbRef.ref('recordLocks/'+activeRecordLockKey).remove().catch(()=>{});
+  }
+  activeRecordLockKey = null;
+}
+// Add/Edit DC modal ke close ke tamam raaston (X button, Cancel, save k baad,
+// duplicate-party case) se yehi function call hota hai taake lock hamesha release ho.
+function closeDcModal(){
+  closeModal('addDcModal');
+  releaseRecordLock();
+}
+
 function renderTabContent(id){
   if(id==='dashboard') renderDashboard();
   if(id==='ledger') renderLedgerPartyList();
   if(id==='parties'){ syncPartiesFromDB(); renderParties(); }
   if(id==='cheques') { renderCheques(); renderAllPayments(); }
   if(id==='hscodes'){ renderHSCodes(); renderHsStockComparison(); }
-  if(id==='settings') { applySettings(); renderAutoNumberConfig(); const abf=document.getElementById('ab-frequency'); if(abf) abf.value = advancedBackupSettings.frequency; renderBackupVersionsList(); const ape=document.getElementById('ap-enabled'); if(ape) ape.checked = !!settings.approvalWorkflowEnabled; const apPo=document.getElementById('ap-po-enabled'); if(apPo) apPo.checked = !!settings.poApprovalWorkflowEnabled; const apExp=document.getElementById('ap-exp-enabled'); if(apExp) apExp.checked = !!settings.expApprovalWorkflowEnabled; const apChq=document.getElementById('ap-chq-enabled'); if(apChq) apChq.checked = !!settings.chqApprovalWorkflowEnabled; }
+  if(id==='settings') { applySettings(); renderAutoNumberConfig(); const abf=document.getElementById('ab-frequency'); if(abf) abf.value = advancedBackupSettings.frequency; renderBackupVersionsList(); const ape=document.getElementById('ap-enabled'); if(ape) ape.checked = !!settings.approvalWorkflowEnabled; const apPo=document.getElementById('ap-po-enabled'); if(apPo) apPo.checked = !!settings.poApprovalWorkflowEnabled; const apExp=document.getElementById('ap-exp-enabled'); if(apExp) apExp.checked = !!settings.expApprovalWorkflowEnabled; const apChq=document.getElementById('ap-chq-enabled'); if(apChq) apChq.checked = !!settings.chqApprovalWorkflowEnabled; refreshGDriveSettingsUI(); }
   if(id==='digitalinvoices'){ renderDigitalInvoices(); updateDiCount(); }
   if(id==='security') renderSecuritySettings();
   if(id==='reports'){ renderRateListsHub(); renderRateListBasketSummary(); }
@@ -4286,9 +4416,22 @@ function getFilteredRecords(){
   if(advFilter.status) recs = recs.filter(r=>getStatus(r)===advFilter.status);
   if(advFilter.minAmount) recs = recs.filter(r=>getDCTotal(r)>=parseFloat(advFilter.minAmount));
   if(advFilter.maxAmount) recs = recs.filter(r=>getDCTotal(r)<=parseFloat(advFilter.maxAmount));
-  // Sort: newest DC number first (by date desc, then index desc)
-  recs = recs.slice().reverse();
+  // Sort: by DC Number automatically (highest/newest DC No first), regardless of the
+  // order records were entered in. e.g. agar 2044 phir 2046 phir 2045 add ho to list
+  // hamesha 2046, 2045, 2044 (numbering ke hisab sy) dikhegi — entry order matter nahi karta.
+  recs = recs.slice().sort((a,b)=>{
+    const na = dcNoSortValue(a.dcNo), nb = dcNoSortValue(b.dcNo);
+    if(nb!==na) return nb-na; // higher DC number first
+    return db.indexOf(b)-db.indexOf(a); // tie-break: most recently added first
+  });
   return recs;
+}
+// Extracts the first/leading number found in a DC No string for sorting purposes.
+// Handles formats like "2046", "1401/1675", "1575-C", "1807-C/1821-C", "1838 / 1840".
+function dcNoSortValue(dcNo){
+  if(!dcNo) return -Infinity;
+  const m = String(dcNo).match(/\d+(\.\d+)?/);
+  return m ? parseFloat(m[0]) : -Infinity;
 }
 function renderRecords(){
   populatePartyList();
@@ -4529,7 +4672,8 @@ function openModal_addDc(){
   updateGrandTotal();
   openModal('addDcModal');
 }
-function editDC(idx){
+function editDC(idx){ checkAndOpenWithLock(idx, ()=>_editDCOpen(idx)); }
+function _editDCOpen(idx){
   editingDcIdx = idx;
   const rec = db[idx];
   document.getElementById('dcModalTitle').textContent = '✏️ Edit DC: '+rec.dcNo;
@@ -4772,12 +4916,31 @@ async function saveDC(){
   if(!date||!dcNo||!party){toast('Date, DC No, and Party are required!','warning');return;}
   const items = getItemsFromTable();
   if(!items.length){toast('Add at least one item!','warning');return;}
+  // === PHASE 8: Credit Limit warning ===
+  // Naya invoice add hone se party ki outstanding balance credit limit cross kar
+  // rahi ho to warn karo (blocking nahi, sirf warning — operator apni marzi se aage barh sakta hai).
+  {
+    const partyObj = fbrParties.find(p=>p.partyName===party);
+    const creditLimit = partyObj ? parseFloat(partyObj.creditLimit)||0 : 0;
+    if(creditLimit>0){
+      const hasInvNo = !!document.getElementById('dc-invno').value.trim();
+      if(hasInvNo){
+        const newTotal = items.reduce((s,it)=>s+((parseFloat(it.qty)||0)*(parseFloat(it.rate)||0)*(1+(parseFloat(it.tax)||0)/100)),0);
+        const existingTotal = (editingDcIdx!==null && db[editingDcIdx]) ? getDCTotal(db[editingDcIdx]) : 0;
+        const projectedOutstanding = getPartyOutstandingBalance(party) - existingTotal + newTotal;
+        if(projectedOutstanding > creditLimit){
+          const proceed = confirm(`⚠️ CREDIT LIMIT WARNING!\n\n"${party}" ki credit limit ${settings.currency||'PKR'} ${fmt(creditLimit)} hai.\nYe invoice save karne ke baad outstanding balance ${settings.currency||'PKR'} ${fmt(projectedOutstanding)} ho jayega (limit se ${settings.currency||'PKR'} ${fmt(projectedOutstanding-creditLimit)} zyada).\n\nPhir bhi save karna chahte hain?`);
+          if(!proceed) return;
+        }
+      }
+    }
+  }
   // === Check if party exists in fbrParties ===
   if(editingDcIdx===null || db[editingDcIdx]?.partyName !== party){
     const existsInParties = fbrParties.some(p=>p.partyName===party);
     if(!existsInParties){
       if(!confirm(`"${party}" is a new party not in the system.\n\nClick OK to auto-add this party (add NTN/Address later from Parties tab).\nClick Cancel to add the party manually first.`)){
-        closeModal('addDcModal');
+        closeDcModal();
         setTimeout(()=>{
           fbrParties.push({partyName:party, ntn:'', address:''});
           saveData(); populatePartyList();
@@ -4845,10 +5008,12 @@ async function saveDC(){
   else { db.push(rec); if(settings.approvalWorkflowEnabled){ rec.approvalStatus='pending_manager'; rec.approvalHistory=[{stage:'Staff', by:securityData.currentUser?securityData.currentUser.username:'Unknown', date:new Date().toISOString(), action:'created'}]; rec.readyForInv=false; } logAudit('create','DC/Invoice',`DC #${rec.dcNo} (${rec.partyName}) created`, undefined, rec); toast('DC added!','success'); }
   if(rec.invNo && editingDcIdx===null){ addAutoLedger(rec, db.length-1); }
   syncPartiesFromDB();
-  saveData(); renderRecords(); closeModal('addDcModal');
+  saveData(); renderRecords(); closeDcModal();
   // A DC's dispatch info is also shown on the separate Dispatch tab/table.
   // Refresh it too so changes are visible immediately without a page reload.
   if(document.getElementById('panel-dispatch')?.classList.contains('active')) renderDispatchTab();
+  if(typeof renderStockTab==='function') renderStockTab();
+  if(rec.poNo && typeof renderPOTab==='function') renderPOTab();
 }
 
 function addAutoLedger(rec, idx){
@@ -5681,6 +5846,62 @@ function syncPartiesFromDB(){
   if(added>0) saveData();
   return added;
 }
+// ==================== PHASE 8: PARTY CREDIT LIMIT + RISK SCORE ====================
+// Outstanding balance = total invoiced - total paid (via ledger), for a given party.
+function getPartyOutstandingBalance(partyName){
+  const totalInv = db.filter(r=>r.partyName===partyName && r.invNo && !r.cancelled).reduce((s,r)=>s+getDCTotal(r),0);
+  const totalPaid = ledgerData.filter(l=>l.partyName===partyName && l.type==='payment').reduce((s,l)=>s+(l.amount||0)+(l.deduction||0),0);
+  return totalInv - totalPaid;
+}
+// Auto-calculates a Green/Yellow/Red risk score for a party based on:
+//  - payment history (average delay between invoice date and matching payment date)
+//  - delay pattern (how many invoices are currently sitting 30+ days unpaid)
+//  - credit limit crossed or not
+function computePartyRiskScore(partyName){
+  const party = fbrParties.find(p=>p.partyName===partyName);
+  const creditLimit = party && parseFloat(party.creditLimit)>0 ? parseFloat(party.creditLimit) : 0;
+  const outstanding = getPartyOutstandingBalance(partyName);
+
+  // Payment history: average days between invoice date and the payment that settled it
+  const partyRecs = db.filter(r=>r.partyName===partyName && r.invNo && !r.cancelled);
+  const delays = [];
+  partyRecs.forEach(r=>{
+    const pay = ledgerData.find(l=>l.type==='payment' && l.partyName===partyName && (l.invNo||'').split(',').map(s=>s.trim()).includes(String(r.invNo)));
+    if(pay && r.date && pay.date){
+      const d = Math.floor((new Date(pay.date)-new Date(r.date))/(1000*60*60*24));
+      if(d>=0) delays.push(d);
+    }
+  });
+  const avgDelay = delays.length ? (delays.reduce((a,b)=>a+b,0)/delays.length) : null;
+
+  // Delay pattern: invoices currently unpaid 30+ days
+  const today = new Date(); today.setHours(0,0,0,0);
+  const cutoff30 = new Date(today); cutoff30.setDate(today.getDate()-30);
+  const overdueCount = partyRecs.filter(r=>{
+    if(!r.date || new Date(r.date) >= cutoff30) return false;
+    const paid = ledgerData.some(l=>l.type==='payment' && l.partyName===partyName && (l.invNo||'').includes(r.invNo));
+    return !paid;
+  }).length;
+
+  const limitCrossed = creditLimit>0 && outstanding>creditLimit;
+
+  let score = 0;
+  if(avgDelay!==null){ if(avgDelay>30) score+=2; else if(avgDelay>15) score+=1; }
+  score += Math.min(2, overdueCount);
+  if(limitCrossed) score += 2;
+
+  let level='green', label='Low Risk';
+  if(score>=4){ level='red'; label='High Risk'; }
+  else if(score>=1){ level='yellow'; label='Medium Risk'; }
+
+  return {level, label, score, avgDelay, overdueCount, limitCrossed, outstanding, creditLimit};
+}
+function riskBadgeHtml(risk){
+  const colors = {green:'#1fbf75', yellow:'#f0a500', red:'#e5484d'};
+  const c = colors[risk.level];
+  const delayTxt = risk.avgDelay!==null ? `${risk.avgDelay.toFixed(0)}d avg delay` : 'no payment history';
+  return `<span class="badge" title="${delayTxt} | ${risk.overdueCount} overdue 30+ day invoice(s)" style="background:${c}22;color:${c};border:1px solid ${c};">${risk.level==='green'?'🟢':risk.level==='yellow'?'🟡':'🔴'} ${risk.label}</span>`;
+}
 function renderParties(){
   syncPartiesFromDB();
   const search=(document.getElementById('partySearch')||{}).value?.toLowerCase()||'';
@@ -5691,11 +5912,21 @@ function renderParties(){
     const total=db.filter(r=>r.partyName===p.partyName&&r.invNo&&!r.cancelled).reduce((s,r)=>s+getDCTotal(r),0);
     const dcCount=db.filter(r=>r.partyName===p.partyName).length;
     const contactCount = getContactsForParty(p.partyName).length;
+    const outstanding = getPartyOutstandingBalance(p.partyName);
+    const creditLimit = parseFloat(p.creditLimit)||0;
+    const limitCrossed = creditLimit>0 && outstanding>creditLimit;
+    const risk = computePartyRiskScore(p.partyName);
     return `<tr>
       <td>${i+1}</td><td><strong>${p.partyName}</strong><br><span style="font-size:10px;color:var(--text3);">${dcCount} DC(s)</span></td>
       <td>${p.ntn||'<span class="red">Missing</span>'}</td>
       <td style="max-width:200px;">${p.address||'<span class="red">Missing</span>'}</td>
       <td style="text-align:right;">${cur} ${fmt(total)}</td>
+      <td style="text-align:right;font-size:11px;">
+        ${creditLimit>0 ? `Limit: ${cur} ${fmt(creditLimit)}<br>` : '<span style="color:var(--text3);">No limit set</span><br>'}
+        <span style="color:${limitCrossed?'var(--neon3)':'var(--text2)'};font-weight:${limitCrossed?'700':'400'};">Outstanding: ${cur} ${fmt(outstanding)}</span>
+        ${limitCrossed?`<div style="color:var(--neon3);font-weight:700;">⚠️ LIMIT CROSSED!</div>`:''}
+      </td>
+      <td>${riskBadgeHtml(risk)}</td>
       <td>
         <button class="btn btn-yellow btn-xs" onclick="editParty(${fbrParties.indexOf(p)})">✏️</button>
         <button class="btn btn-purple btn-xs" onclick="openPartyContactsModal('${p.partyName.replace(/'/g,"\\'")}')" title="Contacts">📞${contactCount?' ('+contactCount+')':''}</button>
@@ -5703,7 +5934,7 @@ function renderParties(){
         <button class="btn btn-red btn-xs" onclick="deleteParty(${fbrParties.indexOf(p)})">🗑️</button>
       </td>
     </tr>`;
-  }).join('') || '<tr><td colspan="6" class="text-center" style="padding:20px;color:var(--text3);">No parties found</td></tr>';
+  }).join('') || '<tr><td colspan="8" class="text-center" style="padding:20px;color:var(--text3);">No parties found</td></tr>';
 }
 function editParty(idx){
   const p=fbrParties[idx];
@@ -5712,6 +5943,7 @@ function editParty(idx){
   document.getElementById('party-name').value=p.partyName||'';
   document.getElementById('party-ntn').value=p.ntn||'';
   document.getElementById('party-address').value=p.address||'';
+  document.getElementById('party-credit-limit').value=p.creditLimit||'';
   openModal('addPartyModal');
 }
 function saveParty(){
@@ -5719,9 +5951,10 @@ function saveParty(){
   const name=document.getElementById('party-name').value.trim();
   const ntn=document.getElementById('party-ntn').value.trim();
   const address=document.getElementById('party-address').value.trim();
+  const creditLimit=parseFloat(document.getElementById('party-credit-limit').value)||0;
   if(!name){toast('Party name required','warning');return;}
-  if(isNaN(idx)||idx<0){ fbrParties.push({partyName:name,ntn,address}); toast('Party added','success'); }
-  else { fbrParties[idx]={partyName:name,ntn,address}; toast('Party updated','success'); }
+  if(isNaN(idx)||idx<0){ fbrParties.push({partyName:name,ntn,address,creditLimit}); toast('Party added','success'); }
+  else { fbrParties[idx]={partyName:name,ntn,address,creditLimit}; toast('Party updated','success'); }
   document.getElementById('party-edit-idx').value='';
   saveData(); renderParties(); closeModal('addPartyModal'); populatePartyList();
 }
@@ -6538,7 +6771,9 @@ function showPartyRecordSummary(){
       <td style="text-align:right;color:var(--neon3);">${fmt(d.outstanding)}</td></tr>`).join('')}
     </tbody></table></div>`;
 }
-function runDataIntegrity(){
+// Shared issue-detection logic - used by the manual Run Check button AND by the
+// Phase 6 weekly auto-run (autoWeeklyIntegrityCheck) so both stay in sync.
+function getDataIntegrityIssues(){
   const issues=[];
   db.forEach((r,i)=>{
     if(!r.dcNo) issues.push({type:'err',msg:`Record #${i+1}: Missing DC No`});
@@ -6546,10 +6781,16 @@ function runDataIntegrity(){
     if(!r.items||!r.items.length) issues.push({type:'err',msg:`Record #${i+1} (${r.dcNo||'?'}): No items`});
     (r.items||[]).forEach(it=>{ if(!it.hscode) issues.push({type:'warn',msg:`${r.dcNo}: "${it.desc}" missing HS code`}); });
   });
-  // Duplicate DC numbers
   const dcCounts={};
   db.forEach(r=>{ if(r.dcNo) dcCounts[r.dcNo]=(dcCounts[r.dcNo]||0)+1; });
   Object.entries(dcCounts).filter(([,c])=>c>1).forEach(([dc,c])=>issues.push({type:'err',msg:`Duplicate DC No "${dc}" appears ${c} times`}));
+  return issues;
+}
+function runDataIntegrity(){
+  const issues = getDataIntegrityIssues();
+  safeSetItem('sau_last_integrity_autocheck', new Date().toISOString());
+  safeSetItem('sau_last_integrity_issue_count', String(issues.length));
+  updateNotifBadge();
 
   document.getElementById('report-result').style.display='block';
   if(!issues.length){
@@ -6640,6 +6881,7 @@ function init(){
   loadStockModule();
   loadPurchaseOrders();
   loadPartyPaymentTerms();
+  loadVisitLogs();
   loadWarehouses();
   loadExpenses();
   loadBankModule();
@@ -6647,6 +6889,7 @@ function init(){
   loadAdvancedBackupSettings();
   setTimeout(()=>checkAutoBackupSchedule(), 3000);
   setTimeout(()=>updateNotifBadge(), 1000);
+  setTimeout(()=>autoWeeklyIntegrityCheck(), 2500); // PHASE 6: weekly auto data-integrity check
   syncLedgerFromDB();
   syncPartiesFromDB();
   populatePartyList(); populateMonthFilter();
@@ -6657,6 +6900,12 @@ function init(){
   updateClock();
   // Check security
   checkSecurityOnLoad();
+  setTimeout(()=>{
+    try{
+      const n = getPOPaymentAlerts().length;
+      if(n>0) toast(`🔔 ${n} PO-linked invoice(s) have crossed their payment terms — check Purchase Order tab`,'warning');
+    }catch(e){}
+  }, 1500);
   // Cloud Sync (Firebase) + Dropbox: check for a newer cloud copy, finish any
   // in-progress Dropbox OAuth login, and reflect connection status in the UI.
   handleDropboxOAuthRedirect();
@@ -9391,6 +9640,25 @@ function computeReminders(){
   }).length;
   if(overdueUnpaidCount) alerts.push({type:'Payment Due', icon:'💰', count:overdueUnpaidCount, detail:`${overdueUnpaidCount} invoice(s) overdue 30+ days with no payment logged`, severity:'danger', tab:'ledger'});
 
+  // 4b. PHASE 6: Payment Pending 15+ days (invoiced DCs 15-29 days old, no ledger payment yet)
+  const cutoff15 = new Date(today); cutoff15.setDate(today.getDate()-15);
+  const pending15 = active.filter(r=>r.invNo && r.date && new Date(r.date) < cutoff15 && new Date(r.date) >= cutoff);
+  const pending15Count = pending15.filter(r=>{
+    const paid = ledgerData.filter(l=>l.type==='payment' && l.partyName===r.partyName && (l.invNo||'').includes(r.invNo)).length;
+    return !paid;
+  }).length;
+  if(pending15Count) alerts.push({type:'Payment Pending 15+ Days', icon:'⏰', count:pending15Count, detail:`${pending15Count} invoice(s) unpaid for 15+ days - follow up before they become overdue`, severity:'warning', tab:'ledger'});
+
+  // 4c. PHASE 6: Weekly Data Integrity Check result (auto-run once/week)
+  try{
+    const lastCheck = localStorage.getItem('sau_last_integrity_autocheck');
+    const issueCount = parseInt(localStorage.getItem('sau_last_integrity_issue_count')||'0');
+    if(lastCheck && issueCount>0){
+      const daysSince = Math.floor((today - new Date(lastCheck))/(1000*60*60*24));
+      if(daysSince <= 7) alerts.push({type:'Weekly Data Integrity', icon:'🔍', count:issueCount, detail:`${issueCount} data issue(s) found in last weekly check - run Reports tab Data Integrity Check`, severity:'warning', tab:'reports'});
+    }
+  }catch(e){}
+
   // 5. Digital Invoice Missing (invoiced DC with no linked digital invoice PDF)
   if(typeof digitalInvoices!=='undefined'){
     const missingDi = active.filter(r=>r.invNo).filter(r=>{
@@ -9413,6 +9681,16 @@ function computeReminders(){
   const duplicateDcNos = Object.keys(dcNoCounts).filter(k=>dcNoCounts[k]>1);
   if(duplicateDcNos.length) alerts.push({type:'Duplicate DC', icon:'⚠️', count:duplicateDcNos.length, detail:`${duplicateDcNos.length} DC number(s) used more than once (${duplicateDcNos.slice(0,3).join(', ')}${duplicateDcNos.length>3?'...':''})`, severity:'danger', tab:'records'});
 
+  // 7c. PHASE 8: Party Credit Limit Crossed
+  if(typeof fbrParties!=='undefined'){
+    const overLimitParties = fbrParties.filter(p=>{
+      const cl = parseFloat(p.creditLimit)||0;
+      if(cl<=0) return false;
+      return getPartyOutstandingBalance(p.partyName) > cl;
+    });
+    if(overLimitParties.length) alerts.push({type:'Credit Limit Crossed', icon:'💳', count:overLimitParties.length, detail:`${overLimitParties.length} part(y/ies) over their credit limit (${overLimitParties.slice(0,3).map(p=>p.partyName).join(', ')}${overLimitParties.length>3?'...':''})`, severity:'danger', tab:'parties'});
+  }
+
   // 7. Birthdays / Anniversaries today or tomorrow (CRM)
   if(typeof crmData!=='undefined'){
     const todayStr = fmtDate(today), tomorrowStr = fmtDate(tomorrow);
@@ -9426,6 +9704,24 @@ function computeReminders(){
   }
 
   return alerts;
+}
+// PHASE 6: Data Integrity Check ko weekly auto-run banaya gaya hai (manual Run Check
+// button ke sath sath). Har baar app khulne par check karta hai ke pichla auto-run
+// 7+ din pehle hua tha ya kabhi hui hi nahi - agar haan to silently check chala kar
+// result save kar deta hai, aur agar issues milen to notification bell + toast se
+// user ko batata hai.
+function autoWeeklyIntegrityCheck(){
+  try{
+    const last = localStorage.getItem('sau_last_integrity_autocheck');
+    const today = new Date(); today.setHours(0,0,0,0);
+    const daysAgo = last ? Math.floor((today - new Date(last))/(1000*60*60*24)) : Infinity;
+    if(daysAgo < 7) return;
+    const issues = getDataIntegrityIssues();
+    safeSetItem('sau_last_integrity_autocheck', today.toISOString());
+    safeSetItem('sau_last_integrity_issue_count', String(issues.length));
+    updateNotifBadge();
+    if(issues.length) toast(`🔍 Weekly Data Integrity Check: ${issues.length} issue(s) found - check Reports tab`,'warning');
+  }catch(e){ console.warn('autoWeeklyIntegrityCheck failed', e); }
 }
 function renderReminders(){
   const el = document.getElementById('dashboard-reminders');
@@ -10237,12 +10533,22 @@ function openStockMoveModal(idx){
   document.getElementById('sm-item-idx').value = idx;
   document.getElementById('sm-item-display').value = item.name;
   document.getElementById('sm-qty').value = '';
+  document.getElementById('sm-rate').value = '';
+  document.getElementById('sm-supplier').value = '';
   document.getElementById('sm-notes').value = '';
   document.getElementById('sm-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('sm-type').value = 'purchase';
   populateWarehouseSelects();
   const wSel = document.getElementById('sm-warehouse');
   if(wSel && item.warehouse && warehousesList.includes(item.warehouse)) wSel.value = item.warehouse;
+  toggleStockRateField();
   openModal('stockMoveModal');
+}
+// PHASE 9: Purchase Rate field sirf "Purchase (In)" movement ke liye relevant hai —
+// baki types (sale/adjustment) ke liye hide kar dete hain taake form saaf rahay.
+function toggleStockRateField(){
+  const row = document.getElementById('sm-rate-row');
+  if(row) row.style.display = document.getElementById('sm-type').value==='purchase' ? '' : 'none';
 }
 function saveStockMovement(){
   const idx = parseInt(document.getElementById('sm-item-idx').value);
@@ -10251,9 +10557,11 @@ function saveStockMovement(){
   const qty = parseFloat(document.getElementById('sm-qty').value)||0;
   const date = document.getElementById('sm-date').value;
   const notes = document.getElementById('sm-notes').value.trim();
+  const rate = type==='purchase' ? (parseFloat(document.getElementById('sm-rate').value)||0) : 0;
+  const supplier = type==='purchase' ? document.getElementById('sm-supplier').value.trim() : '';
   if(!qty){ toast('Enter a quantity','warning'); return; }
   const warehouse = document.getElementById('sm-warehouse')?document.getElementById('sm-warehouse').value:item.warehouse;
-  stockMovements.push({id:'MV'+Date.now(), itemId:item.id, date, type, qty, notes, warehouse});
+  stockMovements.push({id:'MV'+Date.now(), itemId:item.id, date, type, qty, rate, supplier, notes, warehouse});
   saveStockMovements();
   renderStockTab();
   closeModal('stockMoveModal');
@@ -10269,6 +10577,9 @@ function renderStockTab(){
   tbody.innerHTML = list.map(x=>{
     const {purchase, sale} = getItemMovementTotals(x.it.id);
     const balance = (x.it.openingQty||0) + purchase - sale;
+    const pendingPO = typeof getItemPendingPOQty==='function' ? getItemPendingPOQty(x.it.name) : 0;
+    const reserved = Math.min(balance, pendingPO); // portion of current stock earmarked for open party POs
+    const shortfall = Math.max(0, pendingPO - balance); // demand that current stock can't cover yet
     return `<tr>
       <td><strong>${x.it.name}</strong>${x.it.uom?` <span style="font-size:10px;color:var(--text3);">(${x.it.uom})</span>`:''}</td>
       <td>${x.it.category||'-'}</td>
@@ -10276,12 +10587,62 @@ function renderStockTab(){
       <td style="color:var(--success);">+${purchase}</td>
       <td style="color:var(--neon3);">-${sale}</td>
       <td><strong>${balance}</strong></td>
-      <td>0</td><td>${typeof getItemPendingPOQty==='function' ? getItemPendingPOQty(x.it.name) : 0}</td>
+      <td title="Portion of current stock earmarked for open party Purchase Orders">${reserved||'-'}</td>
+      <td title="Total ordered-but-not-yet-dispatched qty across all open Purchase Orders for this item">${pendingPO||'-'}${shortfall>0?` <span style="color:var(--danger);font-size:10px;" title="Stock on hand can't cover this yet">⚠️ short ${shortfall}</span>`:''}</td>
       <td>${x.it.warehouse||'-'}</td>
       <td>${x.it.rack||'-'}${x.it.bin?(' / '+x.it.bin):''}</td>
-      <td><button class="btn btn-xs btn-neon" onclick="openStockMoveModal(${x.idx})">📋</button> <button class="btn btn-xs btn-neon" onclick="openBarcodeQrModal(${x.idx})">🏷️</button> <button class="btn btn-xs btn-neon" onclick="openStockItemModal(${x.idx})">✏️</button> <button class="btn btn-xs btn-red" onclick="deleteStockItem(${x.idx})">🗑️</button></td>
+      <td><button class="btn btn-xs btn-neon" onclick="openStockMoveModal(${x.idx})">📋</button> <button class="btn btn-xs btn-purple" onclick="openRateHistoryModal(${x.idx})" title="Purchase Rate History">📈</button> <button class="btn btn-xs btn-neon" onclick="openBarcodeQrModal(${x.idx})">🏷️</button> <button class="btn btn-xs btn-neon" onclick="openStockItemModal(${x.idx})">✏️</button> <button class="btn btn-xs btn-red" onclick="deleteStockItem(${x.idx})">🗑️</button></td>
     </tr>`;
   }).join('');
+}
+
+// ==================== PHASE 9: ITEM PURCHASE RATE HISTORY ====================
+// Har purchase-type movement (jo rate ke sath log hoti hai) ka record dikhata hai —
+// kab, kitni qty, kis rate par khareeda gaya — taake cost analysis aasan ho.
+function openRateHistoryModal(idx){
+  const item = stockItems[idx];
+  if(!item) return;
+  const cur = settings.currency||'PKR';
+  const history = stockMovements
+    .filter(m=>m.itemId===item.id && m.type==='purchase')
+    .slice()
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+
+  document.getElementById('rh-title').textContent = `📈 Purchase Rate History — ${item.name}`;
+  const tbody = document.getElementById('rh-tbody');
+  const summaryEl = document.getElementById('rh-summary');
+
+  const withRate = history.filter(m=>m.rate>0);
+  if(!withRate.length){
+    summaryEl.innerHTML = `<span style="color:var(--text3);">Abhi tak koi purchase rate record nahi hai. "📋 Log Movement" se Purchase (In) type ke sath rate darj karein.</span>`;
+  } else {
+    const latest = withRate[withRate.length-1];
+    const rates = withRate.map(m=>m.rate);
+    const minRate = Math.min(...rates), maxRate = Math.max(...rates);
+    const avgRate = rates.reduce((a,b)=>a+b,0)/rates.length;
+    const trend = withRate.length>1 ? (latest.rate - withRate[withRate.length-2].rate) : 0;
+    const trendTxt = trend>0 ? `<span style="color:var(--neon3);">▲ +${fmt(trend)} bara hai pichli purchase se</span>` : trend<0 ? `<span style="color:var(--success);">▼ ${fmt(Math.abs(trend))} kam hua hai pichli purchase se</span>` : `<span style="color:var(--text3);">Pichli purchase jaisa hi hai</span>`;
+    summaryEl.innerHTML = `
+      <div style="display:flex;gap:18px;flex-wrap:wrap;">
+        <div><strong>Latest Rate:</strong> ${cur} ${fmt(latest.rate)} <span style="color:var(--text3);font-size:11px;">(${fmtDate(latest.date)})</span></div>
+        <div><strong>Lowest:</strong> ${cur} ${fmt(minRate)}</div>
+        <div><strong>Highest:</strong> ${cur} ${fmt(maxRate)}</div>
+        <div><strong>Average:</strong> ${cur} ${fmt(avgRate)}</div>
+      </div>
+      <div style="margin-top:6px;">${trendTxt}</div>`;
+  }
+
+  tbody.innerHTML = history.length ? history.slice().reverse().map(m=>`<tr>
+      <td>${fmtDate(m.date)}</td>
+      <td>${fmt(m.qty)}</td>
+      <td>${m.rate?cur+' '+fmt(m.rate):'<span style="color:var(--text3);">-</span>'}</td>
+      <td>${m.rate?cur+' '+fmt(m.rate*m.qty):'-'}</td>
+      <td>${m.supplier||'-'}</td>
+      <td>${m.warehouse||'-'}</td>
+      <td>${m.notes||'-'}</td>
+    </tr>`).join('') : '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:16px;">No purchase movements logged yet for this item</td></tr>';
+
+  openModal('rateHistoryModal');
 }
 
 // ==================== MODULE 11: BARCODE / QR SYSTEM ====================
@@ -10397,11 +10758,17 @@ function onPOPartyChange(){
     const contacts = partyContacts[party]||[];
     bl.innerHTML = contacts.map(c=>`<option value="${c.name}">`).join('');
   }
+  const ul = document.getElementById('po-unit-list');
+  if(ul){
+    const units = [...new Set(purchaseOrders.filter(p=>p.supplier===party && p.unit).map(p=>p.unit))];
+    ul.innerHTML = units.map(u=>`<option value="${u}">`).join('');
+  }
 }
 function openPOModal(idx){
   document.getElementById('po-edit-idx').value = idx!==undefined ? idx : -1;
   document.getElementById('poModalTitle').textContent = idx!==undefined ? '✏️ Edit Purchase Order' : '➕ New Purchase Order';
   document.getElementById('po-no').value=''; document.getElementById('po-supplier').value='';
+  document.getElementById('po-unit').value='';
   document.getElementById('po-address').value=''; document.getElementById('po-address').dataset.userEdited='';
   document.getElementById('po-buyer').value=''; document.getElementById('po-terms').value='';
   document.getElementById('po-date').value = new Date().toISOString().slice(0,10);
@@ -10411,6 +10778,7 @@ function openPOModal(idx){
     const po = purchaseOrders[idx];
     document.getElementById('po-no').value=po.poNo;
     document.getElementById('po-supplier').value=po.supplier;
+    document.getElementById('po-unit').value=po.unit||'';
     document.getElementById('po-address').value=po.address||'';
     document.getElementById('po-buyer').value=po.buyer||'';
     document.getElementById('po-terms').value=po.terms||'';
@@ -10430,16 +10798,17 @@ function addPOItemRow(){
   const hscode = document.getElementById('po-item-hscode').value.trim();
   const qty = parseFloat(document.getElementById('po-item-qty').value)||0;
   const rate = parseFloat(document.getElementById('po-item-rate').value)||0;
+  const reqDate = document.getElementById('po-item-reqdate').value;
   if(!name||!qty){ toast('Item name and qty required','warning'); return; }
-  poTempItems.push({name, hscode, qty, rate, received:0});
-  document.getElementById('po-item-name').value=''; document.getElementById('po-item-hscode').value=''; document.getElementById('po-item-qty').value=''; document.getElementById('po-item-rate').value='';
+  poTempItems.push({name, hscode, qty, rate, reqDate, received:0});
+  document.getElementById('po-item-name').value=''; document.getElementById('po-item-hscode').value=''; document.getElementById('po-item-qty').value=''; document.getElementById('po-item-rate').value=''; document.getElementById('po-item-reqdate').value='';
   renderPOItemsTable();
 }
 function removePOItemRow(i){ poTempItems.splice(i,1); renderPOItemsTable(); }
 function renderPOItemsTable(){
   const tbody = document.getElementById('po-items-tbody');
   const cur = settings.currency||'PKR';
-  tbody.innerHTML = poTempItems.map((it,i)=>`<tr><td>${it.name}</td><td>${it.hscode||'-'}</td><td>${it.qty}</td><td>${cur} ${fmt(it.rate)}</td><td>${cur} ${fmt(it.qty*it.rate)}</td><td><button type="button" class="btn btn-xs btn-red" onclick="removePOItemRow(${i})">✕</button></td></tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text3);">No items added</td></tr>';
+  tbody.innerHTML = poTempItems.map((it,i)=>`<tr><td>${it.name}</td><td>${it.hscode||'-'}</td><td>${it.qty}</td><td>${cur} ${fmt(it.rate)}</td><td>${it.reqDate||'-'}</td><td>${cur} ${fmt(it.qty*it.rate)}</td><td><button type="button" class="btn btn-xs btn-red" onclick="removePOItemRow(${i})">✕</button></td></tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text3);">No items added</td></tr>';
 }
 function savePO(){
   const idx = parseInt(document.getElementById('po-edit-idx').value);
@@ -10449,7 +10818,7 @@ function savePO(){
   if(!poTempItems.length){ toast('Add at least one item','warning'); return; }
   const po = {
     id: (idx>=0 && purchaseOrders[idx]) ? purchaseOrders[idx].id : 'PO'+Date.now(),
-    poNo, supplier, address:document.getElementById('po-address').value.trim(), buyer:document.getElementById('po-buyer').value.trim(),
+    poNo, supplier, unit:document.getElementById('po-unit').value.trim(), address:document.getElementById('po-address').value.trim(), buyer:document.getElementById('po-buyer').value.trim(),
     terms: parseFloat(document.getElementById('po-terms').value)||null,
     date:document.getElementById('po-date').value, expiry:document.getElementById('po-expiry').value,
     notes:document.getElementById('po-notes').value.trim(), items: poTempItems
@@ -10463,6 +10832,7 @@ function savePO(){
   savePurchaseOrders();
   logAudit(idx>=0?'edit':'create','Purchase Order',`PO ${po.poNo} (${po.supplier}) saved`, undefined, po);
   renderPOTab();
+  if(typeof renderStockTab==='function') renderStockTab();
   closeModal('poModal');
   toast('Purchase Order saved','success');
 }
@@ -10522,10 +10892,12 @@ function openPOTimeline(idx){
     const dispatched = (map[it.name]||0)+(parseFloat(it.received)||0);
     const remaining = Math.max(0,(parseFloat(it.qty)||0)-dispatched);
     const done = remaining<=0;
+    const reqLate = it.reqDate && !done && new Date(it.reqDate) < new Date();
     return `<tr>
       <td>${it.name}${it.hscode?` <span style="color:var(--text3);font-size:10px;">(HS ${it.hscode})</span>`:''}</td>
       <td>${it.qty}</td><td>${dispatched}</td>
       <td style="color:${done?'var(--success)':'var(--warning)'};font-weight:700;">${remaining}</td>
+      <td style="color:${reqLate?'var(--danger)':'inherit'};">${it.reqDate||'-'}${reqLate?' ⚠️':''}</td>
       <td>${done?'✅ Matched':'⏳ Pending'}</td>
     </tr>`;
   }).join('');
@@ -10540,13 +10912,14 @@ function openPOTimeline(idx){
   document.getElementById('poTimelineBody').innerHTML = `
     <div class="form-row" style="font-size:12px;">
       <div><strong>Party:</strong> ${po.supplier}</div>
-      <div><strong>Buyer:</strong> ${po.buyer||'-'}</div>
+      <div><strong>Unit:</strong> ${po.unit||'-'}</div>
+      <div><strong>Person:</strong> ${po.buyer||'-'}</div>
       <div><strong>PO Date:</strong> ${po.date||'-'}</div>
       <div><strong>Terms:</strong> ${po.terms?po.terms+' days':'-'}</div>
     </div>
     <div class="divider"></div>
     <strong style="color:var(--neon2);">Item Match Status</strong>
-    <div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>Item</th><th>Ordered</th><th>Dispatched</th><th>Remaining</th><th>Status</th></tr></thead>
+    <div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>Item</th><th>Ordered</th><th>Dispatched</th><th>Remaining</th><th>Required By</th><th>Status</th></tr></thead>
     <tbody>${itemRows}</tbody></table></div>
     <div class="divider"></div>
     <strong style="color:var(--neon2);">DC / Invoice History (chronological)</strong>
@@ -10555,6 +10928,7 @@ function openPOTimeline(idx){
   openModal('poTimelineModal');
 }
 function renderPOTab(){
+  renderPOPaymentAlerts();
   const q = (document.getElementById('po-search')?.value||'').toLowerCase();
   const statusFilter = document.getElementById('po-status-filter')?.value||'';
   const cur = settings.currency||'PKR';
@@ -10572,14 +10946,14 @@ function renderPOTab(){
   list.sort((a,b)=>(b.po.date||'').localeCompare(a.po.date||''));
   const tbody = document.getElementById('poTableBody');
   if(!tbody) return;
-  if(!list.length){ tbody.innerHTML='<tr><td colspan="12" style="text-align:center;color:var(--text3);padding:20px;">No purchase orders yet</td></tr>'; return; }
+  if(!list.length){ tbody.innerHTML='<tr><td colspan="13" style="text-align:center;color:var(--text3);padding:20px;">No purchase orders yet</td></tr>'; return; }
   tbody.innerHTML = list.map(x=>{
     const map = getPODispatchedMap(x.po.poNo);
     const orderedValue = x.po.items.reduce((s,i)=>s+i.qty*i.rate,0);
     const remainingQty = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-(parseFloat(i.received)||0)-(map[i.name]||0)),0);
     const balanceValue = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-(parseFloat(i.received)||0)-(map[i.name]||0))*i.rate,0);
     return `<tr>
-      <td>${x.po.poNo}</td><td>${x.po.supplier}</td><td>${x.po.buyer||'-'}</td><td>${x.po.date||'-'}</td><td>${x.po.terms?x.po.terms+'d':'-'}</td>
+      <td>${x.po.poNo}</td><td>${x.po.supplier}</td><td>${x.po.unit||'-'}</td><td>${x.po.buyer||'-'}</td><td>${x.po.date||'-'}</td><td>${x.po.terms?x.po.terms+'d':'-'}</td>
       <td>${x.po.items.length}</td><td>${cur} ${fmt(orderedValue)}</td><td>${remainingQty}</td><td>${cur} ${fmt(balanceValue)}</td>
       <td><span class="badge" style="background:${poColors[x.status]}22;color:${poColors[x.status]};border:1px solid ${poColors[x.status]};">${x.status}</span></td>
       <td>${otherApprovalBadge('po', x.idx)}</td>
@@ -10588,7 +10962,74 @@ function renderPOTab(){
   }).join('');
 }
 
-// ==================== PO ⇄ DC AUTO-LINK: load PO items into a DC, party payment terms ====================
+// ==================== PO PAYMENT-TERMS ALERTS (to the named Person, not generic party number) ====================
+function getPOBuyerContact(po){
+  if(!po.buyer) return null;
+  const contacts = (typeof partyContacts!=='undefined' ? partyContacts[po.supplier] : null) || [];
+  return contacts.find(c=>c.name && c.name.trim().toLowerCase()===po.buyer.trim().toLowerCase()) || null;
+}
+// Finds every DC/Invoice raised against a PO whose Payment Terms have elapsed and is still unpaid.
+function getPOPaymentAlerts(){
+  const today = new Date();
+  const alerts = [];
+  purchaseOrders.forEach(po=>{
+    if(!po.terms) return;
+    const linkedInvoiced = db.filter(r=>!r.cancelled && r.invNo && (r.poNo||'').trim()===po.poNo);
+    linkedInvoiced.forEach(r=>{
+      const isPaid = cheques.some(c=>(c.invoices||[]).includes(r.invNo));
+      if(isPaid) return;
+      const refDate = r.invDate || r.date;
+      if(!refDate) return;
+      const days = Math.floor((today - new Date(refDate))/(1000*60*60*24));
+      const overdueDays = days - po.terms;
+      if(overdueDays > 0){
+        alerts.push({po, dc:r, overdueDays, amount:getDCTotal(r), contact:getPOBuyerContact(po)});
+      }
+    });
+  });
+  alerts.sort((a,b)=>b.overdueDays-a.overdueDays);
+  return alerts;
+}
+function renderPOPaymentAlerts(){
+  const el = document.getElementById('po-payment-alerts');
+  if(!el) return;
+  const alerts = getPOPaymentAlerts();
+  const cur = settings.currency||'PKR';
+  if(!alerts.length){ el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="accent-box" style="border-color:var(--danger);margin-bottom:10px;">
+    <div style="font-weight:700;color:var(--danger);margin-bottom:6px;">🔔 Payment Alerts — PO Terms Elapsed (${alerts.length})</div>
+    <div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>PO No</th><th>Party</th><th>Person</th><th>Invoice</th><th>Amount</th><th>Overdue</th><th></th></tr></thead><tbody>
+    ${alerts.map(a=>`<tr>
+      <td>${a.po.poNo}</td><td>${a.po.supplier}</td><td>${a.po.buyer||'-'}${a.contact?'':' <span style="color:var(--warning);font-size:10px;">(no matching contact saved)</span>'}</td>
+      <td>${a.dc.invNo}</td><td>${cur} ${fmt(a.amount)}</td>
+      <td style="color:var(--danger);font-weight:700;">${a.overdueDays}d</td>
+      <td>
+        ${a.contact && a.contact.mobile ? `<button class="btn btn-xs btn-green" onclick="sendPOPaymentAlert(${purchaseOrders.indexOf(a.po)}, '${a.dc.invNo}', 'wa')">💬 WhatsApp</button>` : ''}
+        ${a.contact && a.contact.email ? `<button class="btn btn-xs btn-neon" onclick="sendPOPaymentAlert(${purchaseOrders.indexOf(a.po)}, '${a.dc.invNo}', 'email')">✉️ Email</button>` : ''}
+      </td>
+    </tr>`).join('')}
+    </tbody></table></div>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px;">This app runs entirely on your device/browser — it can flag overdue payments the moment you open it and prepare the message, but it can't send WhatsApp/Email silently in the background without you tapping Send (no server is running to do that for you).</div>
+  </div>`;
+}
+function sendPOPaymentAlert(poIdx, invNo, channel){
+  const po = purchaseOrders[poIdx];
+  if(!po) return;
+  const contact = getPOBuyerContact(po);
+  if(!contact){ toast('No saved contact matches this PO\'s Person Name — add them under Party Contacts first','warning'); return; }
+  const cur = settings.currency||'PKR';
+  const rec = db.find(r=>r.invNo===invNo && (r.poNo||'').trim()===po.poNo);
+  const amount = rec ? getDCTotal(rec) : 0;
+  const msg = `Dear ${po.buyer||contact.name}, this is a reminder that payment for Invoice ${invNo} (against PO ${po.poNo}, ${cur} ${fmt(amount)}) is now due as per the agreed ${po.terms}-day payment terms. Kindly arrange payment at your earliest. — ${settings.companyName||'SAU Corporation'}`;
+  if(channel==='wa' && contact.mobile){
+    let num = contact.mobile.replace(/\D/g,'');
+    if(num.startsWith('0')) num = '92'+num.slice(1);
+    window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank');
+  } else if(channel==='email' && contact.email){
+    window.location.href = `mailto:${contact.email}?subject=${encodeURIComponent('Payment Reminder - Invoice '+invNo)}&body=${encodeURIComponent(msg)}`;
+  }
+  logAudit('alert','Purchase Order',`Payment alert sent to ${po.buyer} (${channel}) for Invoice ${invNo} / PO ${po.poNo}`, undefined, undefined);
+}
 let partyPaymentTerms = {}; // { partyName: days }
 function loadPartyPaymentTerms(){
   const d = localStorage.getItem('sau_party_payment_terms');
@@ -10602,9 +11043,11 @@ function openPOPickerFromDC(){
   if(!poNo){ toast('Enter the PO No first','warning'); return; }
   const po = purchaseOrders.find(p=>p.poNo===poNo);
   if(!po){ toast(`No Purchase Order found with No "${poNo}"`,'warning'); return; }
-  // auto-fill party if DC party is empty
+  // auto-fill party/unit if DC fields are empty
   const partyEl = document.getElementById('dc-party');
   if(partyEl && !partyEl.value.trim()) partyEl.value = po.supplier;
+  const unitEl = document.getElementById('dc-unit');
+  if(unitEl && !unitEl.value.trim() && po.unit) unitEl.value = po.unit;
   const excludeIdx = editingDcIdx!==null && editingDcIdx!==undefined ? editingDcIdx : undefined;
   const map = getPODispatchedMap(po.poNo, excludeIdx);
   poPickerCtx = {po, map};
@@ -11464,10 +11907,320 @@ function checkAutoBackupSchedule(){
     createBackupVersionNow(`Auto (${advancedBackupSettings.frequency})`);
     advancedBackupSettings.lastAuto = now.toISOString();
     safeSetItem('sau_advanced_backup_settings', JSON.stringify(advancedBackupSettings));
+    if(gdriveAutoSync && gdriveClientId) uploadBackupToDrive(`Auto-${advancedBackupSettings.frequency}`);
   }
 }
 
-// ==================== MODULE 21: OCR MODULE ====================
+// ==================== MODULE 27: FIELD STAFF QUICK-ENTRY MODE (Phase 5) ====================
+let visitLogs = []; // {id, date, party, purpose, notes, followUp, followUpDate, loggedBy}
+let fieldOrderTempItems = [];
+function loadVisitLogs(){
+  const d = localStorage.getItem('sau_visit_logs');
+  visitLogs = d ? JSON.parse(d) : [];
+}
+function saveVisitLogsToStorage(){ safeSetItem('sau_visit_logs', JSON.stringify(visitLogs)); }
+function enterFieldMode(){
+  document.getElementById('fieldModeScreen').style.display = 'block';
+  renderFieldTodayList();
+  renderFieldRecentVisits();
+}
+function exitFieldMode(){
+  document.getElementById('fieldModeScreen').style.display = 'none';
+}
+function openFieldOrderModal(){
+  document.getElementById('fo-party').value='';
+  document.getElementById('fo-note').value='';
+  fieldOrderTempItems = [];
+  const sl = document.getElementById('stock-item-list');
+  if(sl) sl.innerHTML = stockItems.map(i=>`<option value="${i.name}">`).join('');
+  renderFieldOrderItemsTable();
+  openModal('fieldOrderModal');
+}
+function addFieldOrderItem(){
+  const name = document.getElementById('fo-item-name').value.trim();
+  const qty = parseFloat(document.getElementById('fo-item-qty').value)||0;
+  if(!name||!qty){ toast('Item name and qty required','warning'); return; }
+  fieldOrderTempItems.push({name, qty});
+  document.getElementById('fo-item-name').value=''; document.getElementById('fo-item-qty').value='';
+  renderFieldOrderItemsTable();
+}
+function removeFieldOrderItem(i){ fieldOrderTempItems.splice(i,1); renderFieldOrderItemsTable(); }
+function renderFieldOrderItemsTable(){
+  const tbody = document.getElementById('fo-items-tbody');
+  tbody.innerHTML = fieldOrderTempItems.map((it,i)=>`<tr><td>${it.name}</td><td>${it.qty}</td><td><button type="button" class="btn btn-xs btn-red" onclick="removeFieldOrderItem(${i})">✕</button></td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--text3);">No items added</td></tr>';
+}
+function saveFieldOrder(){
+  const party = document.getElementById('fo-party').value.trim();
+  if(!party){ toast('Party name required','warning'); return; }
+  if(!fieldOrderTempItems.length){ toast('Add at least one item','warning'); return; }
+  if(!fbrParties.some(p=>p.partyName===party)){
+    fbrParties.push({partyName:party, ntn:'', address:''});
+    toast(`"${party}" added to parties — office can fill NTN/Address later`,'info');
+  }
+  const dcNo = 'FLD-'+Date.now().toString().slice(-8);
+  const items = fieldOrderTempItems.map(it=>({desc:it.name, hscode:'', uom:settings.defaultUom||'Pcs', qty:it.qty, rate:'', tax:settings.defaultTax||18}));
+  const staffName = (typeof securityData!=='undefined' && securityData.currentUser) ? securityData.currentUser.username : (settings.operatorName||'Field Staff');
+  const rec = {
+    date:new Date().toISOString().slice(0,10), dcNo, invNo:'', invDate:'',
+    partyName:party, unitName:'', poNo:'', items, cancelled:false, readyForInv:false,
+    note:(document.getElementById('fo-note').value.trim() ? document.getElementById('fo-note').value.trim()+' ' : '')+`(📱 Field order by ${staffName} — rate/details to be completed by office)`,
+    dispatch:null
+  };
+  db.push(rec);
+  if(settings.approvalWorkflowEnabled){ rec.approvalStatus='pending_manager'; rec.approvalHistory=[{stage:'Staff', by:staffName, date:new Date().toISOString(), action:'created'}]; }
+  logAudit('create','DC/Invoice',`Field order #${rec.dcNo} (${rec.partyName}) created via Field Mode`, undefined, rec);
+  syncPartiesFromDB();
+  saveData();
+  closeModal('fieldOrderModal');
+  toast('Order saved! Office will finalize rates & invoice.','success');
+  renderFieldTodayList();
+}
+function openFieldVisitModal(){
+  document.getElementById('fv-party').value='';
+  document.getElementById('fv-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('fv-purpose').value='Order Visit';
+  document.getElementById('fv-notes').value='';
+  document.getElementById('fv-followup').checked=false;
+  document.getElementById('fv-followup-date-wrap').style.display='none';
+  document.getElementById('fv-followup-date').value='';
+  openModal('fieldVisitModal');
+}
+function saveFieldVisit(){
+  const party = document.getElementById('fv-party').value.trim();
+  if(!party){ toast('Party name required','warning'); return; }
+  const staffName = (typeof securityData!=='undefined' && securityData.currentUser) ? securityData.currentUser.username : (settings.operatorName||'Field Staff');
+  const visit = {
+    id:'VL'+Date.now(), date:document.getElementById('fv-date').value, party,
+    purpose:document.getElementById('fv-purpose').value,
+    notes:document.getElementById('fv-notes').value.trim(),
+    followUp:document.getElementById('fv-followup').checked,
+    followUpDate:document.getElementById('fv-followup-date').value||null,
+    loggedBy:staffName
+  };
+  visitLogs.push(visit);
+  saveVisitLogsToStorage();
+  logAudit('create','Visit Log',`Visit logged for ${party} (${visit.purpose})`, undefined, visit);
+  closeModal('fieldVisitModal');
+  toast('Visit logged!','success');
+  renderFieldRecentVisits();
+}
+function renderFieldTodayList(){
+  const el = document.getElementById('field-today-list');
+  if(!el) return;
+  const today = new Date().toISOString().slice(0,10);
+  const todays = db.filter(r=>r.date===today && (r.dcNo||'').startsWith('FLD-')).slice().reverse();
+  el.innerHTML = todays.length ? todays.map(r=>`<div class="accent-box" style="margin-bottom:6px;font-size:12px;">
+    <strong>${r.partyName}</strong> — ${(r.items||[]).map(it=>`${it.desc} (${it.qty})`).join(', ')}
+  </div>`).join('') : '<div style="color:var(--text3);font-size:12px;">No orders logged today yet.</div>';
+}
+function renderFieldRecentVisits(){
+  const el = document.getElementById('field-recent-visits');
+  if(!el) return;
+  const recent = visitLogs.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
+  el.innerHTML = recent.length ? recent.map(v=>`<div class="accent-box" style="margin-bottom:6px;font-size:12px;">
+    <strong>${v.party}</strong> — ${v.purpose} <span style="color:var(--text3);">(${v.date})</span>
+    ${v.notes?`<div style="color:var(--text2);margin-top:2px;">${v.notes}</div>`:''}
+    ${v.followUp?`<div style="color:var(--warning);margin-top:2px;">🔔 Follow-up${v.followUpDate?' on '+v.followUpDate:''}</div>`:''}
+  </div>`).join('') : '<div style="color:var(--text3);font-size:12px;">No visits logged yet.</div>';
+}
+
+const GDRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const GDRIVE_FOLDER_NAME = 'SAU_Corporation_Backups';
+let gdriveClientId = localStorage.getItem('sau_gdrive_clientid') || '';
+let gdriveTokenClient = null;
+let gdriveAccessToken = null;
+let gdriveTokenExpiry = 0;
+let gdriveFolderId = localStorage.getItem('sau_gdrive_folderid') || '';
+let gdriveAutoSync = localStorage.getItem('sau_gdrive_autosync') === '1';
+let gdriveAccountEmail = localStorage.getItem('sau_gdrive_email') || '';
+
+function refreshGDriveSettingsUI(){
+  const setupPanel = document.getElementById('gdrive-setup-panel');
+  const connectedPanel = document.getElementById('gdrive-connected-panel');
+  const badge = document.getElementById('gdrive-status-badge');
+  const clientIdInput = document.getElementById('gdrive-client-id');
+  if(!setupPanel) return; // settings tab not rendered yet
+  if(clientIdInput) clientIdInput.value = gdriveClientId;
+  const connected = !!(gdriveAccessToken && Date.now() < gdriveTokenExpiry);
+  if(connected){
+    setupPanel.style.display = 'none';
+    connectedPanel.style.display = 'block';
+    badge.textContent = 'Connected';
+    badge.style.background = '#00e67622'; badge.style.color = '#00e676'; badge.style.borderColor = '#00e676';
+    document.getElementById('gdrive-account-info').textContent = gdriveAccountEmail ? `Signed in as ${gdriveAccountEmail}` : 'Connected to Google Drive';
+    const asChk = document.getElementById('gdrive-autosync');
+    if(asChk) asChk.checked = gdriveAutoSync;
+  } else {
+    setupPanel.style.display = 'block';
+    connectedPanel.style.display = 'none';
+    badge.textContent = gdriveClientId ? 'Not connected' : 'Setup needed';
+    badge.style.background = '#8892b022'; badge.style.color = '#8892b0'; badge.style.borderColor = '#8892b0';
+  }
+}
+function saveGDriveAutoSyncPref(){
+  gdriveAutoSync = document.getElementById('gdrive-autosync').checked;
+  safeSetItem('sau_gdrive_autosync', gdriveAutoSync ? '1' : '0');
+}
+function ensureGDriveTokenClient(){
+  if(!window.google || !google.accounts || !google.accounts.oauth2){
+    toast('Google sign-in library is still loading — try again in a moment (or check your internet/network settings)','warning');
+    return null;
+  }
+  if(gdriveTokenClient && gdriveTokenClient._clientId===gdriveClientId) return gdriveTokenClient;
+  gdriveTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: gdriveClientId,
+    scope: GDRIVE_SCOPE + ' https://www.googleapis.com/auth/userinfo.email',
+    callback: async (resp)=>{
+      if(resp.error){ toast('Google Drive connect failed: '+resp.error,'error'); return; }
+      gdriveAccessToken = resp.access_token;
+      gdriveTokenExpiry = Date.now() + ((resp.expires_in||3500)*1000);
+      try{
+        const info = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {headers:{Authorization:'Bearer '+gdriveAccessToken}}).then(r=>r.json());
+        gdriveAccountEmail = info.email||'';
+        safeSetItem('sau_gdrive_email', gdriveAccountEmail);
+      }catch(e){}
+      await ensureGDriveFolder();
+      refreshGDriveSettingsUI();
+      toast('Google Drive connected!','success');
+      logAudit('backup','System','Google Drive connected for cloud backup', undefined, undefined);
+    }
+  });
+  gdriveTokenClient._clientId = gdriveClientId;
+  return gdriveTokenClient;
+}
+function connectGoogleDrive(){
+  const idInput = document.getElementById('gdrive-client-id');
+  const val = (idInput?.value||'').trim();
+  if(!val){ toast('Paste your Google OAuth Client ID first (see instructions above)','warning'); return; }
+  gdriveClientId = val;
+  safeSetItem('sau_gdrive_clientid', gdriveClientId);
+  const tc = ensureGDriveTokenClient();
+  if(!tc) return;
+  tc.requestAccessToken({prompt:'consent'});
+}
+function disconnectGoogleDrive(){
+  if(!confirm('Disconnect Google Drive? Existing backup files in Drive are not deleted.')) return;
+  if(gdriveAccessToken && window.google && google.accounts && google.accounts.oauth2){
+    try{ google.accounts.oauth2.revoke(gdriveAccessToken, ()=>{}); }catch(e){}
+  }
+  gdriveAccessToken = null; gdriveTokenExpiry = 0; gdriveAccountEmail = '';
+  safeSetItem('sau_gdrive_email','');
+  refreshGDriveSettingsUI();
+  toast('Google Drive disconnected','warning');
+}
+// Silently refresh the access token if it's missing/expired. Returns true if we have a usable token.
+async function ensureGDriveAccessToken(){
+  if(gdriveAccessToken && Date.now() < gdriveTokenExpiry - 30000) return true;
+  if(!gdriveClientId) return false;
+  const tc = ensureGDriveTokenClient();
+  if(!tc) return false;
+  return new Promise((resolve)=>{
+    const prevCb = tc.callback;
+    tc.callback = async (resp)=>{
+      tc.callback = prevCb;
+      if(resp.error){ resolve(false); return; }
+      gdriveAccessToken = resp.access_token;
+      gdriveTokenExpiry = Date.now() + ((resp.expires_in||3500)*1000);
+      resolve(true);
+    };
+    tc.requestAccessToken({prompt:''});
+  });
+}
+async function gdriveFetch(url, opts){
+  if(!(await ensureGDriveAccessToken())) throw new Error('Not connected to Google Drive');
+  opts = opts || {};
+  opts.headers = {...(opts.headers||{}), Authorization: 'Bearer '+gdriveAccessToken};
+  const res = await fetch(url, opts);
+  if(!res.ok){ const t = await res.text().catch(()=> ''); throw new Error(`Drive API ${res.status}: ${t.slice(0,200)}`); }
+  return res;
+}
+async function ensureGDriveFolder(){
+  if(gdriveFolderId){
+    // verify it still exists
+    try{
+      const check = await gdriveFetch(`https://www.googleapis.com/drive/v3/files/${gdriveFolderId}?fields=id,trashed`);
+      const j = await check.json();
+      if(j && j.id && !j.trashed) return gdriveFolderId;
+    }catch(e){ /* fall through to recreate */ }
+  }
+  const q = encodeURIComponent(`name='${GDRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const searchRes = await gdriveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`);
+  const searchJson = await searchRes.json();
+  if(searchJson.files && searchJson.files.length){
+    gdriveFolderId = searchJson.files[0].id;
+  } else {
+    const createRes = await gdriveFetch('https://www.googleapis.com/drive/v3/files', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name:GDRIVE_FOLDER_NAME, mimeType:'application/vnd.google-apps.folder'})
+    });
+    const createJson = await createRes.json();
+    gdriveFolderId = createJson.id;
+  }
+  safeSetItem('sau_gdrive_folderid', gdriveFolderId);
+  return gdriveFolderId;
+}
+async function uploadBackupToDrive(label){
+  try{
+    if(!gdriveClientId){ toast('Connect Google Drive first (Settings → Cloud Backup Connections)','warning'); return false; }
+    toast('Preparing backup for Google Drive…','info');
+    const fullData = await buildFullBackupData();
+    const json = JSON.stringify(fullData);
+    if(!gdriveFolderId) await ensureGDriveFolder();
+    const prefix = settings.backupPrefix||'SAU_Backup';
+    const dt = new Date().toISOString().slice(0,16).replace(/:/g,'-');
+    const fileName = `${prefix}_${dt}${label?'_'+label.replace(/\s+/g,''):''}.json`;
+    const metadata = {name:fileName, parents:[gdriveFolderId]};
+    const boundary = 'sau_backup_boundary_'+Date.now();
+    const body =
+      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`+
+      `--${boundary}\r\nContent-Type: application/json\r\n\r\n${json}\r\n`+
+      `--${boundary}--`;
+    await gdriveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method:'POST',
+      headers:{'Content-Type':`multipart/related; boundary=${boundary}`},
+      body
+    });
+    logAudit('backup','System',`Backup uploaded to Google Drive (${fileName}, ${Math.round(json.length/1024)} KB)`, undefined, undefined);
+    toast('Backup uploaded to Google Drive!','success');
+    return true;
+  }catch(e){
+    console.error('Drive backup failed', e);
+    toast('Google Drive backup failed: '+e.message,'error');
+    return false;
+  }
+}
+async function openGDriveBackupsModal(){
+  openModal('gdriveBackupsModal');
+  const el = document.getElementById('gdrive-backups-list');
+  el.innerHTML = 'Loading…';
+  try{
+    if(!gdriveFolderId) await ensureGDriveFolder();
+    const res = await gdriveFetch(`https://www.googleapis.com/drive/v3/files?q='${gdriveFolderId}'+in+parents+and+trashed=false&fields=files(id,name,createdTime,size)&orderBy=createdTime desc`);
+    const json = await res.json();
+    const files = json.files||[];
+    if(!files.length){ el.innerHTML = '<div style="color:var(--text3);">No backups in Drive yet — click "Backup Now" first.</div>'; return; }
+    el.innerHTML = `<div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>File</th><th>Date</th><th>Size</th><th></th></tr></thead><tbody>
+      ${files.map(f=>`<tr>
+        <td>${f.name}</td><td>${f.createdTime?new Date(f.createdTime).toLocaleString():'-'}</td><td>${f.size?Math.round(f.size/1024)+' KB':'-'}</td>
+        <td><button class="btn btn-xs btn-green" onclick="restoreFromGDrive('${f.id}')">♻️ Restore</button></td>
+      </tr>`).join('')}
+    </tbody></table></div>`;
+  }catch(e){
+    el.innerHTML = `<div style="color:var(--danger);">Could not load Drive backups: ${e.message}</div>`;
+  }
+}
+async function restoreFromGDrive(fileId){
+  if(!confirm('Restore this Drive backup? This will overwrite your current data.')) return;
+  try{
+    const res = await gdriveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+    const data = await res.json();
+    await applyRestoredBackupData(data);
+    logAudit('restore','System','Restored backup from Google Drive', undefined, undefined);
+    toast('Restored from Google Drive successfully','success');
+    closeModal('gdriveBackupsModal');
+  }catch(e){ console.error(e); toast('Restore failed: '+e.message,'error'); }
+}
+
 function openOcrModal(){
   document.getElementById('ocr-file').value='';
   document.getElementById('ocr-progress').textContent='';
@@ -12049,5 +12802,79 @@ window.addEventListener('DOMContentLoaded', init);
 
 
 </script>
+<!-- ==================== FIELD STAFF QUICK-ENTRY MODE (Phase 5) ==================== -->
+<div id="fieldModeScreen" style="display:none;position:fixed;inset:0;z-index:9000;background:var(--bg1,#0d1117);overflow-y:auto;">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border2);position:sticky;top:0;background:var(--bg1,#0d1117);z-index:2;">
+    <div style="font-weight:700;font-size:16px;color:var(--neon2);">📱 Field Staff — Quick Entry</div>
+    <button class="btn btn-xs" style="background:transparent;border:1px solid var(--border2);color:var(--text2);" onclick="exitFieldMode()">🔓 Exit Field Mode</button>
+  </div>
+  <div style="padding:16px;max-width:520px;margin:0 auto;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">
+      <button class="btn btn-green" style="padding:22px 10px;font-size:15px;" onclick="openFieldOrderModal()">➕<br>New Order</button>
+      <button class="btn btn-neon" style="padding:22px 10px;font-size:15px;" onclick="openFieldVisitModal()">📍<br>Visit Log</button>
+    </div>
+    <div style="font-weight:700;color:var(--neon2);margin-bottom:6px;">🕒 Today's Entries</div>
+    <div id="field-today-list" style="margin-bottom:20px;"></div>
+    <div style="font-weight:700;color:var(--neon2);margin-bottom:6px;">📍 Recent Visits</div>
+    <div id="field-recent-visits"></div>
+  </div>
+</div>
+
+<!-- FIELD: NEW ORDER MODAL (simplified) -->
+<div class="modal-overlay" id="fieldOrderModal">
+<div class="modal">
+  <div class="modal-header"><h3>➕ New Order</h3><button class="close-btn" onclick="closeModal('fieldOrderModal')">✕</button></div>
+  <div class="modal-body">
+    <div class="form-group"><label>Party Name *</label><input type="text" id="fo-party" list="party-list" placeholder="Select or type party name"></div>
+    <div class="divider"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <strong style="color:var(--neon);">📦 Items</strong>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2;"><label>Item</label><input type="text" id="fo-item-name" list="stock-item-list" placeholder="Item name"></div>
+      <div class="form-group"><label>Qty</label><input type="number" id="fo-item-qty" placeholder="0"></div>
+      <div class="form-group" style="align-self:flex-end;"><button type="button" class="btn btn-neon btn-sm" onclick="addFieldOrderItem()">➕ Add</button></div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="items-table"><thead><tr><th>Item</th><th>Qty</th><th></th></tr></thead><tbody id="fo-items-tbody"></tbody></table>
+    </div>
+    <div class="form-group mt-8"><label>Note (optional)</label><textarea id="fo-note" rows="2" placeholder="Any special instructions..."></textarea></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="saveFieldOrder()">💾 Save Order</button>
+    <button class="btn btn-neon" onclick="closeModal('fieldOrderModal')">Cancel</button>
+  </div>
+</div>
+</div>
+
+<!-- FIELD: VISIT LOG MODAL -->
+<div class="modal-overlay" id="fieldVisitModal">
+<div class="modal">
+  <div class="modal-header"><h3>📍 Log a Visit</h3><button class="close-btn" onclick="closeModal('fieldVisitModal')">✕</button></div>
+  <div class="modal-body">
+    <div class="form-group"><label>Party Name *</label><input type="text" id="fv-party" list="party-list" placeholder="Select or type party name"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Visit Date</label><input type="date" id="fv-date"></div>
+      <div class="form-group"><label>Purpose</label>
+        <select id="fv-purpose">
+          <option value="Order Visit">Order Visit</option>
+          <option value="Payment Collection">Payment Collection</option>
+          <option value="Follow-up">Follow-up</option>
+          <option value="New Party Intro">New Party Intro</option>
+          <option value="Complaint/Feedback">Complaint/Feedback</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><label>Notes</label><textarea id="fv-notes" rows="3" placeholder="What happened during this visit?"></textarea></div>
+    <div class="toggle-wrap"><label class="toggle"><input type="checkbox" id="fv-followup" onchange="document.getElementById('fv-followup-date-wrap').style.display=this.checked?'block':'none'"><span class="toggle-slider"></span></label><label style="margin:0;">Needs Follow-up</label></div>
+    <div class="form-group" id="fv-followup-date-wrap" style="display:none;"><label>Follow-up Date</label><input type="date" id="fv-followup-date"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="saveFieldVisit()">💾 Save Visit</button>
+    <button class="btn btn-neon" onclick="closeModal('fieldVisitModal')">Cancel</button>
+  </div>
+</div>
+</div>
 </div><!-- /app-content -->
 </body></html>
