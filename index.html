@@ -4421,6 +4421,17 @@ Continue?`)){
 // deliberately types the exact confirmation phrase, and it NEVER touches the
 // cloud — it only affects this one browser tab, and only after confirmation.
 function restoreEmbedded(silent=false){
+  // FIX (2026-07-14): this used to ignore the `silent` flag and pop a
+  // BLOCKING native prompt() on every login where this device's localStorage
+  // was empty (fresh browser, cleared cache, first load, etc). Because
+  // prompt() halts all JS on the page, this also delayed initRealtimeSync()
+  // from even starting until a human dismissed the dialog — which is what
+  // made cloud sync look "slow". When called silently (the normal automatic
+  // path from loadData()), just start with an empty list and do nothing
+  // else: the real, current data arrives from Firebase within a couple of
+  // seconds via initRealtimeSync() and replaces this. No stale/old data is
+  // ever shown, and nothing here can cause data loss.
+  if(silent){ db = []; return; }
   const phrase = prompt('⚠️ DANGER: this will replace ALL current data on this device with an OLD backup from 2026-06-11 (only 277 records) — everything added since then (Purchase Orders, DCs, Employees, etc.) will be LOST on this device.\n\nThis should almost never be used. If you are sure, type exactly:\nRESTORE OLD 2026-06-11 DATA');
   if(phrase !== 'RESTORE OLD 2026-06-11 DATA'){ toast('Cancelled — embedded backup NOT restored.','info'); return; }
   db = JSON.parse(JSON.stringify(EMBEDDED_BACKUP.db||[]));
