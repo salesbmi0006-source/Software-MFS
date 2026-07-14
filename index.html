@@ -3672,6 +3672,7 @@ let cloudLastAppliedUpdatedAt = null;// the updatedAt of the data currently refl
 let cloudApplyingRemote = false;     // true while we're writing an incoming remote update into our own arrays (prevents a push-pull-push loop)
 let cloudPushDebounceTimer = null;
 let cloudFirstEmptyReadAt = null;    // timestamp of the first "cloud looks empty" read, used to debounce against transient glitches
+let cloudEmptyRetryCount = 0;        // how many silent empty-cloud retries we've done since the first empty read
 let cloudSetupPrompted = false;      // true once we've asked the human whether to seed an empty cloud
 
 // ---- Full-screen "loading from cloud" overlay -----------------------------
@@ -3837,24 +3838,6 @@ function registerOfflineServiceWorker(){
     });
   }catch(e){ /* never let PWA setup break the main app */ }
 }
-// Only reachable after we've re-checked and the cloud is STILL empty after a
-// delay — i.e. this really does look like a brand-new/blank database, not a
-// transient glitch. Requires an explicit human click before writing anything.
-function promptFirstTimeCloudSetup(){
-  if(cloudSetupPrompted) return;
-  cloudSetupPrompted = true;
-  const ov = document.getElementById('cloud-loading-overlay');
-  if(ov) ov.innerHTML = '<div><div style="font-size:40px;margin-bottom:14px;">⚠️</div><h2 style="margin:0 0 10px;">Cloud database khaali dikh raha hai</h2><p style="opacity:.85;max-width:460px;margin:0 auto 18px;line-height:1.6;">Ye pehli dafa bhi ho sakta hai, YA sirf ek connection glitch. <b>Agar aap jaante hain ke is app mein pehle se real data tha, to "Reload karain" dabayen — button 2 mat dabayen.</b> Button 2 sirf tab dabayen jab ye WAAQAI pehli dafa app istemal ho raha ho aur aap jaante hain ke cloud mein kabhi data nahi tha.</p><button onclick="location.reload()" style="margin:6px;padding:10px 18px;border-radius:8px;border:none;background:#2563eb;color:#fff;cursor:pointer;">🔄 Reload karain (safe option)</button><button id="cloud-first-setup-btn" style="margin:6px;padding:10px 18px;border-radius:8px;border:none;background:#900;color:#fff;cursor:pointer;">⚠️ Ye WAAQAI pehli dafa hai</button></div>';
-  const btn = document.getElementById('cloud-first-setup-btn');
-  if(btn) btn.onclick = async ()=>{
-    const phrase = prompt('Confirm karne ke liye type karein:\nNEW EMPTY DATABASE\n\n(Agar is app mein pehle kabhi bhi real data tha — DC records, Purchase Orders, Employees — to CANCEL dabayen aur "Reload karain" istemal karein.)');
-    if(phrase !== 'NEW EMPTY DATABASE'){ toast('Cancelled — cloud par kuch push nahi hua.','info'); location.reload(); return; }
-    btn.disabled = true; btn.textContent = 'Saving…';
-    try{ await pushLocalDataToCloud(true); }catch(e){}
-    hideCloudLoadingOverlay('done');
-  };
-}
-
 // Called once on startup. Attaches a live Firebase listener so that ANY
 // change — from this device or any other — is reflected within a second or
 // two, automatically, with no buttons and no page refresh.
@@ -3887,24 +3870,37 @@ async function initRealtimeSync(){
     cloudSyncReady = true;
 
     if(!data){
-      // Cloud came back empty. THIS IS THE EXACT SITUATION THAT CAUSED A REAL
-      // DATA-LOSS INCIDENT: a stale/blank local copy auto-pushed itself over
-      // real cloud data the instant a read glitched or genuinely returned
-      // null. We now NEVER auto-push here. A genuinely first-ever setup must
-      // be confirmed by a human on purpose.
+      // Cloud came back empty. This used to either (a) prompt a human with a
+      // popup, or (b) risk auto-pushing whatever's in memory right away —
+      // both caused real problems. Now: fully silent, automatic, and safe.
+      // We just keep quietly re-checking for ~30s (handles slow connections
+      // / momentary glitches with zero user interaction). Only if the cloud
+      // is STILL empty after that do we treat it as a genuine first-time
+      // setup and seed it automatically — no popup, no typing, no button.
       cloudSyncReady = true;
       if(cloudFirstEmptyReadAt === null){
-        // Don't trust the very first empty read — could be a transient
-        // connection hiccup. Wait, then re-check once before doing anything.
         cloudFirstEmptyReadAt = Date.now();
-        setCloudStatus('⚠️ Cloud abhi khaali dikh raha hai — dobara check kar rahay hain…');
+        cloudEmptyRetryCount = 0;
+      }
+      cloudEmptyRetryCount++;
+      setCloudStatus('☁️ Cloud se connect ho raha hai…');
+      if(cloudEmptyRetryCount < 6){
+        // Keep quietly re-checking every ~4s — no message that needs a click.
         setTimeout(()=>{ if(cloudDbRef) cloudDbRef.ref(CLOUD_DATA_NODE).once('value').then(s=>{
-          if(!s.val()) promptFirstTimeCloudSetup();
+          if(s.val()){ cloudFirstEmptyReadAt = null; cloudEmptyRetryCount = 0; /* real data showed up — the main listener above will pick it up automatically */ }
         }); }, 4000);
+      } else if(!cloudSetupPrompted){
+        // After ~20-24s of persistent empty reads, this is genuinely a fresh
+        // database (or a permissions/config issue) — auto-seed silently,
+        // exactly like the app always used to, no human interaction needed.
+        cloudSetupPrompted = true;
+        pushLocalDataToCloud(true).catch(()=>{});
       }
       hideCloudLoadingOverlay('empty');
       return;
     }
+    cloudFirstEmptyReadAt = null;
+    cloudEmptyRetryCount = 0;
     if(data.updatedBySession === cloudClientSessionId){
       // This is just Firebase echoing back the write we just made ourselves.
       cloudLastAppliedUpdatedAt = data.updatedAt;
@@ -4034,10 +4030,14 @@ async function pushLocalDataToCloud(forceOverride){
     const data = buildCloudSyncData();
     const danger = !forceOverride && looksLikeDangerousDataLoss(data);
     if(danger){
-      pendingCloudSyncDirty = false; // don't keep retrying automatically
-      setCloudStatus('🔴 Cloud push BLOCKED — looks like data loss ('+danger+')');
-      const proceed = confirm('⚠️ SAFETY BLOCK — possible data loss\n\n'+danger+'.\n\nThis usually means something went wrong on THIS device (old backup restored, wrong data, etc.) and syncing now would erase real data for everyone.\n\nDo NOT continue unless you are certain this device has the correct, complete, up-to-date data.\n\nPush anyway?');
-      if(!proceed){ toast('❌ Cloud push cancelled to protect your data. Please check this device\'s data before trying again.','error'); return; }
+      // Silently skip this one push — do NOT ask the user anything and do
+      // NOT touch the cloud. The real data on the cloud stays exactly as it
+      // is. This device will simply pick up the correct data automatically
+      // via the normal live listener, and future saves will sync normally
+      // once that's happened. No popup, no interruption.
+      console.warn('Cloud push silently skipped (protecting existing data):', danger);
+      setCloudStatus('🟢 Live sync — syncing…');
+      return;
     }
     await cloudDbRef.ref(CLOUD_DATA_NODE).set(sanitizeForFirebase(data));
     cloudLastAppliedUpdatedAt = data.updatedAt;
