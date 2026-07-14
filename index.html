@@ -3920,7 +3920,21 @@ async function initRealtimeSync(){
     // came back. Figure out whether anyone else ALSO changed the cloud data
     // during our offline window first.
     if(pendingCloudSyncDirty){
-      if(cloudLastAppliedUpdatedAt===null || data.updatedAt===cloudLastAppliedUpdatedAt){
+      if(cloudLastAppliedUpdatedAt===null){
+        // FIX (2026-07-14): this is the very FIRST cloud read this page load
+        // has seen. There's no real cloud baseline yet to compare against, so
+        // this can't be a genuine "offline edit conflict" — it was just
+        // page-init noise (e.g. a settings default being (re)written to
+        // localStorage a split-second before the live listener finished
+        // connecting). Treating it as "flush local over cloud" used to
+        // silently swallow the real incoming cloud data — and since local
+        // was empty/tiny at that point, the push below would then get
+        // blocked by the data-loss guard, leaving the status stuck on
+        // "syncing…" forever until someone manually clicked Force Pull.
+        // Correct behaviour: just apply the real cloud data normally, like
+        // any first load (falls through to the block below).
+        pendingCloudSyncDirty = false;
+      } else if(data.updatedAt===cloudLastAppliedUpdatedAt){
         // Nobody else touched the cloud while we were offline — safe to just
         // flush our queued local edits up automatically, no prompt needed.
         pendingCloudSyncDirty = false;
