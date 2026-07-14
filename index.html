@@ -3844,11 +3844,13 @@ function promptFirstTimeCloudSetup(){
   if(cloudSetupPrompted) return;
   cloudSetupPrompted = true;
   const ov = document.getElementById('cloud-loading-overlay');
-  if(ov) ov.innerHTML = '<div><div style="font-size:40px;margin-bottom:14px;">⚠️</div><h2 style="margin:0 0 10px;">Cloud database khaali hai</h2><p style="opacity:.85;max-width:460px;margin:0 auto 18px;line-height:1.6;">Ye pehli dafa lag raha hai, ya connection me masla hai. Agar ye pehli dafa hai to neeche button dabayen — warna page reload kar ke internet check karein.</p><button onclick="location.reload()" style="margin:6px;padding:10px 18px;border-radius:8px;border:none;background:#444;color:#fff;cursor:pointer;">🔄 Reload karain</button><button id="cloud-first-setup-btn" style="margin:6px;padding:10px 18px;border-radius:8px;border:none;background:#2563eb;color:#fff;cursor:pointer;">Haan, ye pehli dafa hai — shuru karein</button></div>';
+  if(ov) ov.innerHTML = '<div><div style="font-size:40px;margin-bottom:14px;">⚠️</div><h2 style="margin:0 0 10px;">Cloud database khaali dikh raha hai</h2><p style="opacity:.85;max-width:460px;margin:0 auto 18px;line-height:1.6;">Ye pehli dafa bhi ho sakta hai, YA sirf ek connection glitch. <b>Agar aap jaante hain ke is app mein pehle se real data tha, to "Reload karain" dabayen — button 2 mat dabayen.</b> Button 2 sirf tab dabayen jab ye WAAQAI pehli dafa app istemal ho raha ho aur aap jaante hain ke cloud mein kabhi data nahi tha.</p><button onclick="location.reload()" style="margin:6px;padding:10px 18px;border-radius:8px;border:none;background:#2563eb;color:#fff;cursor:pointer;">🔄 Reload karain (safe option)</button><button id="cloud-first-setup-btn" style="margin:6px;padding:10px 18px;border-radius:8px;border:none;background:#900;color:#fff;cursor:pointer;">⚠️ Ye WAAQAI pehli dafa hai</button></div>';
   const btn = document.getElementById('cloud-first-setup-btn');
   if(btn) btn.onclick = async ()=>{
+    const phrase = prompt('Confirm karne ke liye type karein:\nNEW EMPTY DATABASE\n\n(Agar is app mein pehle kabhi bhi real data tha — DC records, Purchase Orders, Employees — to CANCEL dabayen aur "Reload karain" istemal karein.)');
+    if(phrase !== 'NEW EMPTY DATABASE'){ toast('Cancelled — cloud par kuch push nahi hua.','info'); location.reload(); return; }
     btn.disabled = true; btn.textContent = 'Saving…';
-    try{ await pushLocalDataToCloud(); }catch(e){}
+    try{ await pushLocalDataToCloud(true); }catch(e){}
     hideCloudLoadingOverlay('done');
   };
 }
@@ -3999,7 +4001,16 @@ function scheduleCloudPush(){
 // button after confirming.
 let lastKnownGoodCloudCounts = null; // {db, purchaseOrders, employees, ledgerData} — set whenever we successfully read the cloud
 function looksLikeDangerousDataLoss(data){
-  if(!lastKnownGoodCloudCounts) return false; // nothing to compare against yet
+  // HARD RULE (always applies, no prior-count needed): this app is expected
+  // to have real business data. If, at push time, the core lists are all
+  // basically empty, that's almost certainly this device's in-memory state
+  // being empty right after a page load / connection glitch — NOT a real
+  // "nothing to sync" situation. Block it outright.
+  const totalCore = (data.db||[]).length + (data.purchaseOrders||[]).length + (data.employees||[]).length + (data.ledgerData||[]).length;
+  if(totalCore < 3){
+    return `this device currently has almost no data (${totalCore} total core records) — pushing this would very likely erase real data on the cloud`;
+  }
+  if(!lastKnownGoodCloudCounts) return false; // nothing more to compare against yet
   const checks = [
     ['db', 'DC records'],
     ['purchaseOrders', 'Purchase Orders'],
