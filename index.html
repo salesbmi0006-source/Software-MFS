@@ -775,7 +775,6 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
         <button class="btn btn-green btn-sm" onclick="doBackup()" style="width:100%;">💾 Backup Now (JSON)</button>
         <button class="btn btn-neon btn-sm" onclick="document.getElementById('importFileInput').click()" style="width:100%;">📂 Import JSON Backup</button>
         <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="importBackup(event)">
-        <button class="btn btn-yellow btn-sm" onclick="restoreEmbedded()" style="width:100%;">🔄 Restore Embedded Backup</button>
         <div style="font-size:11px;color:var(--text2);margin-top:6px;">Embedded: 2026-06-11 (277 records)</div>
       </div>
     </div>
@@ -3763,6 +3762,18 @@ window.addEventListener('offline', ()=>{
 // internet. This only works when the page is served over http(s) from a real
 // origin — browsers block Service Workers entirely on file:// pages, so this
 // silently does nothing there instead of throwing an error.
+// PHASE 15 — FIX: the old cache-first strategy below ("show cached copy
+// instantly, silently fetch+cache the new one for NEXT time") is what caused
+// a real incident: a device kept showing a stale, older copy of this page
+// (with older sync code) indefinitely, on every load, until the user
+// manually hard-refreshed / cleared cache — which looked exactly like "cloud
+// sync stopped working" even though the cloud data itself was fine. Fixed by:
+//   1) Network-FIRST: always try to fetch the latest copy when online; the
+//      cache is now only a fallback for when there is genuinely no internet.
+//   2) Bumped CACHE_NAME so every existing installed copy is invalidated once.
+//   3) When a new Service Worker version takes control, the page now
+//      auto-reloads itself (once) instead of silently sitting on old code
+//      until someone happens to hard-refresh.
 function registerOfflineServiceWorker(){
   if(!('serviceWorker' in navigator)) return;
   if(location.protocol==='file:'){
@@ -3771,28 +3782,56 @@ function registerOfflineServiceWorker(){
   }
   try{
     const swSource = `
-      const CACHE_NAME='sau-corp-shell-v1';
+      const CACHE_NAME='sau-corp-shell-v2-networkfirst';
       self.addEventListener('install', e=>{ self.skipWaiting(); });
-      self.addEventListener('activate', e=>{ self.clients.claim(); });
+      self.addEventListener('activate', e=>{
+        e.waitUntil((async()=>{
+          // Drop every older cache version (v1 and any earlier ones) so a
+          // stale copy can never be served again from a previous install.
+          const names = await caches.keys();
+          await Promise.all(names.filter(n=>n!==CACHE_NAME).map(n=>caches.delete(n)));
+          await self.clients.claim();
+        })());
+      });
       self.addEventListener('fetch', e=>{
         if(e.request.method!=='GET') return;
         e.respondWith(
-          caches.match(e.request).then(cached=>{
-            const fetchPromise = fetch(e.request).then(networkRes=>{
-              if(networkRes && networkRes.status===200){
-                caches.open(CACHE_NAME).then(cache=>cache.put(e.request, networkRes.clone()));
-              }
-              return networkRes;
-            }).catch(()=>cached);
-            return cached || fetchPromise;
+          fetch(e.request).then(networkRes=>{
+            // Got a live response — this is always the freshest copy, use it,
+            // and stash it away only as an OFFLINE fallback for later.
+            if(networkRes && networkRes.status===200){
+              caches.open(CACHE_NAME).then(cache=>cache.put(e.request, networkRes.clone()));
+            }
+            return networkRes;
+          }).catch(()=>{
+            // No network right now — fall back to whatever we have cached,
+            // which is the only case this cache should ever be used for.
+            return caches.match(e.request);
           })
         );
       });
     `;
     const blob = new Blob([swSource], {type:'application/javascript'});
     const swUrl = URL.createObjectURL(blob);
-    navigator.serviceWorker.register(swUrl).then(()=>{
-      console.info('Offline app-shell caching enabled.');
+    navigator.serviceWorker.register(swUrl).then(reg=>{
+      console.info('Offline app-shell caching enabled (network-first).');
+      // If a newer Service Worker takes over control while this tab is open
+      // (i.e. the app file itself was updated), reload automatically ONCE so
+      // the person is always running current code without needing to know to
+      // hard-refresh. Guarded so it can only ever fire a single reload.
+      let alreadyReloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+        if(alreadyReloaded) return;
+        alreadyReloaded = true;
+        try{ toast('🔄 App updated — reloading to the latest version…','info'); }catch(_){}
+        setTimeout(()=>location.reload(), 800);
+      });
+      // Ask the browser to check for a newer version whenever the tab
+      // becomes visible again (e.g. phone screen turned back on) — Service
+      // Workers otherwise only re-check on a fresh navigation.
+      document.addEventListener('visibilitychange', ()=>{
+        if(document.visibilityState==='visible') reg.update().catch(()=>{});
+      });
     }).catch(err=>{
       console.info('Service Worker registration skipped (not supported on this browser/host):', err.message);
     });
@@ -3871,6 +3910,7 @@ async function initRealtimeSync(){
       hideCloudLoadingOverlay('done');
       return;
     }
+    lastKnownGoodCloudCounts = { db:(data.db||[]).length, purchaseOrders:(data.purchaseOrders||[]).length, employees:(data.employees||[]).length, ledgerData:(data.ledgerData||[]).length };
     if(data.updatedAt && data.updatedAt === cloudLastAppliedUpdatedAt){
       hideCloudLoadingOverlay('done');
       return; // already applied, nothing new
@@ -3949,12 +3989,48 @@ function scheduleCloudPush(){
   clearTimeout(cloudPushDebounceTimer);
   cloudPushDebounceTimer = setTimeout(pushLocalDataToCloud, 1200);
 }
-async function pushLocalDataToCloud(){
+// DATA-LOSS GUARD (2026-07-14): before ever overwriting the cloud, compare
+// how many records we're about to write against the last snapshot we know
+// was actually on the cloud. If a core list (DC records, Purchase Orders,
+// Employees, Ledger) would shrink drastically, something is wrong on THIS
+// device (stale tab, accidental reset, wrong restore, etc.) — refuse to push
+// automatically and surface a loud warning instead of silently deleting
+// everyone else's data. A human can still force it via the manual "push"
+// button after confirming.
+let lastKnownGoodCloudCounts = null; // {db, purchaseOrders, employees, ledgerData} — set whenever we successfully read the cloud
+function looksLikeDangerousDataLoss(data){
+  if(!lastKnownGoodCloudCounts) return false; // nothing to compare against yet
+  const checks = [
+    ['db', 'DC records'],
+    ['purchaseOrders', 'Purchase Orders'],
+    ['employees', 'Employees'],
+    ['ledgerData', 'Ledger entries']
+  ];
+  for(const [key, label] of checks){
+    const before = lastKnownGoodCloudCounts[key] || 0;
+    const after = (data[key]||[]).length;
+    // Only flag real danger: cloud had a meaningful amount of data (5+) and
+    // we're about to write less than half of it.
+    if(before >= 5 && after < before * 0.5){
+      return `${label}: cloud has ${before}, this device is about to push only ${after}`;
+    }
+  }
+  return false;
+}
+async function pushLocalDataToCloud(forceOverride){
   if(!cloudDbRef) return;
   try{
     const data = buildCloudSyncData();
+    const danger = !forceOverride && looksLikeDangerousDataLoss(data);
+    if(danger){
+      pendingCloudSyncDirty = false; // don't keep retrying automatically
+      setCloudStatus('🔴 Cloud push BLOCKED — looks like data loss ('+danger+')');
+      const proceed = confirm('⚠️ SAFETY BLOCK — possible data loss\n\n'+danger+'.\n\nThis usually means something went wrong on THIS device (old backup restored, wrong data, etc.) and syncing now would erase real data for everyone.\n\nDo NOT continue unless you are certain this device has the correct, complete, up-to-date data.\n\nPush anyway?');
+      if(!proceed){ toast('❌ Cloud push cancelled to protect your data. Please check this device\'s data before trying again.','error'); return; }
+    }
     await cloudDbRef.ref(CLOUD_DATA_NODE).set(sanitizeForFirebase(data));
     cloudLastAppliedUpdatedAt = data.updatedAt;
+    lastKnownGoodCloudCounts = { db:(data.db||[]).length, purchaseOrders:(data.purchaseOrders||[]).length, employees:(data.employees||[]).length, ledgerData:(data.ledgerData||[]).length };
     setCloudStatus('🟢 Live sync — last update: '+new Date(data.updatedAt).toLocaleString()+' (you)');
   }catch(err){
     console.error('Auto cloud push failed:', err);
@@ -4324,8 +4400,18 @@ Continue?`)){
   };
   reader.readAsText(file, 'UTF-8');
 }
+// DISABLED (2026-07-14): This function used to silently replace ALL live
+// data with an old, hardcoded 11-June-2026 snapshot (only 277 records) baked
+// into this file, and would then auto-push that stale snapshot to Firebase —
+// wiping out every DC/Purchase Order/Employee record added since. That is
+// exactly what caused the real data-loss incident. The UI button that called
+// this has been removed. This function is kept only so nothing else in the
+// file errors if it's referenced, but it now refuses to run unless someone
+// deliberately types the exact confirmation phrase, and it NEVER touches the
+// cloud — it only affects this one browser tab, and only after confirmation.
 function restoreEmbedded(silent=false){
-  if(!silent && !confirm('Restore embedded backup (2026-06-11, 277 records)? Current data will be replaced!')) return;
+  const phrase = prompt('⚠️ DANGER: this will replace ALL current data on this device with an OLD backup from 2026-06-11 (only 277 records) — everything added since then (Purchase Orders, DCs, Employees, etc.) will be LOST on this device.\n\nThis should almost never be used. If you are sure, type exactly:\nRESTORE OLD 2026-06-11 DATA');
+  if(phrase !== 'RESTORE OLD 2026-06-11 DATA'){ toast('Cancelled — embedded backup NOT restored.','info'); return; }
   db = JSON.parse(JSON.stringify(EMBEDDED_BACKUP.db||[]));
   cheques = JSON.parse(JSON.stringify(EMBEDDED_BACKUP.cheques||[]));
   ledgerData = JSON.parse(JSON.stringify(EMBEDDED_BACKUP.ledgerData||[]));
@@ -4333,7 +4419,7 @@ function restoreEmbedded(silent=false){
   syncLedgerFromDB();
   saveData();
   renderAll();
-  if(!silent) toast('Embedded backup restored!','success');
+  toast('Embedded (OLD) backup restored on THIS DEVICE ONLY — this was NOT pushed to the cloud. Do not refresh/sync from here unless you mean to overwrite the cloud too.','warning');
 }
 function resetAllWithAdminGate(){
   // Determine admin password requirement
