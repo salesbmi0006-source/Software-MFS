@@ -311,7 +311,6 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       <div style="flex:1;height:1px;background:var(--border2);"></div>
     </div>
     <div style="display:flex;gap:8px;">
-      <button class="btn btn-sm" style="flex:1;background:var(--bg3);border:1px solid var(--neon2);color:var(--neon2);padding:10px 6px;" onclick="fieldModeFromLock()" title="Simplified screen for field sales staff — no admin login needed">📱 Field Mode</button>
       <button class="btn btn-sm" style="flex:1;background:var(--bg3);border:1px solid var(--neon4);color:var(--neon4);padding:10px 6px;" onclick="empLoginFromLock()" title="Employee login — see only your own dispatch/attendance/commission">👤 Employee Login</button>
     </div>
     <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--text3);">SAU CORPORATION v31 | Management System</div>
@@ -338,7 +337,6 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <button class="btn btn-green btn-sm" onclick="doBackup()">💾 Backup</button>
     <button class="btn btn-yellow btn-sm" onclick="openModal('settingsModal')">⚙️ Settings</button>
     <button class="btn btn-sm" id="modeToggleBtn" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);" onclick="toggleModeQuick()" title="Toggle Dark/Light Mode">🌙</button>
-    <button class="btn btn-sm" style="background:var(--bg3);border:1px solid var(--neon2);color:var(--neon2);" onclick="enterFieldMode()" title="Simplified screen for field sales staff">📱 Field Mode</button>
     <button class="btn btn-sm" style="background:var(--bg3);border:1px solid var(--neon4);color:var(--neon4);" onclick="openEmpLoginModal()" title="Employee login — see only your own dispatch/attendance/commission">👤 Employee Login</button>
   </div>
   <div id="header-right">
@@ -1001,6 +999,28 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div class="settings-section-title" style="color:var(--neon3);">⚠️ Danger Zone</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">This permanently deletes ALL data (records, ledger, cheques, parties, contacts, digital invoices, rate lists, everything). Requires Admin password to confirm — protects against accidental clicks.</div>
     <button type="button" class="btn btn-red btn-sm" onclick="resetAllWithAdminGate()">🗑️ Reset All Data (Admin Password Required)</button>
+
+    <!-- ================= OWNER-ONLY MASTER DANGER ZONE ================= -->
+    <!-- Only rendered/shown for the owner admin (DZ_OWNER_USERNAME). Everything -->
+    <!-- inside requires the admin password again for every single action. -->
+    <div id="dz-owner-section" style="display:none;margin-top:18px;padding-top:16px;border-top:1px dashed var(--neon3);">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">
+        🔒 <strong>Owner-only master control.</strong> Turning this ON gives you full enable/disable control over every module in the app, plus edit/delete access on entries that don't normally show it, and a recoverable Trash for anything deleted anywhere. Every single action inside asks for your admin password again — nothing here happens silently. When this switch is OFF, the app behaves exactly as it does today for everyone, including you.
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:14px;">
+        <input type="checkbox" id="dz-master-toggle" onchange="toggleDangerZoneMaster()" style="width:18px;height:18px;">
+        <span id="dz-master-label" style="font-weight:700;color:var(--neon3);">Danger Zone Mode: OFF</span>
+      </label>
+      <div id="dz-control-panel" style="display:none;">
+        <div class="settings-section-title" style="font-size:13px;">🧩 Modules — Enable / Disable (hides the tab for everyone until you turn it back on)</div>
+        <div id="dz-module-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px;margin:8px 0 18px;"></div>
+
+        <div class="settings-section-title" style="font-size:13px;">🗑️ Trash / Recycle Bin</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Anything deleted anywhere in the app (records, ledger, parties, cheques, stock, etc.) is captured here before it's gone for good. Restore it back to where it came from, or purge it permanently — each needs your password.</div>
+        <div style="margin-bottom:8px;"><button type="button" class="btn btn-xs" onclick="renderDzTrashList()">🔄 Refresh Trash</button></div>
+        <div id="dz-trash-list" style="max-height:340px;overflow:auto;"></div>
+      </div>
+    </div>
   </div>
   <div style="text-align:right;padding-top:8px;">
     <button type="submit" class="btn btn-green">💾 Save All Settings</button>
@@ -1603,7 +1623,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     </div>
     <div style="overflow-x:auto;">
       <table class="items-table">
-        <thead><tr><th>Date</th><th>Channel</th><th>Party</th><th>Invoice/Ref</th><th>Sent To</th><th>Type</th></tr></thead>
+        <thead><tr><th>Date</th><th>Channel</th><th>Party</th><th>Invoice/Ref</th><th>Sent To</th><th>Type</th><th></th></tr></thead>
         <tbody id="sl-report-tbody"></tbody>
       </table>
     </div>
@@ -4488,6 +4508,206 @@ function resetAllWithAdminGate(){
   toast('All data has been reset','warning');
 }
 
+// ==================== DANGER ZONE (OWNER-ONLY MASTER SYSTEM) ====================
+// Only the owner admin below can ever see or use this. Everyone else — including
+// a second admin account — never sees this section and is completely unaffected
+// when it's off. Every action inside re-prompts for the admin password.
+const DZ_OWNER_USERNAME = 'saif@g.com';
+
+function isDzOwner(){
+  return typeof securityData!=='undefined' && securityData.currentUser &&
+    securityData.currentUser.role==='admin' && securityData.currentUser.username===DZ_OWNER_USERNAME;
+}
+function ensureDzState(){
+  if(typeof securityData==='undefined') return;
+  if(!securityData.dangerZone) securityData.dangerZone = {enabled:false, disabledModules:[]};
+  if(!securityData.dangerZone.disabledModules) securityData.dangerZone.disabledModules = [];
+}
+function isDzOn(){ ensureDzState(); return !!(securityData.dangerZone && securityData.dangerZone.enabled); }
+
+// Every single Danger Zone action (turning it on/off, toggling a module,
+// restoring/purging trash, or an edit/delete that only exists because Danger
+// Zone is on) must pass through this — it re-asks for the OWNER's password
+// every time, no caching.
+function dzGate(actionLabel){
+  if(!isDzOwner()){ toast('❌ Not permitted','error'); return false; }
+  const pwd = prompt('🔒 ADMIN PASSWORD REQUIRED\n\n'+actionLabel);
+  if(pwd===null) return false;
+  const admin = (securityData.adminUsers||[]).find(u=>u.username===DZ_OWNER_USERNAME && u.password===pwd && u.active);
+  if(!admin){ toast('❌ Wrong admin password. Cancelled.','error'); return false; }
+  return true;
+}
+
+// ---- Trash / Recycle Bin (local, survives refresh; captures deletes app-wide) ----
+let trashBin = [];
+function loadTrashBin(){
+  try{ const d = localStorage.getItem('sau_trash_bin'); trashBin = d ? JSON.parse(d) : []; }catch(e){ trashBin = []; }
+}
+function saveTrashBin(){ safeSetItem('sau_trash_bin', JSON.stringify(trashBin)); }
+// Called from inside every delete function in the app, right before the item is
+// actually removed, so nothing is ever truly gone by accident.
+function dzCapture(moduleKey, moduleLabel, itemLabel, itemData){
+  try{
+    loadTrashBin();
+    trashBin.unshift({
+      id: 'tb_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),
+      module: moduleKey, moduleLabel: moduleLabel, label: itemLabel,
+      data: itemData, deletedAt: new Date().toISOString(),
+      deletedBy: (securityData.currentUser?securityData.currentUser.username:'Unknown')
+    });
+    if(trashBin.length>1000) trashBin.length = 1000; // keep it bounded
+    saveTrashBin();
+  }catch(e){ /* never block a delete because trash capture failed */ }
+}
+// Maps a trash entry's module key back to "push it back into its live array
+// and re-render/save" so Restore actually puts data back where it came from.
+const DZ_RESTORE_HANDLERS = {
+  records:   d=>{ db.push(d); saveData(); if(typeof renderRecords==='function') renderRecords(); },
+  ledger:    d=>{ ledgerData.push(d); saveData(); if(typeof renderLedger==='function') renderLedger(); },
+  party:     d=>{ fbrParties.push(d); saveData(); if(typeof renderParties==='function') renderParties(); },
+  cheque:    d=>{ cheques.push(d); saveData(); if(typeof renderCheques==='function') renderCheques(); },
+  digitalinvoice: d=>{ digitalInvoices.push(d); if(typeof saveDigitalInvoices==='function') saveDigitalInvoices(); if(typeof renderDigitalInvoices==='function') renderDigitalInvoices(); },
+  quotation: d=>{ savedQuotations.push(d); if(typeof saveSavedQuotations==='function') saveSavedQuotations(); if(typeof renderSavedQuotations==='function') renderSavedQuotations(); },
+  envelope:  d=>{ envelopeDispatches.push(d); if(typeof saveEnvelopeDispatches==='function') saveEnvelopeDispatches(); if(typeof renderEnvelopeDispatchTab==='function') renderEnvelopeDispatchTab(); },
+  employee:  d=>{ employees.push(d); if(typeof saveEmployees==='function') saveEmployees(); if(typeof renderEmployees==='function') renderEmployees(); },
+  emailtemplate: d=>{ emailTemplates.push(d); if(typeof saveEmailTemplatesList==='function') saveEmailTemplatesList(); if(typeof renderEmailTemplatesList==='function') renderEmailTemplatesList(); },
+  stockitem: d=>{ stockItems.push(d); if(typeof saveStockItems==='function') saveStockItems(); if(typeof renderStockTab==='function') renderStockTab(); },
+  salesreturn: d=>{ salesReturns.push(d); if(typeof saveSalesReturns==='function') saveSalesReturns(); if(typeof renderSalesReturnsTab==='function') renderSalesReturnsTab(); },
+  po:        d=>{ purchaseOrders.push(d); if(typeof savePurchaseOrders==='function') savePurchaseOrders(); if(typeof renderPOTab==='function') renderPOTab(); },
+  expense:   d=>{ expenses.push(d); if(typeof saveExpenses==='function') saveExpenses(); if(typeof renderExpensesTab==='function') renderExpensesTab(); },
+  banktx:    d=>{ bankTransactions.push(d); if(typeof saveBankTransactions==='function') saveBankTransactions(); if(typeof renderBankTab==='function') renderBankTab(); },
+  sendlog:   d=>{ sendLog.push(d); if(typeof saveSendLog==='function') saveSendLog(); if(typeof renderSendLogReport==='function') renderSendLogReport(); }
+};
+function renderDzTrashList(){
+  const el = document.getElementById('dz-trash-list');
+  if(!el) return;
+  loadTrashBin();
+  if(!trashBin.length){ el.innerHTML = '<div style="color:var(--text3);font-size:12px;">Trash is empty.</div>'; return; }
+  el.innerHTML = trashBin.map(t=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--border);font-size:12px;">
+      <div style="flex:1;">
+        <strong>${t.moduleLabel}</strong> — ${t.label}<br>
+        <span style="color:var(--text3);">Deleted ${new Date(t.deletedAt).toLocaleString()} by ${t.deletedBy}</span>
+      </div>
+      <button class="btn btn-xs btn-green" onclick="dzRestoreTrashItem('${t.id}')">♻️ Restore</button>
+      <button class="btn btn-xs btn-red" onclick="dzPurgeTrashItem('${t.id}')">🗑️ Purge</button>
+    </div>`).join('');
+}
+function dzRestoreTrashItem(id){
+  if(!dzGate('Restore this item from Trash back into its module.')) return;
+  loadTrashBin();
+  const item = trashBin.find(t=>t.id===id);
+  if(!item){ toast('Item not found','error'); return; }
+  const handler = DZ_RESTORE_HANDLERS[item.module];
+  if(!handler){ toast('Restore not supported for this module yet','error'); return; }
+  handler(item.data);
+  trashBin = trashBin.filter(t=>t.id!==id);
+  saveTrashBin();
+  if(typeof logAudit==='function') logAudit('restore', item.moduleLabel, `Restored from Trash: ${item.label}`, undefined, item.data);
+  renderDzTrashList();
+  toast('✅ Restored','success');
+}
+function dzPurgeTrashItem(id){
+  if(!dzGate('Permanently delete this item from Trash. This CANNOT be undone.')) return;
+  loadTrashBin();
+  const item = trashBin.find(t=>t.id===id);
+  trashBin = trashBin.filter(t=>t.id!==id);
+  saveTrashBin();
+  if(item && typeof logAudit==='function') logAudit('purge', item.moduleLabel, `Permanently purged from Trash: ${item.label}`, item.data, undefined);
+  renderDzTrashList();
+  toast('Purged permanently','warning');
+}
+
+// ---- Module Enable / Disable (owner can hide any tab from the whole app) ----
+const DZ_MODULES = [
+  {key:'records',label:'📋 Records'},{key:'dashboard',label:'📊 Dashboard'},{key:'analytics',label:'📊 Analytics'},
+  {key:'ledger',label:'📒 Ledger'},{key:'fbr',label:'🧾 FBR/Tax'},{key:'reports',label:'📄 Reports'},
+  {key:'quotation',label:'💬 Quotation'},{key:'digitalinvoices',label:'📎 D.Invoices'},{key:'docmanager',label:'📁 Documents'},
+  {key:'parties',label:'👥 Parties'},{key:'partylookup',label:'📨 Party Lookup'},{key:'crm',label:'🤝 CRM'},
+  {key:'sendcenter',label:'📤 Send Center'},{key:'dispatch',label:'🚚 Dispatch'},
+  {key:'employees',label:'👔 Employees'},{key:'stock',label:'📦 Stock'},{key:'purchaseorders',label:'📝 Purchase Orders'},
+  {key:'warehouses',label:'🏭 Warehouses'},{key:'hscodes',label:'🏷️ HS Codes'},
+  {key:'cheques',label:'🏦 Cheques'},{key:'salesreturns',label:'🔄 Sales Returns'},{key:'bank',label:'🏛️ Bank'},
+  {key:'expenses',label:'💸 Expenses'},{key:'receipts',label:'🧾 Receipts'},
+  {key:'tools',label:'🔧 Tools'},{key:'auditlog',label:'📜 Audit Log'},{key:'aisearch',label:'🤖 AI Search'}
+  // Note: 'security' and 'settings' are intentionally never listed here so the
+  // owner can never accidentally lock themselves out of Danger Zone itself.
+];
+function applyDzModuleVisibility(){
+  ensureDzState();
+  const disabled = securityData.dangerZone.disabledModules;
+  DZ_MODULES.forEach(m=>{
+    const tabEl = document.getElementById('tab-'+m.key);
+    if(tabEl) tabEl.style.display = disabled.includes(m.key) ? 'none' : '';
+  });
+}
+function renderDzModuleList(){
+  const el = document.getElementById('dz-module-list');
+  if(!el) return;
+  ensureDzState();
+  const disabled = securityData.dangerZone.disabledModules;
+  el.innerHTML = DZ_MODULES.map(m=>`
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;background:var(--bg2);padding:6px 8px;border-radius:6px;cursor:pointer;">
+      <input type="checkbox" ${disabled.includes(m.key)?'':'checked'} onchange="dzToggleModule('${m.key}')">
+      ${m.label} ${disabled.includes(m.key)?'<span style="color:var(--danger,#ff5566);">(hidden)</span>':''}
+    </label>`).join('');
+}
+function dzToggleModule(key){
+  const m = DZ_MODULES.find(x=>x.key===key);
+  if(!dzGate(`Toggle module: ${m?m.label:key}`)){ renderDzModuleList(); return; }
+  ensureDzState();
+  const arr = securityData.dangerZone.disabledModules;
+  const i = arr.indexOf(key);
+  if(i>=0) arr.splice(i,1); else arr.push(key);
+  saveSecurity();
+  applyDzModuleVisibility();
+  renderDzModuleList();
+  toast(i>=0?`✅ ${m.label} enabled`:`🚫 ${m.label} disabled`, i>=0?'success':'warning');
+}
+
+// ---- Master on/off switch + wiring into the Settings screen ----
+function toggleDangerZoneMaster(){
+  const cb = document.getElementById('dz-master-toggle');
+  ensureDzState();
+  if(cb.checked){
+    if(!dzGate('Enable DANGER ZONE — full module enable/disable control, extra edit/delete access, and the Trash.')){ cb.checked=false; return; }
+    securityData.dangerZone.enabled = true;
+    if(typeof logAudit==='function') logAudit('danger_zone','Security','Danger Zone ENABLED', undefined, undefined);
+  } else {
+    if(!dzGate('Disable Danger Zone.')){ cb.checked=true; return; }
+    securityData.dangerZone.enabled = false;
+    if(typeof logAudit==='function') logAudit('danger_zone','Security','Danger Zone disabled', undefined, undefined);
+  }
+  saveSecurity();
+  refreshDzOwnerPanel();
+}
+// Call this whenever the Settings tab is shown, and once after login — it
+// shows/hides the whole owner-only block and keeps the checkbox/labels in sync.
+function refreshDzOwnerPanel(){
+  const section = document.getElementById('dz-owner-section');
+  if(!section) return;
+  if(!isDzOwner()){ section.style.display='none'; return; }
+  section.style.display='';
+  ensureDzState();
+  const on = securityData.dangerZone.enabled;
+  const cb = document.getElementById('dz-master-toggle');
+  const label = document.getElementById('dz-master-label');
+  const panel = document.getElementById('dz-control-panel');
+  if(cb) cb.checked = on;
+  if(label){ label.textContent = 'Danger Zone Mode: '+(on?'ON':'OFF'); label.style.color = on?'#ff5566':'var(--neon3)'; }
+  if(panel) panel.style.display = on?'':'none';
+  if(on){ renderDzModuleList(); renderDzTrashList(); }
+  applyDzModuleVisibility();
+  applyDzExtraEditDeleteVisibility();
+}
+// Extra edit/delete buttons that ONLY exist (for the owner, only while Danger
+// Zone is on) in a couple of places that normally have none at all: the
+// Dispatch table and the Send Log Report.
+function applyDzExtraEditDeleteVisibility(){
+  const show = isDzOwner() && isDzOn();
+  document.querySelectorAll('.dz-extra-action').forEach(elm=>{ elm.style.display = show?'':'none'; });
+}
+
 // ==================== UTILITIES ====================
 function fmt(n){ return parseFloat(n||0).toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 // Universal sort helper: order = 'oldest'|'newest'|'asc'|'desc'
@@ -4600,7 +4820,7 @@ function toast(msg, type='info'){
 // currently open, so the most-recently-opened modal is always on top — no matter
 // where it sits in the HTML. This covers ALL modals in the app (54+), not just
 // the one that was reported, so the same bug can't resurface elsewhere.
-let modalZCounter = 9500; // must stay above fieldModeScreen/employeeDashboardScreen (z-index 9000) so their popups (New Order, Visit Log, Employee Login) always show in front
+let modalZCounter = 9500; // must stay above employeeDashboardScreen (z-index 9000) so its popups (Employee Login) always show in front
 function openModal(id){
   const el = document.getElementById(id);
   if(!el) return;
@@ -4688,7 +4908,7 @@ function renderTabContent(id){
   if(id==='parties'){ syncPartiesFromDB(); renderParties(); }
   if(id==='cheques') { renderCheques(); renderAllPayments(); }
   if(id==='hscodes'){ renderHSCodes(); renderHsStockComparison(); }
-  if(id==='settings') { applySettings(); renderAutoNumberConfig(); const abf=document.getElementById('ab-frequency'); if(abf) abf.value = advancedBackupSettings.frequency; renderBackupVersionsList(); const ape=document.getElementById('ap-enabled'); if(ape) ape.checked = !!settings.approvalWorkflowEnabled; const apPo=document.getElementById('ap-po-enabled'); if(apPo) apPo.checked = !!settings.poApprovalWorkflowEnabled; const apExp=document.getElementById('ap-exp-enabled'); if(apExp) apExp.checked = !!settings.expApprovalWorkflowEnabled; const apChq=document.getElementById('ap-chq-enabled'); if(apChq) apChq.checked = !!settings.chqApprovalWorkflowEnabled; refreshGDriveSettingsUI(); }
+  if(id==='settings') { applySettings(); renderAutoNumberConfig(); const abf=document.getElementById('ab-frequency'); if(abf) abf.value = advancedBackupSettings.frequency; renderBackupVersionsList(); const ape=document.getElementById('ap-enabled'); if(ape) ape.checked = !!settings.approvalWorkflowEnabled; const apPo=document.getElementById('ap-po-enabled'); if(apPo) apPo.checked = !!settings.poApprovalWorkflowEnabled; const apExp=document.getElementById('ap-exp-enabled'); if(apExp) apExp.checked = !!settings.expApprovalWorkflowEnabled; const apChq=document.getElementById('ap-chq-enabled'); if(apChq) apChq.checked = !!settings.chqApprovalWorkflowEnabled; refreshGDriveSettingsUI(); if(typeof refreshDzOwnerPanel==='function') refreshDzOwnerPanel(); }
   if(id==='digitalinvoices'){ renderDigitalInvoices(); updateDiCount(); }
   if(id==='security') renderSecuritySettings();
   if(id==='reports'){ renderRateListsHub(); renderRateListBasketSummary(); }
@@ -5483,6 +5703,7 @@ function deleteRecord(idx){
   if(!confirm('Delete this DC record?')) return;
   const rec = db[idx];
   logAudit('delete','DC/Invoice',`DC #${rec.dcNo} (${rec.partyName}) deleted`, rec, undefined);
+  dzCapture('records','📋 Records',`DC #${rec.dcNo} (${rec.partyName})`, rec);
   db.splice(idx,1);
   saveData(); renderRecords();
   toast('Record deleted','warning');
@@ -6240,7 +6461,7 @@ function saveLedgerEntry(){
 function deleteLedgerEntry(id){
   if(!confirm('Delete this ledger entry?')) return;
   const entry = ledgerData.find(e=>e.id===id);
-  if(entry) logAudit('delete','Ledger',`${entry.type} entry for ${entry.partyName} — amount ${entry.amount} deleted`, entry, undefined);
+  if(entry){ logAudit('delete','Ledger',`${entry.type} entry for ${entry.partyName} — amount ${entry.amount} deleted`, entry, undefined); dzCapture('ledger','📒 Ledger',`${entry.type} — ${entry.partyName} (${entry.amount})`, entry); }
   ledgerData=ledgerData.filter(e=>e.id!==id);
   saveData(); renderLedger();
   toast('Entry deleted','warning');
@@ -6379,6 +6600,7 @@ function saveParty(){
 }
 function deleteParty(idx){
   if(!confirm('Delete this party?')) return;
+  dzCapture('party','👥 Parties', fbrParties[idx] && fbrParties[idx].partyName || 'Party', fbrParties[idx]);
   fbrParties.splice(idx,1);
   saveData(); renderParties();
   toast('Party deleted','warning');
@@ -6639,7 +6861,7 @@ function showPartyChequeLedger(partyName){
 function deleteCheque(idx){
   if(!confirm('Delete this cheque?')) return;
   const chq = cheques[idx];
-  if(chq) logAudit('delete','Cheque',`Cheque ${chq.chequeNo} deleted`, chq, undefined);
+  if(chq){ logAudit('delete','Cheque',`Cheque ${chq.chequeNo} deleted`, chq, undefined); dzCapture('cheque','🏦 Cheques',`Cheque ${chq.chequeNo}`, chq); }
   cheques.splice(idx,1);
   saveData(); renderCheques();
   toast('Cheque deleted','warning');
@@ -7296,6 +7518,7 @@ function init(){
   loadEmailCenter();
   loadSendLog();
   loadSalarySlips();
+  if(typeof loadTrashBin==='function') loadTrashBin();
   loadAutoNumberSettings();
   loadStockModule();
   loadSalesReturns();
@@ -7866,6 +8089,7 @@ function linkDigitalInvoice(id){
 }
 async function deleteDigitalInvoice(id){
   if(!confirm('Remove this digital invoice? This cannot be undone.')) return;
+  { const di = digitalInvoices.find(d=>d.id===id); if(di) dzCapture('digitalinvoice','📎 D.Invoices', di.fbrInvNo||id, di); }
   digitalInvoices = digitalInvoices.filter(d=>d.id!==id);
   await deletePdfBlob(id);
   saveDigitalInvoices(); renderDigitalInvoices(); updateDiCount();
@@ -9247,6 +9471,7 @@ function printSavedQuotation(id, size){
 }
 function deleteSavedQuotation(id){
   if(!confirm('Delete this quotation?')) return;
+  { const q = savedQuotations.find(x=>x.id===id); if(q) dzCapture('quotation','💬 Quotation', q.quotNo||id, q); }
   savedQuotations = savedQuotations.filter(x=>x.id!==id);
   saveSavedQuotations(); renderSavedQuotations(); renderQuotationDashboard();
   toast('Quotation deleted','warning');
@@ -9491,6 +9716,8 @@ function applyUserPermissions(){
   if(!user||user.role==='admin') {
     document.querySelectorAll('.tab').forEach(t=>t.style.display='');
     document.querySelectorAll('.btn-red').forEach(b=>b.style.display='');
+    if(typeof applyDzModuleVisibility==='function') applyDzModuleVisibility();
+    if(typeof refreshDzOwnerPanel==='function') refreshDzOwnerPanel();
     return;
   }
   const allowed = user.permissions||[];
@@ -9511,6 +9738,8 @@ function applyUserPermissions(){
   if(!allowed.includes('backup')){
     document.querySelectorAll('[onclick*="doBackup"]').forEach(b=>b.style.display='none');
   }
+  if(typeof applyDzModuleVisibility==='function') applyDzModuleVisibility();
+  if(typeof refreshDzOwnerPanel==='function') refreshDzOwnerPanel();
 }
 function renderSecuritySettings(){
   const sd = securityData;
@@ -9707,9 +9936,24 @@ function renderDispatchTab(){
       <td>${d.deliveryDate||'-'}</td>
       <td>${d.pod?'✅':'—'}</td>
       <td><span class="badge" style="background:${(DISPATCH_STATUS_COLORS[st]||'#8892b0')}22;color:${DISPATCH_STATUS_COLORS[st]||'#8892b0'};border:1px solid ${DISPATCH_STATUS_COLORS[st]||'#8892b0'};">${st}</span></td>
-      <td><button class="btn btn-xs btn-neon" onclick="editDC(${x.idx})">✏️</button> <button class="btn btn-xs btn-neon" onclick="generateDispatchFullPDF(${x.idx})">📄</button></td>
+      <td><button class="btn btn-xs btn-neon" onclick="editDC(${x.idx})">✏️</button> <button class="btn btn-xs btn-neon" onclick="generateDispatchFullPDF(${x.idx})">📄</button> <button class="btn btn-xs btn-red dz-extra-action" style="display:none;" onclick="dzDeleteDispatchEntry(${x.idx})" title="Danger Zone: delete this dispatch entry">🗑️</button></td>
     </tr>`;
   }).join('');
+  if(typeof applyDzExtraEditDeleteVisibility==='function') applyDzExtraEditDeleteVisibility();
+}
+// Owner-only, Danger-Zone-only: clears the dispatch info off a DC record (this
+// is the only "delete" possible here since dispatch data lives on the record
+// itself, not a separate list). Captured to Trash so it can be restored.
+function dzDeleteDispatchEntry(idx){
+  if(!(isDzOwner() && isDzOn())){ toast('Danger Zone is off','warning'); return; }
+  const rec = db[idx];
+  if(!rec || !rec.dispatch){ toast('Not found','error'); return; }
+  if(!dzGate(`Delete dispatch entry for DC #${rec.dcNo} (${rec.partyName}). This can be restored from Trash.`)) return;
+  dzCapture('dispatch','🚚 Dispatch', `DC #${rec.dcNo} (${rec.partyName})`, {dcNo: rec.dcNo, dispatch: rec.dispatch});
+  delete rec.dispatch;
+  saveData();
+  renderDispatchTab();
+  toast('Dispatch entry deleted (recoverable from Trash)','warning');
 }
 function renderBiltyHistory(){
   const q = (document.getElementById('bilty-history-search')?.value||'').trim();
@@ -9813,7 +10057,7 @@ function saveEnvelopeDispatch(){
 function deleteEnvelopeDispatch(idx){
   if(!confirm('Delete this envelope dispatch record?')) return;
   const env = envelopeDispatches[idx];
-  if(env) logAudit('delete','Envelope Dispatch',`Envelope to ${env.partyName} deleted`, env, undefined);
+  if(env){ logAudit('delete','Envelope Dispatch',`Envelope to ${env.partyName} deleted`, env, undefined); dzCapture('envelope','📨 Envelope Dispatch',`Envelope to ${env.partyName}`, env); }
   envelopeDispatches.splice(idx,1);
   saveEnvelopeDispatches();
   renderEnvelopeDispatchTab();
@@ -9974,7 +10218,7 @@ async function saveEmployee(){
 function deleteEmployee(idx){
   if(!confirm('Delete this employee record?')) return;
   const emp = employees[idx];
-  if(emp) logAudit('delete','Employee',`Employee ${emp.name} deleted`, emp, undefined);
+  if(emp){ logAudit('delete','Employee',`Employee ${emp.name} deleted`, emp, undefined); dzCapture('employee','👔 Employees', emp.name, emp); }
   employees.splice(idx,1); saveEmployees(); renderEmployees();
   toast('Employee deleted','warning');
 }
@@ -10768,7 +11012,7 @@ function renderSendLogReport(){
   const tbody = document.getElementById('sl-report-tbody');
   if(!tbody) return;
   const list = getFilteredSendLog();
-  if(!list.length){ tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text3);">No sends recorded for this filter.</td></tr>'; return; }
+  if(!list.length){ tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text3);">No sends recorded for this filter.</td></tr>'; return; }
   tbody.innerHTML = list.map(s=>`<tr>
     <td>${new Date(s.date).toLocaleString()}</td>
     <td>${s.channel==='whatsapp'?'📱 WhatsApp':'✉️ Email'}</td>
@@ -10776,7 +11020,44 @@ function renderSendLogReport(){
     <td>${s.invoiceNo||s.subject||'-'}</td>
     <td>${s.recipientName?(s.recipientName+' — '):''}${s.recipientContact||'-'}</td>
     <td>${s.messageType?WA_MSG_TYPE_LABELS[s.messageType]||s.messageType:'-'}</td>
+    <td class="dz-extra-action" style="display:none;">
+      <button class="btn btn-xs btn-neon" onclick="dzEditSendLogEntry('${s.id}')" title="Danger Zone: edit">✏️</button>
+      <button class="btn btn-xs btn-red" onclick="dzDeleteSendLogEntry('${s.id}')" title="Danger Zone: delete">🗑️</button>
+    </td>
   </tr>`).join('');
+  if(typeof applyDzExtraEditDeleteVisibility==='function') applyDzExtraEditDeleteVisibility();
+}
+// Owner-only, Danger-Zone-only: Send Log entries normally have no edit/delete
+// at all. Delete is captured to Trash and restorable; edit re-prompts for the
+// admin password and lets the owner correct party/recipient/reference fields.
+function dzDeleteSendLogEntry(id){
+  if(!(isDzOwner() && isDzOn())){ toast('Danger Zone is off','warning'); return; }
+  const entry = sendLog.find(s=>s.id===id);
+  if(!entry){ toast('Not found','error'); return; }
+  if(!dzGate(`Delete Send Log entry for ${entry.party||'this recipient'}. This can be restored from Trash.`)) return;
+  dzCapture('sendlog','📤 Send Log', `${entry.party||''} — ${entry.invoiceNo||entry.subject||''}`, entry);
+  sendLog = sendLog.filter(s=>s.id!==id);
+  if(typeof saveSendLog==='function') saveSendLog();
+  renderSendLogReport();
+  toast('Send Log entry deleted (recoverable from Trash)','warning');
+}
+function dzEditSendLogEntry(id){
+  if(!(isDzOwner() && isDzOn())){ toast('Danger Zone is off','warning'); return; }
+  const entry = sendLog.find(s=>s.id===id);
+  if(!entry){ toast('Not found','error'); return; }
+  if(!dzGate(`Edit Send Log entry for ${entry.party||'this recipient'}.`)) return;
+  const newParty = prompt('Party name:', entry.party||'');
+  if(newParty===null) return;
+  const newRef = prompt('Invoice / Reference no:', entry.invoiceNo||entry.subject||'');
+  if(newRef===null) return;
+  const newRecipient = prompt('Recipient name:', entry.recipientName||'');
+  if(newRecipient===null) return;
+  const newContact = prompt('Recipient contact:', entry.recipientContact||'');
+  if(newContact===null) return;
+  entry.party = newParty; entry.invoiceNo = newRef; entry.recipientName = newRecipient; entry.recipientContact = newContact;
+  if(typeof saveSendLog==='function') saveSendLog();
+  renderSendLogReport();
+  toast('Send Log entry updated','success');
 }
 function exportSendLogPDF(partyOnly){
   let list = getFilteredSendLog();
@@ -10937,6 +11218,7 @@ function saveEmailTemplate(){
 }
 function deleteEmailTemplate(idx){
   if(!confirm('Delete this template?')) return;
+  dzCapture('emailtemplate','✉️ Email Templates', emailTemplates[idx] && emailTemplates[idx].name || 'Template', emailTemplates[idx]);
   emailTemplates.splice(idx,1);
   saveEmailTemplatesList();
   renderEmailTemplatesList();
@@ -11091,7 +11373,7 @@ function saveStockItem(){
 function deleteStockItem(idx){
   if(!confirm('Delete this item? (Movement history will remain but be unlinked)')) return;
   const it = stockItems[idx];
-  if(it) logAudit('delete','Stock',`Item ${it.name} deleted`, it, undefined);
+  if(it){ logAudit('delete','Stock',`Item ${it.name} deleted`, it, undefined); dzCapture('stockitem','📦 Stock', it.name, it); }
   stockItems.splice(idx,1);
   saveStockItems();
   renderStockTab();
@@ -11325,7 +11607,7 @@ function saveSalesReturn(){
 function deleteSalesReturn(id){
   if(!confirm('Delete this Sales Return / Credit Note?\n\nNote: the ledger credit and stock-return entries already created will NOT be auto-reversed — adjust those manually in Ledger/Stock if needed.')) return;
   const rec = salesReturns.find(r=>r.id===id);
-  if(rec) logAudit('delete','Sales Return',`Credit Note ${rec.cnNo} deleted`, rec, undefined);
+  if(rec){ logAudit('delete','Sales Return',`Credit Note ${rec.cnNo} deleted`, rec, undefined); dzCapture('salesreturn','🔄 Sales Returns',`Credit Note ${rec.cnNo}`, rec); }
   salesReturns = salesReturns.filter(r=>r.id!==id);
   saveSalesReturns();
   renderSalesReturnsTab();
@@ -11563,7 +11845,7 @@ function savePO(){
 function deletePO(idx){
   if(!confirm('Delete this Purchase Order?')) return;
   const po = purchaseOrders[idx];
-  if(po) logAudit('delete','Purchase Order',`PO ${po.poNo} deleted`, po, undefined);
+  if(po){ logAudit('delete','Purchase Order',`PO ${po.poNo} deleted`, po, undefined); dzCapture('po','📝 Purchase Orders',`PO ${po.poNo}`, po); }
   purchaseOrders.splice(idx,1);
   savePurchaseOrders();
   renderPOTab();
@@ -11967,7 +12249,7 @@ function saveExpense(){
 function deleteExpense(idx){
   if(!confirm('Delete this expense?')) return;
   const exp = expenses[idx];
-  if(exp) logAudit('delete','Expense',`${exp.category} expense of ${exp.amount} deleted`, exp, undefined);
+  if(exp){ logAudit('delete','Expense',`${exp.category} expense of ${exp.amount} deleted`, exp, undefined); dzCapture('expense','💸 Expenses',`${exp.category} — ${exp.amount}`, exp); }
   expenses.splice(idx,1);
   saveExpenses();
   renderExpensesTab();
@@ -12111,6 +12393,7 @@ function saveBankTx(){
 }
 function deleteBankTx(id){
   if(!confirm('Delete this transaction?')) return;
+  { const tx = bankTransactions.find(t=>t.id===id); if(tx) dzCapture('banktx','🏛️ Bank',`${tx.type||''} ${tx.amount||''}`, tx); }
   bankTransactions = bankTransactions.filter(t=>t.id!==id);
   saveBankTransactions();
   renderBankTab();
@@ -12254,9 +12537,7 @@ function renderAuditLogTab(){
 }
 
 // ==================== MODULE 17: ACTIVITY TIMELINE ====================
-function showRecordTimeline(idx){
-  const rec = db[idx];
-  if(!rec) return;
+function buildTimelineEvents(rec){
   const events = [];
   // Created / Edited from audit log (best-effort match by DC No)
   const relatedAudit = auditLog.filter(a=>a.module==='DC/Invoice' && a.summary.includes(`#${rec.dcNo} `));
@@ -12284,15 +12565,23 @@ function showRecordTimeline(idx){
   // Sort by date (nulls last, in original insertion order)
   const withDate = events.filter(e=>e.date).sort((a,b)=>a.date.localeCompare(b.date));
   const withoutDate = events.filter(e=>!e.date);
-  const sorted = [...withDate, ...withoutDate];
-  document.getElementById('timelineModalTitle').textContent = `🕐 Timeline — DC #${rec.dcNo} (${rec.partyName})`;
-  document.getElementById('timeline-body').innerHTML = sorted.map(e=>`
+  return [...withDate, ...withoutDate];
+}
+function timelineEventsHTML(sorted){
+  return sorted.map(e=>`
     <div style="position:relative;margin-bottom:16px;">
       <div style="position:absolute;left:-26px;top:2px;width:10px;height:10px;border-radius:50%;background:var(--neon);"></div>
       <div style="font-weight:700;color:var(--neon2);">${e.label}</div>
       <div style="font-size:11px;color:var(--text3);">${e.date ? new Date(e.date).toLocaleString() : 'Date not recorded'}</div>
       ${e.detail?`<div style="font-size:12px;color:var(--text2);">${e.detail}</div>`:''}
     </div>`).join('') || '<div style="color:var(--text3);">No timeline events found for this record.</div>';
+}
+function showRecordTimeline(idx){
+  const rec = db[idx];
+  if(!rec) return;
+  const sorted = buildTimelineEvents(rec);
+  document.getElementById('timelineModalTitle').textContent = `🕐 Timeline — DC #${rec.dcNo} (${rec.partyName})`;
+  document.getElementById('timeline-body').innerHTML = timelineEventsHTML(sorted);
   openModal('timelineModal');
 }
 
@@ -12660,7 +12949,7 @@ function checkAutoBackupSchedule(){
 
 // ==================== MODULE 28: EMPLOYEE ROLE-BASED DASHBOARD (Phase 12) ====================
 let currentEmployeeSession = null; // {name, idx} while an employee is logged into their own dashboard
-// True whenever Field Mode / Employee Login was opened directly from the Lock Screen
+// True whenever Employee Login was opened directly from the Lock Screen
 // (i.e. the person never did the full admin login). Used so "exit"/"logout" sends them
 // back to the lock screen instead of exposing the full app underneath.
 let enteredFromLockScreen = false;
@@ -12678,6 +12967,19 @@ function empLoginFromLock(){
   enteredFromLockScreen = true;
   document.getElementById('login-screen').style.display = 'none';
   openEmpLoginModal();
+}
+// FIX (2026-07-14): X / Cancel on the Employee Login popup used to just call
+// the generic closeModal(), which never restored the Lock/Login screen that
+// empLoginFromLock() had hidden — leaving the user on a completely blank
+// screen with no way back in except reloading the page. Now: if this modal
+// was opened straight from the lock screen and the person backs out without
+// logging in, put the lock screen back.
+function closeEmpLoginModal(){
+  closeModal('empLoginModal');
+  if(enteredFromLockScreen){
+    enteredFromLockScreen = false;
+    showLoginScreen();
+  }
 }
 function employeeLogin(){
   const u = document.getElementById('emplogin-username').value.trim();
@@ -12702,6 +13004,7 @@ function employeeLogout(){
     if(securityData.enabled) showLoginScreen();
   }
 }
+let empDashDispatchList = []; // holds the currently-rendered month's dispatch records, indexed for the View button
 function renderEmployeeDashboard(){
   if(!currentEmployeeSession) return;
   const emp = employees[currentEmployeeSession.idx];
@@ -12709,165 +13012,88 @@ function renderEmployeeDashboard(){
   document.getElementById('emp-dash-name').textContent = emp.name;
   const cur = settings.currency||'PKR';
 
-  // My Dispatches: DC records where the "Dispatch By" employee field matches this employee's name
-  const myDispatches = db.filter(r=>!r.cancelled && r.dispatch && r.dispatch.dispatchBy && r.dispatch.dispatchBy.trim().toLowerCase()===emp.name.trim().toLowerCase())
-    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  document.getElementById('emp-dash-dispatches').innerHTML = myDispatches.length ? myDispatches.slice(0,50).map(r=>`<tr>
-    <td>${r.date||'-'}</td><td>${r.dcNo||'-'}</td><td>${r.partyName||'-'}</td><td>${r.invNo||'-'}</td>
-  </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--text3);">No dispatches tagged to you yet — the office needs to set "Dispatch By" to your name on a DC for it to show here.</td></tr>';
+  // Month selector — defaults to the current month, keeps whatever the employee picks
+  const monthInput = document.getElementById('emp-dash-month');
+  if(monthInput && !monthInput.value) monthInput.value = new Date().toISOString().slice(0,7);
+  const month = monthInput ? monthInput.value : new Date().toISOString().slice(0,7);
 
-  // My Attendance
-  const myAttendance = (emp.attendance||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  // My Dispatches — only this month's, with a View button for full details + timeline
+  empDashDispatchList = db.filter(r=>!r.cancelled && r.dispatch && r.dispatch.dispatchBy && r.dispatch.dispatchBy.trim().toLowerCase()===emp.name.trim().toLowerCase() && r.date && r.date.slice(0,7)===month)
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  document.getElementById('emp-dash-dispatches').innerHTML = empDashDispatchList.length ? empDashDispatchList.map((r,i)=>`<tr>
+    <td>${r.date||'-'}</td><td>${r.dcNo||'-'}</td><td>${r.partyName||'-'}</td><td>${r.invNo||'-'}</td>
+    <td><button class="btn btn-xs" onclick="viewEmpDispatch(${i})">👁️ View</button></td>
+  </tr>`).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--text3);">No dispatches tagged to you this month — the office needs to set "Dispatch By" to your name on a DC for it to show here.</td></tr>';
+
+  // My Attendance — only this month's
+  const myAttendance = (emp.attendance||[]).filter(a=>a.date && a.date.slice(0,7)===month).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const presentCount = myAttendance.filter(a=>a.type==='present').length;
   const leaveCount = myAttendance.filter(a=>a.type==='leave').length;
   const absentCount = myAttendance.filter(a=>a.type==='absent').length;
   const icons = {present:'✅',leave:'🏖️',absent:'❌'};
-  document.getElementById('emp-dash-attendance').innerHTML = myAttendance.length ? myAttendance.slice(0,30).map(a=>`<div>${icons[a.type]||''} ${a.date} — ${a.type}</div>`).join('') : 'No attendance entries logged yet.';
+  document.getElementById('emp-dash-attendance').innerHTML = myAttendance.length ? myAttendance.map(a=>`<div>${icons[a.type]||''} ${a.date} — ${a.type}</div>`).join('') : 'No attendance entries logged for this month.';
 
-  // My Commission / Bonus / Advance
-  const myMoney = (emp.money||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  // My Commission / Bonus / Advance — only this month's
+  const myMoney = (emp.money||[]).filter(m=>m.date && m.date.slice(0,7)===month).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const moneyIcons = {advance:'💵',bonus:'🎁',commission:'📈'};
   document.getElementById('emp-dash-money').innerHTML = myMoney.length ? myMoney.map(m=>`<tr>
     <td>${m.date}</td><td>${moneyIcons[m.type]||''} ${m.type}</td><td>${cur} ${fmt(m.amount)}</td><td>${m.note||'-'}</td>
-  </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--text3);">No entries yet</td></tr>';
+  </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--text3);">No entries for this month</td></tr>';
   const commissionTotal = myMoney.filter(m=>m.type==='commission').reduce((s,m)=>s+(parseFloat(m.amount)||0),0);
-  const bonusTotal = myMoney.filter(m=>m.type==='bonus').reduce((s,m)=>s+(parseFloat(m.amount)||0),0);
-  const advanceTotal = myMoney.filter(m=>m.type==='advance').reduce((s,m)=>s+(parseFloat(m.amount)||0),0);
+
+  // Salary breakdown for the selected month — same formula the office's official
+  // salary slips use (base salary, per-day rate, absent deduction, bonus, advance)
+  const calc = computeEmployeeSalaryForMonth(emp, month);
 
   document.getElementById('emp-dash-summary').innerHTML = `
-    <div class="accent-box" style="text-align:center;"><div style="font-size:11px;color:var(--text3);">Dispatches</div><div style="font-size:20px;font-weight:700;color:var(--neon);">${myDispatches.length}</div></div>
+    <div class="accent-box" style="text-align:center;"><div style="font-size:11px;color:var(--text3);">Dispatches</div><div style="font-size:20px;font-weight:700;color:var(--neon);">${empDashDispatchList.length}</div></div>
     <div class="accent-box" style="text-align:center;"><div style="font-size:11px;color:var(--text3);">Present Days</div><div style="font-size:20px;font-weight:700;color:var(--success);">${presentCount}</div></div>
     <div class="accent-box" style="text-align:center;"><div style="font-size:11px;color:var(--text3);">Leave / Absent</div><div style="font-size:20px;font-weight:700;color:var(--warning);">${leaveCount}/${absentCount}</div></div>
     <div class="accent-box" style="text-align:center;"><div style="font-size:11px;color:var(--text3);">Commission</div><div style="font-size:16px;font-weight:700;color:var(--neon2);">${cur} ${fmt(commissionTotal)}</div></div>
-    <div class="accent-box" style="text-align:center;"><div style="font-size:11px;color:var(--text3);">Bonus</div><div style="font-size:16px;font-weight:700;color:var(--neon2);">${cur} ${fmt(bonusTotal)}</div></div>
-    <div class="accent-box" style="text-align:center;"><div style="font-size:11px;color:var(--text3);">Advance Taken</div><div style="font-size:16px;font-weight:700;color:var(--danger);">${cur} ${fmt(advanceTotal)}</div></div>
+    <div class="accent-box" style="text-align:center;"><div style="font-size:11px;color:var(--text3);">Bonus</div><div style="font-size:16px;font-weight:700;color:var(--neon2);">${cur} ${fmt(calc.bonus)}</div></div>
+    <div class="accent-box" style="text-align:center;"><div style="font-size:11px;color:var(--text3);">Advance Taken</div><div style="font-size:16px;font-weight:700;color:var(--danger);">${cur} ${fmt(calc.advance)}</div></div>
   `;
+
+  document.getElementById('emp-dash-salary').innerHTML = `
+    <div class="accent-box" style="text-align:center;"><div style="font-size:11px;color:var(--text3);">Base Salary</div><div style="font-size:15px;font-weight:700;color:var(--text2);">${cur} ${fmt(calc.baseSalary)}</div></div>
+    <div class="accent-box" style="text-align:center;"><div style="font-size:11px;color:var(--text3);">Absent Deduction</div><div style="font-size:15px;font-weight:700;color:var(--danger);">- ${cur} ${fmt(calc.deduction)}</div></div>
+    <div class="accent-box" style="text-align:center;"><div style="font-size:11px;color:var(--text3);">Bonus</div><div style="font-size:15px;font-weight:700;color:var(--success);">+ ${cur} ${fmt(calc.bonus)}</div></div>
+    <div class="accent-box" style="text-align:center;"><div style="font-size:11px;color:var(--text3);">Advance</div><div style="font-size:15px;font-weight:700;color:var(--danger);">- ${cur} ${fmt(calc.advance)}</div></div>
+    <div class="accent-box" style="text-align:center;grid-column:1 / -1;border:1px solid var(--neon);"><div style="font-size:11px;color:var(--text3);">Net Salary (Estimated — ${calc.present} present / ${calc.daysInMonth} days)</div><div style="font-size:20px;font-weight:700;color:var(--neon);">${cur} ${fmt(calc.netSalary)}</div></div>
+  `;
+}
+// Opens full details + timeline for one of this employee's dispatches (works even
+// when the employee entered straight from the lock screen and #app-content is hidden,
+// unlike the admin-only timelineModal which lives inside #app-content).
+function viewEmpDispatch(i){
+  const rec = empDashDispatchList[i];
+  if(!rec) return;
+  const cur = settings.currency||'PKR';
+  const st = rec.dispatch ? computeDispatchStatus(rec.dispatch) : '-';
+  document.getElementById('empDispatchViewTitle').textContent = `🚚 DC #${rec.dcNo||'-'} — ${rec.partyName||'-'}`;
+  document.getElementById('empDispatchViewDetails').innerHTML = `
+    <div class="form-row"><div class="form-group"><label>Date</label><div>${rec.date||'-'}</div></div><div class="form-group"><label>PO No</label><div>${rec.poNo||'-'}</div></div></div>
+    <div class="form-row"><div class="form-group"><label>Party</label><div>${rec.partyName||'-'}</div></div><div class="form-group"><label>Invoice No</label><div>${rec.invNo||'-'}</div></div></div>
+    <div class="form-group"><label>Items</label><div>${(rec.items||[]).map(it=>`${it.desc||'-'} — Qty ${it.qty||0} ${it.uom||''}`).join('<br>')||'-'}</div></div>
+    <div class="form-row"><div class="form-group"><label>Dispatch Method</label><div>${rec.dispatch?.method||'-'}</div></div><div class="form-group"><label>Tracking No</label><div>${rec.dispatch?.trackingNo||'-'}</div></div></div>
+    <div class="form-row"><div class="form-group"><label>Dispatch Date</label><div>${rec.dispatch?.dispatchDate||'-'}</div></div><div class="form-group"><label>Delivery Date</label><div>${rec.dispatch?.deliveryDate||'-'}</div></div></div>
+    <div class="form-group"><label>Status</label><div>${st}</div></div>
+  `;
+  document.getElementById('empDispatchViewTimeline').innerHTML = timelineEventsHTML(buildTimelineEvents(rec));
+  openModal('empDispatchViewModal');
 }
 
 // ==================== MODULE 27: FIELD STAFF QUICK-ENTRY MODE (Phase 5) ====================
+// NOTE (2026-07-14): the Field Mode *screen* (quick order/visit entry UI) has been
+// removed per request — not needed. `visitLogs` itself is kept as-is (still loaded,
+// still synced to/from the cloud and included in backups) purely so existing data
+// and other modules that read it keep working untouched; only the entry screen is gone.
 let visitLogs = []; // {id, date, party, purpose, notes, followUp, followUpDate, loggedBy}
-let fieldOrderTempItems = [];
 function loadVisitLogs(){
   const d = localStorage.getItem('sau_visit_logs');
   visitLogs = d ? JSON.parse(d) : [];
 }
 function saveVisitLogsToStorage(){ safeSetItem('sau_visit_logs', JSON.stringify(visitLogs)); }
-function enterFieldMode(){
-  document.getElementById('fieldModeScreen').style.display = 'block';
-  renderFieldTodayList();
-  renderFieldRecentVisits();
-}
-// Called from the button on the Lock/Login screen — lets field/marketing staff reach the
-// simplified Field Mode screen without doing the full admin login. Works even while
-// app-content is hidden because fieldModeScreen now lives outside #app-content in the DOM.
-function fieldModeFromLock(){
-  enteredFromLockScreen = true;
-  document.getElementById('login-screen').style.display = 'none';
-  enterFieldMode();
-}
-function exitFieldMode(){
-  document.getElementById('fieldModeScreen').style.display = 'none';
-  if(enteredFromLockScreen){
-    enteredFromLockScreen = false;
-    if(securityData.enabled) showLoginScreen();
-  }
-}
-function openFieldOrderModal(){
-  document.getElementById('fo-party').value='';
-  document.getElementById('fo-note').value='';
-  fieldOrderTempItems = [];
-  const sl = document.getElementById('stock-item-list');
-  if(sl) sl.innerHTML = stockItems.map(i=>`<option value="${i.name}">`).join('');
-  renderFieldOrderItemsTable();
-  openModal('fieldOrderModal');
-}
-function addFieldOrderItem(){
-  const name = document.getElementById('fo-item-name').value.trim();
-  const qty = parseFloat(document.getElementById('fo-item-qty').value)||0;
-  if(!name||!qty){ toast('Item name and qty required','warning'); return; }
-  fieldOrderTempItems.push({name, qty});
-  document.getElementById('fo-item-name').value=''; document.getElementById('fo-item-qty').value='';
-  renderFieldOrderItemsTable();
-}
-function removeFieldOrderItem(i){ fieldOrderTempItems.splice(i,1); renderFieldOrderItemsTable(); }
-function renderFieldOrderItemsTable(){
-  const tbody = document.getElementById('fo-items-tbody');
-  tbody.innerHTML = fieldOrderTempItems.map((it,i)=>`<tr><td>${it.name}</td><td>${it.qty}</td><td><button type="button" class="btn btn-xs btn-red" onclick="removeFieldOrderItem(${i})">✕</button></td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--text3);">No items added</td></tr>';
-}
-function saveFieldOrder(){
-  const party = document.getElementById('fo-party').value.trim();
-  if(!party){ toast('Party name required','warning'); return; }
-  if(!fieldOrderTempItems.length){ toast('Add at least one item','warning'); return; }
-  if(!fbrParties.some(p=>p.partyName===party)){
-    fbrParties.push({partyName:party, ntn:'', address:''});
-    toast(`"${party}" added to parties — office can fill NTN/Address later`,'info');
-  }
-  const dcNo = 'FLD-'+Date.now().toString().slice(-8);
-  const items = fieldOrderTempItems.map(it=>({desc:it.name, hscode:'', uom:settings.defaultUom||'Pcs', qty:it.qty, rate:'', tax:settings.defaultTax||18}));
-  const staffName = (typeof securityData!=='undefined' && securityData.currentUser) ? securityData.currentUser.username : (settings.operatorName||'Field Staff');
-  const rec = {
-    date:new Date().toISOString().slice(0,10), dcNo, invNo:'', invDate:'',
-    partyName:party, unitName:'', poNo:'', items, cancelled:false, readyForInv:false,
-    note:(document.getElementById('fo-note').value.trim() ? document.getElementById('fo-note').value.trim()+' ' : '')+`(📱 Field order by ${staffName} — rate/details to be completed by office)`,
-    dispatch:null
-  };
-  db.push(rec);
-  if(settings.approvalWorkflowEnabled){ rec.approvalStatus='pending_manager'; rec.approvalHistory=[{stage:'Staff', by:staffName, date:new Date().toISOString(), action:'created'}]; }
-  logAudit('create','DC/Invoice',`Field order #${rec.dcNo} (${rec.partyName}) created via Field Mode`, undefined, rec);
-  syncPartiesFromDB();
-  saveData();
-  closeModal('fieldOrderModal');
-  toast('Order saved! Office will finalize rates & invoice.','success');
-  renderFieldTodayList();
-}
-function openFieldVisitModal(){
-  document.getElementById('fv-party').value='';
-  document.getElementById('fv-date').value = new Date().toISOString().slice(0,10);
-  document.getElementById('fv-purpose').value='Order Visit';
-  document.getElementById('fv-notes').value='';
-  document.getElementById('fv-followup').checked=false;
-  document.getElementById('fv-followup-date-wrap').style.display='none';
-  document.getElementById('fv-followup-date').value='';
-  openModal('fieldVisitModal');
-}
-function saveFieldVisit(){
-  const party = document.getElementById('fv-party').value.trim();
-  if(!party){ toast('Party name required','warning'); return; }
-  const staffName = (typeof securityData!=='undefined' && securityData.currentUser) ? securityData.currentUser.username : (settings.operatorName||'Field Staff');
-  const visit = {
-    id:'VL'+Date.now(), date:document.getElementById('fv-date').value, party,
-    purpose:document.getElementById('fv-purpose').value,
-    notes:document.getElementById('fv-notes').value.trim(),
-    followUp:document.getElementById('fv-followup').checked,
-    followUpDate:document.getElementById('fv-followup-date').value||null,
-    loggedBy:staffName
-  };
-  visitLogs.push(visit);
-  saveVisitLogsToStorage();
-  logAudit('create','Visit Log',`Visit logged for ${party} (${visit.purpose})`, undefined, visit);
-  closeModal('fieldVisitModal');
-  toast('Visit logged!','success');
-  renderFieldRecentVisits();
-}
-function renderFieldTodayList(){
-  const el = document.getElementById('field-today-list');
-  if(!el) return;
-  const today = new Date().toISOString().slice(0,10);
-  const todays = db.filter(r=>r.date===today && (r.dcNo||'').startsWith('FLD-')).slice().reverse();
-  el.innerHTML = todays.length ? todays.map(r=>`<div class="accent-box" style="margin-bottom:6px;font-size:12px;">
-    <strong>${r.partyName}</strong> — ${(r.items||[]).map(it=>`${it.desc} (${it.qty})`).join(', ')}
-  </div>`).join('') : '<div style="color:var(--text3);font-size:12px;">No orders logged today yet.</div>';
-}
-function renderFieldRecentVisits(){
-  const el = document.getElementById('field-recent-visits');
-  if(!el) return;
-  const recent = visitLogs.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
-  el.innerHTML = recent.length ? recent.map(v=>`<div class="accent-box" style="margin-bottom:6px;font-size:12px;">
-    <strong>${v.party}</strong> — ${v.purpose} <span style="color:var(--text3);">(${v.date})</span>
-    ${v.notes?`<div style="color:var(--text2);margin-top:2px;">${v.notes}</div>`:''}
-    ${v.followUp?`<div style="color:var(--warning);margin-top:2px;">🔔 Follow-up${v.followUpDate?' on '+v.followUpDate:''}</div>`:''}
-  </div>`).join('') : '<div style="color:var(--text3);font-size:12px;">No visits logged yet.</div>';
-}
 
 const GDRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const GDRIVE_FOLDER_NAME = 'SAU_Corporation_Backups';
@@ -13768,11 +13994,11 @@ window.addEventListener('DOMContentLoaded', init);
 </div><!-- /app-content -->
 
 <!-- ==================== EMPLOYEE ROLE-BASED DASHBOARD (Phase 12) ====================
-     NOTE: intentionally placed OUTSIDE #app-content so Employee Login / Field Mode still
-     work when triggered straight from the Lock/Login screen (app-content is display:none then). -->
+     NOTE: intentionally placed OUTSIDE #app-content so Employee Login still
+     works when triggered straight from the Lock/Login screen (app-content is display:none then). -->
 <div class="modal-overlay" id="empLoginModal">
 <div class="modal">
-  <div class="modal-header"><h3>👤 Employee Login</h3><button class="close-btn" onclick="closeModal('empLoginModal')">✕</button></div>
+  <div class="modal-header"><h3>👤 Employee Login</h3><button class="close-btn" onclick="closeEmpLoginModal()">✕</button></div>
   <div class="modal-body">
     <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">This is only for the office to hand an employee their own view — not the full system. Ask the office to set your username/password if you don't have one yet.</div>
     <div class="form-group"><label>Username</label><input type="text" id="emplogin-username" placeholder="Your username" onkeydown="if(event.key==='Enter')document.getElementById('emplogin-password').focus()"></div>
@@ -13781,7 +14007,7 @@ window.addEventListener('DOMContentLoaded', init);
   </div>
   <div class="modal-footer">
     <button class="btn btn-green" onclick="employeeLogin()">🔓 Login</button>
-    <button class="btn btn-neon" onclick="closeModal('empLoginModal')">Cancel</button>
+    <button class="btn btn-neon" onclick="closeEmpLoginModal()">Cancel</button>
   </div>
 </div>
 </div>
@@ -13792,91 +14018,42 @@ window.addEventListener('DOMContentLoaded', init);
     <button class="btn btn-xs" style="background:transparent;border:1px solid var(--border2);color:var(--text2);" onclick="employeeLogout()">🔒 Logout</button>
   </div>
   <div style="padding:16px;max-width:640px;margin:0 auto;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+      <label style="font-size:12px;color:var(--text3);white-space:nowrap;">📅 Month</label>
+      <input type="month" id="emp-dash-month" style="flex:1;" onchange="renderEmployeeDashboard()">
+    </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px;" id="emp-dash-summary"></div>
 
-    <div style="font-weight:700;color:var(--neon2);margin:16px 0 6px;">🚚 My Dispatches</div>
-    <div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>Date</th><th>DC No</th><th>Party</th><th>Invoice</th></tr></thead><tbody id="emp-dash-dispatches"></tbody></table></div>
+    <div style="font-weight:700;color:var(--neon2);margin:16px 0 6px;">💵 Salary — Selected Month</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px;" id="emp-dash-salary"></div>
 
-    <div style="font-weight:700;color:var(--neon2);margin:16px 0 6px;">📅 My Attendance (last 30 entries)</div>
+    <div style="font-weight:700;color:var(--neon2);margin:16px 0 6px;">🚚 My Dispatches</div>
+    <div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>Date</th><th>DC No</th><th>Party</th><th>Invoice</th><th>Details</th></tr></thead><tbody id="emp-dash-dispatches"></tbody></table></div>
+
+    <div style="font-weight:700;color:var(--neon2);margin:16px 0 6px;">📅 My Attendance — Selected Month</div>
     <div id="emp-dash-attendance" style="font-size:12px;color:var(--text2);"></div>
 
-    <div style="font-weight:700;color:var(--neon2);margin:16px 0 6px;">💰 My Commission / Bonus / Advance</div>
+    <div style="font-weight:700;color:var(--neon2);margin:16px 0 6px;">💰 My Commission / Bonus / Advance — Selected Month</div>
     <div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Note</th></tr></thead><tbody id="emp-dash-money"></tbody></table></div>
   </div>
 </div>
 
-<!-- ==================== FIELD STAFF QUICK-ENTRY MODE (Phase 5) ==================== -->
-<div id="fieldModeScreen" style="display:none;position:fixed;inset:0;z-index:9000;background:var(--bg1,#0d1117);overflow-y:auto;">
-  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border2);position:sticky;top:0;background:var(--bg1,#0d1117);z-index:2;">
-    <div style="font-weight:700;font-size:16px;color:var(--neon2);">📱 Field Staff — Quick Entry</div>
-    <button class="btn btn-xs" style="background:transparent;border:1px solid var(--border2);color:var(--text2);" onclick="exitFieldMode()">🔓 Exit Field Mode</button>
-  </div>
-  <div style="padding:16px;max-width:520px;margin:0 auto;">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">
-      <button class="btn btn-green" style="padding:22px 10px;font-size:15px;" onclick="openFieldOrderModal()">➕<br>New Order</button>
-      <button class="btn btn-neon" style="padding:22px 10px;font-size:15px;" onclick="openFieldVisitModal()">📍<br>Visit Log</button>
-    </div>
-    <div style="font-weight:700;color:var(--neon2);margin-bottom:6px;">🕒 Today's Entries</div>
-    <div id="field-today-list" style="margin-bottom:20px;"></div>
-    <div style="font-weight:700;color:var(--neon2);margin-bottom:6px;">📍 Recent Visits</div>
-    <div id="field-recent-visits"></div>
-  </div>
-</div>
-
-<!-- FIELD: NEW ORDER MODAL (simplified) -->
-<div class="modal-overlay" id="fieldOrderModal">
+<!-- Employee's own dispatch detail + timeline popup — deliberately kept outside
+     #app-content (like empLoginModal) so it still renders when the employee
+     entered straight from the Lock Screen and #app-content is hidden. -->
+<div class="modal-overlay" id="empDispatchViewModal">
 <div class="modal">
-  <div class="modal-header"><h3>➕ New Order</h3><button class="close-btn" onclick="closeModal('fieldOrderModal')">✕</button></div>
+  <div class="modal-header"><h3 id="empDispatchViewTitle">Dispatch Details</h3><button class="close-btn" onclick="closeModal('empDispatchViewModal')">✕</button></div>
   <div class="modal-body">
-    <div class="form-group"><label>Party Name *</label><input type="text" id="fo-party" list="party-list" placeholder="Select or type party name"></div>
-    <div class="divider"></div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-      <strong style="color:var(--neon);">📦 Items</strong>
-    </div>
-    <div class="form-row">
-      <div class="form-group" style="flex:2;"><label>Item</label><input type="text" id="fo-item-name" list="stock-item-list" placeholder="Item name"></div>
-      <div class="form-group"><label>Qty</label><input type="number" id="fo-item-qty" placeholder="0"></div>
-      <div class="form-group" style="align-self:flex-end;"><button type="button" class="btn btn-neon btn-sm" onclick="addFieldOrderItem()">➕ Add</button></div>
-    </div>
-    <div style="overflow-x:auto;">
-      <table class="items-table"><thead><tr><th>Item</th><th>Qty</th><th></th></tr></thead><tbody id="fo-items-tbody"></tbody></table>
-    </div>
-    <div class="form-group mt-8"><label>Note (optional)</label><textarea id="fo-note" rows="2" placeholder="Any special instructions..."></textarea></div>
+    <div id="empDispatchViewDetails" style="margin-bottom:16px;"></div>
+    <div style="font-weight:700;color:var(--neon2);margin:10px 0 10px;">🕐 Timeline</div>
+    <div id="empDispatchViewTimeline" style="padding-left:26px;border-left:2px solid var(--border2);margin-left:6px;"></div>
   </div>
   <div class="modal-footer">
-    <button class="btn btn-green" onclick="saveFieldOrder()">💾 Save Order</button>
-    <button class="btn btn-neon" onclick="closeModal('fieldOrderModal')">Cancel</button>
+    <button class="btn btn-neon" onclick="closeModal('empDispatchViewModal')">Close</button>
   </div>
 </div>
 </div>
 
-<!-- FIELD: VISIT LOG MODAL -->
-<div class="modal-overlay" id="fieldVisitModal">
-<div class="modal">
-  <div class="modal-header"><h3>📍 Log a Visit</h3><button class="close-btn" onclick="closeModal('fieldVisitModal')">✕</button></div>
-  <div class="modal-body">
-    <div class="form-group"><label>Party Name *</label><input type="text" id="fv-party" list="party-list" placeholder="Select or type party name"></div>
-    <div class="form-row">
-      <div class="form-group"><label>Visit Date</label><input type="date" id="fv-date"></div>
-      <div class="form-group"><label>Purpose</label>
-        <select id="fv-purpose">
-          <option value="Order Visit">Order Visit</option>
-          <option value="Payment Collection">Payment Collection</option>
-          <option value="Follow-up">Follow-up</option>
-          <option value="New Party Intro">New Party Intro</option>
-          <option value="Complaint/Feedback">Complaint/Feedback</option>
-          <option value="Other">Other</option>
-        </select>
-      </div>
-    </div>
-    <div class="form-group"><label>Notes</label><textarea id="fv-notes" rows="3" placeholder="What happened during this visit?"></textarea></div>
-    <div class="toggle-wrap"><label class="toggle"><input type="checkbox" id="fv-followup" onchange="document.getElementById('fv-followup-date-wrap').style.display=this.checked?'block':'none'"><span class="toggle-slider"></span></label><label style="margin:0;">Needs Follow-up</label></div>
-    <div class="form-group" id="fv-followup-date-wrap" style="display:none;"><label>Follow-up Date</label><input type="date" id="fv-followup-date"></div>
-  </div>
-  <div class="modal-footer">
-    <button class="btn btn-green" onclick="saveFieldVisit()">💾 Save Visit</button>
-    <button class="btn btn-neon" onclick="closeModal('fieldVisitModal')">Cancel</button>
-  </div>
-</div>
-</div>
+
 </body></html>
