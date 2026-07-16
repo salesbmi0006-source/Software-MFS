@@ -391,6 +391,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div class="tab" onclick="showTab('salesreturns')" id="tab-salesreturns">🔄 Sales Returns</div>
     <div class="tab" onclick="showTab('bank')" id="tab-bank">🏛️ Bank</div>
     <div class="tab" onclick="showTab('expenses')" id="tab-expenses">💸 Expenses</div>
+    <div class="tab" onclick="showTab('pantry')" id="tab-pantry">🍵 Pantry</div>
     <div class="tab" onclick="showTab('receipts')" id="tab-receipts">🧾 Receipts</div>
 
     <div class="tab-group-label">System</div>
@@ -2100,6 +2101,78 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
   </div>
 </div>
 
+<!-- PANTRY / TEA-BOY MODULE -->
+<div class="tab-panel" id="panel-pantry">
+  <div class="grid2">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🍵 New Pantry Order</div>
+      </div>
+      <div id="pantry-session-note" style="font-size:11px;color:var(--text3);margin-bottom:8px;"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Date</label><input type="date" id="pantry-date"></div>
+        <div class="form-group" id="pantry-broughtby-wrap">
+          <label>Laane Wala (Brought By)</label>
+          <select id="pantry-broughtby" onchange="onPantryBroughtByChange()"></select>
+          <input type="text" id="pantry-broughtby-other" placeholder="Name likhein" style="display:none;margin-top:6px;">
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2;">
+          <label>Item</label>
+          <select id="pantry-item-select" onchange="onPantryItemSelectChange()"></select>
+        </div>
+        <div class="form-group"><label>Qty</label><input type="number" id="pantry-item-qty" value="1" min="1" style="width:80px;"></div>
+        <div class="form-group"><label>Rate</label><input type="number" id="pantry-item-rate" min="0" style="width:100px;"></div>
+        <div class="form-group" style="align-self:flex-end;"><button class="btn btn-green btn-sm" onclick="addPantryCartItem()">➕ Add</button></div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="items-table"><thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Amount</th><th></th></tr></thead><tbody id="pantryCartTbody"></tbody></table>
+      </div>
+      <div style="text-align:right;font-size:16px;font-weight:700;margin:10px 0;">Total: <span id="pantry-cart-total">0</span></div>
+      <div class="form-group"><label>Notes (optional)</label><input type="text" id="pantry-notes" placeholder="Koi note..."></div>
+      <div class="flex-gap">
+        <button class="btn btn-purple" onclick="savePantryOrder(true)">🖨️ Save &amp; Print</button>
+        <button class="btn btn-neon" onclick="savePantryOrder(false)">💾 Save Only</button>
+        <button class="btn" onclick="clearPantryCart()">✖️ Clear</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🧾 Item List (Rates)</div>
+      </div>
+      <div id="pantryItemsList" style="margin-bottom:10px;"></div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2;"><label>New Item Name</label><input type="text" id="pantry-new-item-name" placeholder="e.g. Coffee"></div>
+        <div class="form-group"><label>Default Rate</label><input type="number" id="pantry-new-item-rate" min="0" style="width:100px;"></div>
+        <div class="form-group" style="align-self:flex-end;"><button class="btn btn-green btn-sm" onclick="addPantryItem()">➕ Add Item</button></div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px;">Rates yahan sy edit ki ja sakti hain — order lagate waqt bhi rate change ho sakti hai, ye sirf default hai.</div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px;">
+    <div class="card-header">
+      <div class="card-title">📜 Pantry History</div>
+      <div class="flex-gap">
+        <button class="btn btn-neon btn-sm" onclick="exportPantryPdf()">📄 Export PDF</button>
+      </div>
+    </div>
+    <div class="search-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <label style="font-size:12px;">From <input type="date" id="pantry-hist-from" onchange="renderPantryHistory()"></label>
+      <label style="font-size:12px;">To <input type="date" id="pantry-hist-to" onchange="renderPantryHistory()"></label>
+      <select id="pantry-hist-person" onchange="renderPantryHistory()" style="min-width:160px;">
+        <option value="">All People</option>
+      </select>
+      <input type="text" id="pantry-hist-search" placeholder="Search item/notes..." oninput="renderPantryHistory()" style="flex:1;min-width:150px;">
+    </div>
+    <div id="pantry-hist-total" style="font-size:12px;color:var(--text3);margin:6px 0;"></div>
+    <div style="overflow-x:auto;">
+      <table class="items-table"><thead><tr><th>Date</th><th>Time</th><th>Items</th><th>Total</th><th>Brought By</th><th>Entered By</th><th></th></tr></thead><tbody id="pantryHistTbody"></tbody></table>
+    </div>
+  </div>
+</div>
+
 <!-- ADD EXPENSE MODAL -->
 <div class="modal-overlay" id="expenseModal">
 <div class="modal">
@@ -3526,7 +3599,7 @@ async function buildFullBackupData(){
     digitalInvoices: diWithPdf,
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
     savedQuotations, quotSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
-    stockItems, stockMovements, salesReturns, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
+    stockItems, stockMovements, salesReturns, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     documentManager: docsWithBlob,
     securityData: (typeof securityData!=='undefined'?securityData:null),
     backupDate:new Date().toISOString(), version:'20.0'
@@ -3713,7 +3786,7 @@ function buildCloudSyncData(){
     db, cheques, ledgerData, fbrParties, descMaster, settings,
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
     savedQuotations, quotSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
-    stockItems, stockMovements, salesReturns, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
+    stockItems, stockMovements, salesReturns, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     securityData: (typeof securityData!=='undefined'?securityData:null),
     updatedAt: new Date().toISOString(),
     updatedBy: (typeof securityData!=='undefined' && securityData.currentUser) ? securityData.currentUser.username : (settings.operatorName||'Operator'),
@@ -4378,6 +4451,8 @@ async function applyRestoredBackupData(data){
   if(data.visitLogs) { visitLogs = data.visitLogs; saveVisitLogsToStorage(); }
   if(data.warehousesList) { warehousesList = data.warehousesList; saveWarehousesList(); }
   if(data.expenses) { expenses = data.expenses; saveExpenses(); }
+  if(data.pantryItems) { pantryItems = data.pantryItems; savePantryItems(); }
+  if(data.pantryExpenses) { pantryExpenses = data.pantryExpenses; savePantryExpenses(); }
   if(data.bankAccounts) { bankAccounts = data.bankAccounts; saveBankAccounts(); }
   if(data.bankTransactions) { bankTransactions = data.bankTransactions; saveBankTransactions(); }
   if(data.auditLog && data.auditLog.length){
@@ -4684,7 +4759,7 @@ const DZ_MODULES = [
   {key:'employees',label:'👔 Employees'},{key:'stock',label:'📦 Stock'},{key:'purchaseorders',label:'📝 Purchase Orders'},
   {key:'warehouses',label:'🏭 Warehouses'},{key:'hscodes',label:'🏷️ HS Codes'},
   {key:'cheques',label:'🏦 Cheques'},{key:'salesreturns',label:'🔄 Sales Returns'},{key:'bank',label:'🏛️ Bank'},
-  {key:'expenses',label:'💸 Expenses'},{key:'receipts',label:'🧾 Receipts'},
+  {key:'expenses',label:'💸 Expenses'},{key:'pantry',label:'🍵 Pantry'},{key:'receipts',label:'🧾 Receipts'},
   {key:'tools',label:'🔧 Tools'},{key:'auditlog',label:'📜 Audit Log'},{key:'aisearch',label:'🤖 AI Search'}
   // Note: 'security' and 'settings' are intentionally never listed here so the
   // owner can never accidentally lock themselves out of Danger Zone itself.
@@ -4981,6 +5056,7 @@ function renderTabContent(id){
   if(id==='purchaseorders') renderPOTab();
   if(id==='warehouses') renderWarehousesTab();
   if(id==='expenses') renderExpensesTab();
+  if(id==='pantry') renderPantryTab();
   if(id==='bank') renderBankTab();
   if(id==='auditlog') renderAuditLogTab();
   if(id==='aisearch') { populateAiSearchHelp(); }
@@ -7588,6 +7664,7 @@ function init(){
   loadVisitLogs();
   loadWarehouses();
   loadExpenses();
+  loadPantryData();
   loadBankModule();
   loadAuditLog();
   loadAdvancedBackupSettings();
@@ -9908,7 +9985,7 @@ const PERM_LABELS = {
   hscodes:'🏷️ HS Codes',tools:'🔧 Tools',settings:'⚙️ Settings',digitalinvoices:'📎 Digital Invoices',
   partylookup:'📨 Party Lookup', dispatch:'🚚 Dispatch', employees:'👔 Employees',
   docmanager:'📁 Documents', crm:'🤝 CRM', sendcenter:'📤 Send Center', stock:'📦 Stock',
-  purchaseorders:'📝 Purchase Orders', warehouses:'🏭 Warehouses', expenses:'💸 Expenses',
+  purchaseorders:'📝 Purchase Orders', warehouses:'🏭 Warehouses', expenses:'💸 Expenses', pantry:'🍵 Pantry',
   bank:'🏛️ Bank', auditlog:'📜 Audit Log', aisearch:'🤖 AI Search', analytics:'📊 Analytics',
   delete:'🗑️ Delete Records',bulkactions:'⚡ Bulk Actions',backup:'💾 Backup/Restore'
 };
@@ -9916,10 +9993,10 @@ const PERM_ALL = Object.keys(PERM_LABELS);
 const ROLE_PRESETS = {
   'Super Admin': PERM_ALL,
   'Admin': PERM_ALL,
-  'Accounts': ['dashboard','ledger','fbr','reports','cheques','bank','expenses','auditlog'],
+  'Accounts': ['dashboard','ledger','fbr','reports','cheques','bank','expenses','pantry','auditlog'],
   'Sales': ['dashboard','records','quotation','parties','crm','sendcenter','digitalinvoices'],
   'Store': ['dashboard','stock','purchaseorders','warehouses','hscodes'],
-  'Dispatch': ['dashboard','dispatch','records','employees'],
+  'Dispatch': ['dashboard','dispatch','records','employees','pantry'],
   'Viewer': ['dashboard','reports']
 };
 
@@ -12005,17 +12082,32 @@ function loadPurchaseOrders(){
   purchaseOrders = d ? JSON.parse(d) : [];
 }
 function savePurchaseOrders(){ safeSetItem('sau_purchase_orders', JSON.stringify(purchaseOrders)); }
+// Normalizes an item name/description for matching purposes: trims, lowercases,
+// collapses internal whitespace, and folds curly quotes to straight ones so that
+// small typing differences (extra space, different case, a curly " vs a straight ")
+// between a PO item's name and a DC item's desc don't silently break the match.
+function normKey(s){
+  return String(s||'')
+    .replace(/[\u2018\u2019\u02BC]/g,"'")
+    .replace(/[\u201C\u201D]/g,'"')
+    .replace(/\s+/g,' ')
+    .trim()
+    .toLowerCase();
+}
 // Sums qty already put on DCs (dc-pono) against a given PO, per item description. excludeIdx = db index to skip (the DC currently being edited).
+// Map keys are normalized (see normKey) so lookups must also go through normKey(it.name) — never map[it.name] directly.
 function getPODispatchedMap(poNo, excludeIdx){
   const map = {};
   if(!poNo) return map;
+  const wantPO = String(poNo||'').trim();
   db.forEach((r,i)=>{
     if(i===excludeIdx) return;
     if(r.cancelled) return;
-    if((r.poNo||'').trim()!==poNo) return;
+    if((r.poNo||'').trim()!==wantPO) return;
     (r.items||[]).forEach(it=>{
       if(!it.desc) return;
-      map[it.desc] = (map[it.desc]||0) + (parseFloat(it.qty)||0);
+      const k = normKey(it.desc);
+      map[k] = (map[k]||0) + (parseFloat(it.qty)||0);
     });
   });
   return map;
@@ -12023,7 +12115,7 @@ function getPODispatchedMap(poNo, excludeIdx){
 function computePOStatus(po){
   const map = getPODispatchedMap(po.poNo);
   const totalQty = po.items.reduce((s,i)=>s+(parseFloat(i.qty)||0),0);
-  const totalFulfilled = po.items.reduce((s,i)=>s+(parseFloat(i.received)||0)+(map[i.name]||0),0);
+  const totalFulfilled = po.items.reduce((s,i)=>s+(parseFloat(i.received)||0)+(map[normKey(i.name)]||0),0);
   if(totalFulfilled<=0) return 'Pending';
   if(totalFulfilled>=totalQty) return 'Completed';
   return 'Partial';
@@ -12033,7 +12125,7 @@ function getItemPendingPOQty(itemName){
   purchaseOrders.forEach(po=>{
     const map = getPODispatchedMap(po.poNo);
     po.items.forEach(i=>{
-      if(i.name===itemName) pending += Math.max(0, (parseFloat(i.qty)||0) - (parseFloat(i.received)||0) - (map[i.name]||0));
+      if(i.name===itemName) pending += Math.max(0, (parseFloat(i.qty)||0) - (parseFloat(i.received)||0) - (map[normKey(i.name)]||0));
     });
   });
   return pending;
@@ -12185,7 +12277,7 @@ function openPOTimeline(idx){
   const linkedDCs = db.map((r,i)=>({r,i})).filter(x=>(x.r.poNo||'').trim()===po.poNo).sort((a,b)=>(a.r.date||'').localeCompare(b.r.date||''));
   const map = getPODispatchedMap(po.poNo);
   const itemRows = po.items.map(it=>{
-    const dispatched = (map[it.name]||0)+(parseFloat(it.received)||0);
+    const dispatched = (map[normKey(it.name)]||0)+(parseFloat(it.received)||0);
     const remaining = Math.max(0,(parseFloat(it.qty)||0)-dispatched);
     const done = remaining<=0;
     const reqLate = it.reqDate && !done && new Date(it.reqDate) < new Date();
@@ -12246,8 +12338,8 @@ function renderPOTab(){
   tbody.innerHTML = list.map(x=>{
     const map = getPODispatchedMap(x.po.poNo);
     const orderedValue = x.po.items.reduce((s,i)=>s+i.qty*i.rate,0);
-    const remainingQty = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-(parseFloat(i.received)||0)-(map[i.name]||0)),0);
-    const balanceValue = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-(parseFloat(i.received)||0)-(map[i.name]||0))*i.rate,0);
+    const remainingQty = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-(parseFloat(i.received)||0)-(map[normKey(i.name)]||0)),0);
+    const balanceValue = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-(parseFloat(i.received)||0)-(map[normKey(i.name)]||0))*i.rate,0);
     return `<tr>
       <td>${x.po.poNo}</td><td>${x.po.supplier}</td><td>${x.po.unit||'-'}</td><td>${x.po.buyer||'-'}</td><td>${x.po.date||'-'}</td><td>${x.po.terms?x.po.terms+'d':'-'}</td>
       <td>${x.po.items.length}</td><td>${cur} ${fmt(orderedValue)}</td><td>${remainingQty}</td><td>${cur} ${fmt(balanceValue)}</td>
@@ -12348,12 +12440,12 @@ function openPOPickerFromDC(){
   const map = getPODispatchedMap(po.poNo, excludeIdx);
   poPickerCtx = {po, map};
   const cur = settings.currency||'PKR';
-  const allDone = po.items.every(it=>Math.max(0,(parseFloat(it.qty)||0)-(parseFloat(it.received)||0)-(map[it.name]||0))<=0);
+  const allDone = po.items.every(it=>Math.max(0,(parseFloat(it.qty)||0)-(parseFloat(it.received)||0)-(map[normKey(it.name)]||0))<=0);
   document.getElementById('poPickerTitle').textContent = `📋 PO ${po.poNo} — ${po.supplier}${po.buyer?' (Buyer: '+po.buyer+')':''}`;
   document.getElementById('poPickerBody').innerHTML = (allDone ? `<div style="color:var(--success);margin-bottom:8px;">✅ This PO's quantities are already fully matched by earlier DCs — nothing pending.</div>` : '') +
     `<div style="overflow-x:auto;"><table class="items-table"><thead><tr><th></th><th>Item</th><th>HS Code</th><th>Ordered</th><th>Already Dispatched</th><th>Remaining</th><th>Qty to add now</th><th>Rate</th></tr></thead><tbody>
     ${po.items.map((it,i)=>{
-      const dispatched = (map[it.name]||0)+(parseFloat(it.received)||0);
+      const dispatched = (map[normKey(it.name)]||0)+(parseFloat(it.received)||0);
       const remaining = Math.max(0,(parseFloat(it.qty)||0)-dispatched);
       return `<tr>
         <td><input type="checkbox" class="po-pick-chk" data-i="${i}" ${remaining>0?'checked':''} ${remaining<=0?'disabled':''}></td>
@@ -12593,6 +12685,349 @@ function renderExpenseReport(){
     </div>
     <div class="divider"></div>
     <div style="text-align:right;font-weight:700;color:var(--neon);">Total: ${cur} ${fmt(total)}</div>`;
+}
+
+// ==================== MODULE 14b: PANTRY (TEA / SNACKS) ====================
+// pantryItems: [{id, name, rate}]  — item master with default/editable rates
+// pantryExpenses: [{id, date, time, items:[{name,qty,rate,amount}], total, notes,
+//                    broughtBy, enteredBy, enteredByRole}]
+let pantryItems = [];
+let pantryExpenses = [];
+let pantryCart = []; // {name, qty, rate, amount} — current order being built
+function loadPantryData(){
+  const di = localStorage.getItem('sau_pantry_items');
+  pantryItems = di ? JSON.parse(di) : [
+    {id:'p1', name:'Chai', rate:70},
+    {id:'p2', name:'Biscuit', rate:50},
+    {id:'p3', name:'Juice', rate:100},
+    {id:'p4', name:'Nimko (20)', rate:20},
+    {id:'p5', name:'Nimko (50)', rate:50}
+  ];
+  const de = localStorage.getItem('sau_pantry_expenses');
+  pantryExpenses = de ? JSON.parse(de) : [];
+}
+function savePantryItems(){ safeSetItem('sau_pantry_items', JSON.stringify(pantryItems)); }
+function savePantryExpenses(){ safeSetItem('sau_pantry_expenses', JSON.stringify(pantryExpenses)); }
+
+// Who is "logged in" right now for attribution purposes — an employee via their own
+// dashboard login, or the admin/guest operator via the main app login.
+function getPantryCurrentPerson(){
+  if(typeof currentEmployeeSession!=='undefined' && currentEmployeeSession && employees[currentEmployeeSession.idx]){
+    return {name: employees[currentEmployeeSession.idx].name, role:'employee'};
+  }
+  if(typeof securityData!=='undefined' && securityData.currentUser){
+    return {name: securityData.currentUser.username, role: securityData.currentUser.role||'admin'};
+  }
+  return {name: settings.operatorName||'Operator', role:'admin'};
+}
+
+function populatePantryItemSelect(){
+  const sel = document.getElementById('pantry-item-select');
+  if(!sel) return;
+  const keep = sel.value;
+  sel.innerHTML = pantryItems.map(it=>`<option value="${it.id}">${it.name}</option>`).join('');
+  if(keep && pantryItems.some(it=>it.id===keep)) sel.value = keep;
+  onPantryItemSelectChange();
+}
+function onPantryItemSelectChange(){
+  const sel = document.getElementById('pantry-item-select');
+  const rateEl = document.getElementById('pantry-item-rate');
+  if(!sel || !rateEl) return;
+  const it = pantryItems.find(x=>x.id===sel.value);
+  rateEl.value = it ? it.rate : 0;
+}
+function renderPantryItemsList(){
+  const wrap = document.getElementById('pantryItemsList');
+  if(!wrap) return;
+  const cur = settings.currency||'PKR';
+  wrap.innerHTML = pantryItems.length ? `<table class="items-table"><thead><tr><th>Item</th><th>Rate</th><th></th></tr></thead><tbody>
+    ${pantryItems.map((it,idx)=>`<tr>
+      <td>${it.name}</td>
+      <td><input type="number" value="${it.rate}" min="0" style="width:90px;" onchange="updatePantryItemRate(${idx}, this.value)"></td>
+      <td><button class="btn btn-xs btn-red" onclick="deletePantryItem(${idx})">🗑️</button></td>
+    </tr>`).join('')}
+  </tbody></table>` : `<div style="color:var(--text3);font-size:12px;">No items yet — add one below.</div>`;
+}
+function updatePantryItemRate(idx, val){
+  if(!pantryItems[idx]) return;
+  pantryItems[idx].rate = parseFloat(val)||0;
+  savePantryItems();
+}
+function addPantryItem(){
+  const nameEl = document.getElementById('pantry-new-item-name');
+  const rateEl = document.getElementById('pantry-new-item-rate');
+  const name = (nameEl.value||'').trim();
+  if(!name){ toast('Item name likhein','warning'); return; }
+  pantryItems.push({id:'p'+Date.now(), name, rate: parseFloat(rateEl.value)||0});
+  savePantryItems();
+  nameEl.value=''; rateEl.value='';
+  renderPantryItemsList();
+  populatePantryItemSelect();
+  toast('Item add ho gaya!','success');
+}
+function deletePantryItem(idx){
+  if(!confirm('Ye item delete karna hai?')) return;
+  pantryItems.splice(idx,1);
+  savePantryItems();
+  renderPantryItemsList();
+  populatePantryItemSelect();
+}
+
+function populatePantryBroughtBySelect(){
+  const sel = document.getElementById('pantry-broughtby');
+  const wrap = document.getElementById('pantry-broughtby-wrap');
+  const note = document.getElementById('pantry-session-note');
+  if(!sel) return;
+  const person = getPantryCurrentPerson();
+  if(person.role==='employee'){
+    // Logged in via their own employee dashboard: locked to their own name.
+    sel.innerHTML = `<option value="${person.name}">${person.name}</option>`;
+    sel.value = person.name;
+    sel.disabled = true;
+    const otherEl = document.getElementById('pantry-broughtby-other');
+    if(otherEl) otherEl.style.display = 'none';
+    if(note) note.textContent = `Logged in as ${person.name} — is order par apka naam save hoga.`;
+  } else {
+    sel.disabled = false;
+    sel.innerHTML = employees.map(e=>`<option value="${e.name}">${e.name}</option>`).join('') + `<option value="__other__">Other / Not Listed</option>`;
+    if(note) note.textContent = `Admin/Operator: apne staff list sy select karein k saman kon lay k aa raha hai.`;
+    onPantryBroughtByChange();
+  }
+}
+function onPantryBroughtByChange(){
+  const sel = document.getElementById('pantry-broughtby');
+  const otherEl = document.getElementById('pantry-broughtby-other');
+  if(!sel || !otherEl) return;
+  otherEl.style.display = sel.value==='__other__' ? '' : 'none';
+}
+function getPantryBroughtByValue(){
+  const sel = document.getElementById('pantry-broughtby');
+  const otherEl = document.getElementById('pantry-broughtby-other');
+  if(!sel) return '';
+  if(sel.value==='__other__') return (otherEl.value||'').trim();
+  return sel.value;
+}
+
+function renderPantryCart(){
+  const tbody = document.getElementById('pantryCartTbody');
+  const totalEl = document.getElementById('pantry-cart-total');
+  const cur = settings.currency||'PKR';
+  if(tbody){
+    tbody.innerHTML = pantryCart.length ? pantryCart.map((c,idx)=>`<tr>
+      <td>${c.name}</td><td>${c.qty}</td><td>${cur} ${fmt(c.rate)}</td><td>${cur} ${fmt(c.amount)}</td>
+      <td><button class="btn btn-xs btn-red" onclick="removePantryCartItem(${idx})">🗑️</button></td>
+    </tr>`).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:10px;">Koi item add nahi hua abhi</td></tr>';
+  }
+  if(totalEl) totalEl.textContent = `${cur} ${fmt(pantryCart.reduce((s,c)=>s+c.amount,0))}`;
+}
+function addPantryCartItem(){
+  const sel = document.getElementById('pantry-item-select');
+  const qtyEl = document.getElementById('pantry-item-qty');
+  const rateEl = document.getElementById('pantry-item-rate');
+  const it = pantryItems.find(x=>x.id===sel.value);
+  if(!it){ toast('Pehlay item select karein','warning'); return; }
+  const qty = parseFloat(qtyEl.value)||0;
+  const rate = parseFloat(rateEl.value)||0;
+  if(qty<=0){ toast('Qty theek darj karein','warning'); return; }
+  pantryCart.push({name: it.name, qty, rate, amount: qty*rate});
+  renderPantryCart();
+  qtyEl.value = 1;
+}
+function removePantryCartItem(idx){
+  pantryCart.splice(idx,1);
+  renderPantryCart();
+}
+function clearPantryCart(){
+  pantryCart = [];
+  renderPantryCart();
+  const notesEl = document.getElementById('pantry-notes');
+  if(notesEl) notesEl.value='';
+}
+
+function savePantryOrder(alsoPrint){
+  if(!pantryCart.length){ toast('Pehlay kam az kam 1 item add karein','warning'); return; }
+  const broughtBy = getPantryBroughtByValue();
+  if(!broughtBy){ toast('Brought By likhein / select karein','warning'); return; }
+  const dateEl = document.getElementById('pantry-date');
+  const date = dateEl && dateEl.value ? dateEl.value : new Date().toISOString().slice(0,10);
+  const now = new Date();
+  const person = getPantryCurrentPerson();
+  const entry = {
+    id: 'pe'+Date.now(),
+    date,
+    time: now.toTimeString().slice(0,5),
+    items: pantryCart.map(c=>({...c})),
+    total: pantryCart.reduce((s,c)=>s+c.amount,0),
+    notes: (document.getElementById('pantry-notes')?.value||'').trim(),
+    broughtBy,
+    enteredBy: person.name,
+    enteredByRole: person.role
+  };
+  pantryExpenses.push(entry);
+  savePantryExpenses();
+  if(typeof logAudit==='function') logAudit('create','Pantry',`Pantry order (Rs ${fmt(entry.total)}) brought by ${broughtBy}`, undefined, entry);
+  toast('Pantry order save ho gaya!','success');
+  if(alsoPrint) printPantryReceipt(entry);
+  clearPantryCart();
+  renderPantryHistory();
+}
+
+// ---- Thermal receipt printing (bold, clear, minimum 4in wide) ----
+function printPantryReceipt(entry){
+  const cur = settings.currency||'PKR';
+  const companyName = (settings.companyName||'SAU CORPORATION').toUpperCase();
+  const now = new Date();
+  const itemRows = entry.items.map(it=>`
+    <tr>
+      <td style="text-align:left;">${it.name}</td>
+      <td style="text-align:center;">${it.qty}</td>
+      <td style="text-align:right;">${fmt(it.rate)}</td>
+      <td style="text-align:right;">${fmt(it.amount)}</td>
+    </tr>`).join('');
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pantry Receipt</title>
+  <style>
+    @page{ size: 4in auto; margin: 4mm; }
+    body{ width:4in; margin:0; font-family:'Arial', sans-serif; color:#000; font-weight:700; }
+    .center{ text-align:center; }
+    .header{ font-size:20px; font-weight:900; letter-spacing:1px; }
+    .sub{ font-size:12px; font-weight:700; margin-top:2px; }
+    hr{ border:none; border-top:2px dashed #000; margin:6px 0; }
+    table{ width:100%; border-collapse:collapse; font-size:14px; }
+    th{ text-align:left; border-bottom:2px solid #000; padding:3px 2px; font-size:13px; }
+    td{ padding:4px 2px; font-size:15px; }
+    .totalRow td{ font-size:18px; font-weight:900; border-top:2px solid #000; padding-top:6px; }
+    .meta{ font-size:12px; font-weight:700; margin:2px 0; }
+    .footer{ font-size:11px; font-weight:700; margin-top:10px; text-align:center; }
+  </style></head>
+  <body onload="window.print();">
+    <div class="center header">${companyName}</div>
+    <div class="center sub">PANTRY / OFFICE ORDER RECEIPT</div>
+    <hr>
+    <div class="meta">Date: ${entry.date} &nbsp; Time: ${entry.time}</div>
+    <div class="meta">Brought By: ${entry.broughtBy}</div>
+    <div class="meta">Entered By: ${entry.enteredBy}</div>
+    <hr>
+    <table>
+      <thead><tr><th>Item</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Amt</th></tr></thead>
+      <tbody>${itemRows}</tbody>
+      <tfoot><tr class="totalRow"><td colspan="3">TOTAL</td><td style="text-align:right;">${cur} ${fmt(entry.total)}</td></tr></tfoot>
+    </table>
+    ${entry.notes ? `<hr><div class="meta">Note: ${entry.notes}</div>` : ''}
+    <hr>
+    <div class="footer">Printed: ${now.toLocaleDateString()} ${now.toTimeString().slice(0,5)}</div>
+  </body></html>`;
+  const w = window.open('', 'PANTRY_PRINT', 'width=420,height=640');
+  if(!w){ toast('Print window block ho gayi — popup allow karein','warning'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+}
+function reprintPantryEntry(idx){
+  const entry = pantryHistFilteredList ? pantryHistFilteredList[idx] : null;
+  if(entry) printPantryReceipt(entry);
+}
+function deletePantryEntry(idx){
+  const entry = pantryHistFilteredList ? pantryHistFilteredList[idx] : null;
+  if(!entry) return;
+  if(!confirm('Ye pantry entry delete karni hai?')) return;
+  const realIdx = pantryExpenses.findIndex(e=>e.id===entry.id);
+  if(realIdx>=0){ pantryExpenses.splice(realIdx,1); savePantryExpenses(); renderPantryHistory(); }
+}
+
+let pantryHistFilteredList = [];
+function populatePantryHistPersonFilter(){
+  const sel = document.getElementById('pantry-hist-person');
+  if(!sel) return;
+  const keep = sel.value;
+  const people = [...new Set(pantryExpenses.map(e=>e.broughtBy).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">All People</option>' + people.map(p=>`<option value="${p}">${p}</option>`).join('');
+  if(keep) sel.value = keep;
+}
+function getPantryFilteredEntries(){
+  const from = document.getElementById('pantry-hist-from')?.value||'';
+  const to = document.getElementById('pantry-hist-to')?.value||'';
+  const person = document.getElementById('pantry-hist-person')?.value||'';
+  const q = (document.getElementById('pantry-hist-search')?.value||'').toLowerCase();
+  let list = pantryExpenses.slice();
+  if(from) list = list.filter(e=>(e.date||'')>=from);
+  if(to) list = list.filter(e=>(e.date||'')<=to);
+  if(person) list = list.filter(e=>e.broughtBy===person);
+  if(q) list = list.filter(e=>{
+    const itemBits = (e.items||[]).map(i=>i.name).join(' ').toLowerCase();
+    return itemBits.includes(q) || (e.notes||'').toLowerCase().includes(q);
+  });
+  list.sort((a,b)=>((b.date||'')+((b.time||''))).localeCompare((a.date||'')+(a.time||'')));
+  return list;
+}
+function renderPantryHistory(){
+  populatePantryHistPersonFilter();
+  const cur = settings.currency||'PKR';
+  const list = getPantryFilteredEntries();
+  pantryHistFilteredList = list;
+  const totalEl = document.getElementById('pantry-hist-total');
+  const total = list.reduce((s,e)=>s+e.total,0);
+  if(totalEl) totalEl.textContent = `${list.length} entries — Total: ${cur} ${fmt(total)}`;
+  const tbody = document.getElementById('pantryHistTbody');
+  if(!tbody) return;
+  if(!list.length){ tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:16px;">Koi pantry record nahi mila</td></tr>'; return; }
+  tbody.innerHTML = list.map((e,idx)=>`<tr>
+    <td>${e.date}</td><td>${e.time||'-'}</td>
+    <td>${(e.items||[]).map(i=>`${i.name} (${i.qty})`).join(', ')}</td>
+    <td>${cur} ${fmt(e.total)}</td>
+    <td>${e.broughtBy||'-'}</td><td>${e.enteredBy||'-'}</td>
+    <td><button class="btn btn-xs btn-purple" onclick="reprintPantryEntry(${idx})">🖨️</button> <button class="btn btn-xs btn-red" onclick="deletePantryEntry(${idx})">🗑️</button></td>
+  </tr>`).join('');
+}
+function exportPantryPdf(){
+  const list = getPantryFilteredEntries();
+  if(!list.length){ toast('Export karne k liay koi record nahi (filter check karein)','warning'); return; }
+  const cur = settings.currency||'PKR';
+  const from = document.getElementById('pantry-hist-from')?.value||'—';
+  const to = document.getElementById('pantry-hist-to')?.value||'—';
+  const total = list.reduce((s,e)=>s+e.total,0);
+  const rows = list.map(e=>`<tr>
+    <td>${e.date}</td><td>${e.time||'-'}</td>
+    <td>${(e.items||[]).map(i=>`${i.name} x${i.qty}`).join(', ')}</td>
+    <td style="text-align:right;">${fmt(e.total)}</td>
+    <td>${e.broughtBy||'-'}</td><td>${e.enteredBy||'-'}</td>
+  </tr>`).join('');
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pantry Report</title>
+  <style>
+    body{ font-family:Arial, sans-serif; padding:20px; }
+    h2{ margin-bottom:2px; }
+    .sub{ color:#555; font-size:12px; margin-bottom:14px; }
+    table{ width:100%; border-collapse:collapse; font-size:12px; }
+    th,td{ border:1px solid #ccc; padding:6px 8px; text-align:left; }
+    th{ background:#f0f0f0; }
+    tfoot td{ font-weight:700; border-top:2px solid #000; }
+  </style></head>
+  <body onload="window.print();">
+    <h2>${(settings.companyName||'SAU CORPORATION').toUpperCase()} — Pantry Report</h2>
+    <div class="sub">Period: ${from} to ${to} &nbsp;|&nbsp; Generated: ${new Date().toLocaleString()}</div>
+    <table>
+      <thead><tr><th>Date</th><th>Time</th><th>Items</th><th>Amount</th><th>Brought By</th><th>Entered By</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td colspan="3">TOTAL</td><td>${cur} ${fmt(total)}</td><td colspan="2"></td></tr></tfoot>
+    </table>
+  </body></html>`;
+  const w = window.open('', 'PANTRY_PDF', 'width=900,height=700');
+  if(!w){ toast('Popup block ho gayi — allow karein','warning'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+}
+
+function renderPantryTab(){
+  const dateEl = document.getElementById('pantry-date');
+  if(dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0,10);
+  populatePantryItemSelect();
+  populatePantryBroughtBySelect();
+  renderPantryItemsList();
+  renderPantryCart();
+  const fromEl = document.getElementById('pantry-hist-from');
+  const toEl = document.getElementById('pantry-hist-to');
+  if(fromEl && !fromEl.value){
+    const d = new Date(); d.setDate(1);
+    fromEl.value = d.toISOString().slice(0,10);
+  }
+  if(toEl && !toEl.value) toEl.value = new Date().toISOString().slice(0,10);
+  renderPantryHistory();
 }
 
 // ==================== MODULE 15: BANK MODULE ====================
@@ -13330,6 +13765,19 @@ function renderEmployeeDashboard(){
     <td>${m.date}</td><td>${moneyIcons[m.type]||''} ${m.type}</td><td>${cur} ${fmt(m.amount)}</td><td>${m.note||'-'}</td>
   </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--text3);">No entries for this month</td></tr>';
   const commissionTotal = myMoney.filter(m=>m.type==='commission').reduce((s,m)=>s+(parseFloat(m.amount)||0),0);
+
+  // My Pantry Requests — only this month's, matched on the "Brought By" name
+  const myPantry = (typeof pantryExpenses!=='undefined' ? pantryExpenses : [])
+    .filter(e=>e.broughtBy && e.broughtBy.trim().toLowerCase()===emp.name.trim().toLowerCase() && e.date && e.date.slice(0,7)===month)
+    .sort((a,b)=>((b.date||'')+(b.time||'')).localeCompare((a.date||'')+(a.time||'')));
+  const pantryEl = document.getElementById('emp-dash-pantry');
+  if(pantryEl){
+    pantryEl.innerHTML = myPantry.length ? myPantry.map(e=>`<tr>
+      <td>${e.date}</td><td>${e.time||'-'}</td>
+      <td>${(e.items||[]).map(i=>`${i.name} x${i.qty}`).join(', ')}</td>
+      <td>${cur} ${fmt(e.total)}</td>
+    </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--text3);">No pantry requests tagged to you this month</td></tr>';
+  }
 
   // Salary breakdown for the selected month — same formula the office's official
   // salary slips use (base salary, per-day rate, absent deduction, bonus, advance)
@@ -14325,6 +14773,9 @@ window.addEventListener('DOMContentLoaded', init);
 
     <div style="font-weight:700;color:var(--neon2);margin:16px 0 6px;">💰 My Commission / Bonus / Advance — Selected Month</div>
     <div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Note</th></tr></thead><tbody id="emp-dash-money"></tbody></table></div>
+
+    <div style="font-weight:700;color:var(--neon2);margin:16px 0 6px;">🍵 My Pantry Requests — Selected Month</div>
+    <div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>Date</th><th>Time</th><th>Items</th><th>Amount</th></tr></thead><tbody id="emp-dash-pantry"></tbody></table></div>
   </div>
 </div>
 
