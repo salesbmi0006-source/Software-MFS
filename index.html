@@ -5109,9 +5109,16 @@ function updateDiCount(){
 }
 
 // ==================== CLOCK ====================
+// Single source of truth for "current time" formatting across the whole app —
+// always 12-hour with AM/PM (never 24-hour). Any place that shows or stores a
+// live/current time string should go through this so it stays consistent.
+function formatTime12(date){
+  date = date || new Date();
+  return date.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
+}
 function updateClock(){
   const now = new Date();
-  document.getElementById('clock').textContent = now.toLocaleTimeString('en-PK',{hour12:false});
+  document.getElementById('clock').textContent = formatTime12(now);
 }
 setInterval(updateClock, 1000);
 
@@ -12716,7 +12723,11 @@ function getPantryCurrentPerson(){
     return {name: employees[currentEmployeeSession.idx].name, role:'employee'};
   }
   if(typeof securityData!=='undefined' && securityData.currentUser){
-    return {name: securityData.currentUser.username, role: securityData.currentUser.role||'admin'};
+    // Never show the raw login username/email as the "person" — always prefer
+    // a real name: the Operator Name from Settings, falling back to the username
+    // only if nothing else is available.
+    const displayName = settings.operatorName || securityData.currentUser.username;
+    return {name: displayName, role: securityData.currentUser.role||'admin'};
   }
   return {name: settings.operatorName||'Operator', role:'admin'};
 }
@@ -12855,7 +12866,7 @@ function savePantryOrder(alsoPrint){
   const entry = {
     id: 'pe'+Date.now(),
     date,
-    time: now.toTimeString().slice(0,5),
+    time: formatTime12(now),
     items: pantryCart.map(c=>({...c})),
     total: pantryCart.reduce((s,c)=>s+c.amount,0),
     notes: (document.getElementById('pantry-notes')?.value||'').trim(),
@@ -12872,7 +12883,7 @@ function savePantryOrder(alsoPrint){
   renderPantryHistory();
 }
 
-// ---- Thermal receipt printing (bold, clear, minimum 4in wide) ----
+// ---- Thermal receipt printing (bold, clear, 5in wide — nothing ever runs off the edge) ----
 function printPantryReceipt(entry){
   const cur = settings.currency||'PKR';
   const companyName = (settings.companyName||'SAU CORPORATION').toUpperCase();
@@ -12884,20 +12895,28 @@ function printPantryReceipt(entry){
       <td style="text-align:right;">${fmt(it.rate)}</td>
       <td style="text-align:right;">${fmt(it.amount)}</td>
     </tr>`).join('');
+  // NOTE on layout: everything is sized with box-sizing:border-box and the body
+  // width is 100% of the @page printable area (never a fixed inch value that's
+  // wider than the margins allow) — this is what was cutting the amount/total
+  // off the right edge before. table-layout:fixed with explicit column widths
+  // keeps the Amount/Total column from ever being squeezed off the page.
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pantry Receipt</title>
   <style>
-    @page{ size: 4in auto; margin: 4mm; }
-    body{ width:4in; margin:0; font-family:'Arial', sans-serif; color:#000; font-weight:700; }
+    *{ box-sizing:border-box; }
+    @page{ size: 5in auto; margin: 4mm; }
+    html,body{ width:100%; margin:0; padding:0; }
+    body{ font-family:'Arial', sans-serif; color:#000; font-weight:800; padding:0 2mm; overflow-wrap:break-word; }
     .center{ text-align:center; }
-    .header{ font-size:20px; font-weight:900; letter-spacing:1px; }
-    .sub{ font-size:12px; font-weight:700; margin-top:2px; }
+    .header{ font-size:23px; font-weight:900; letter-spacing:1px; }
+    .sub{ font-size:13px; font-weight:800; margin-top:2px; }
     hr{ border:none; border-top:2px dashed #000; margin:6px 0; }
-    table{ width:100%; border-collapse:collapse; font-size:14px; }
-    th{ text-align:left; border-bottom:2px solid #000; padding:3px 2px; font-size:13px; }
-    td{ padding:4px 2px; font-size:15px; }
-    .totalRow td{ font-size:18px; font-weight:900; border-top:2px solid #000; padding-top:6px; }
-    .meta{ font-size:12px; font-weight:700; margin:2px 0; }
-    .footer{ font-size:11px; font-weight:700; margin-top:10px; text-align:center; }
+    table{ width:100%; table-layout:fixed; border-collapse:collapse; font-size:15px; }
+    col.col-item{ width:37%; } col.col-qty{ width:15%; } col.col-rate{ width:23%; } col.col-amt{ width:25%; }
+    th{ text-align:left; border-bottom:2px solid #000; padding:3px 2px; font-size:14px; font-weight:900; }
+    td{ padding:4px 2px; font-size:16px; font-weight:800; word-break:break-word; }
+    .totalRow td{ font-size:19px; font-weight:900; border-top:2px solid #000; padding-top:6px; white-space:nowrap; }
+    .meta{ font-size:13px; font-weight:800; margin:2px 0; }
+    .footer{ font-size:12px; font-weight:800; margin-top:10px; text-align:center; }
   </style></head>
   <body onload="window.print();">
     <div class="center header">${companyName}</div>
@@ -12905,18 +12924,18 @@ function printPantryReceipt(entry){
     <hr>
     <div class="meta">Date: ${entry.date} &nbsp; Time: ${entry.time}</div>
     <div class="meta">Brought By: ${entry.broughtBy}</div>
-    <div class="meta">Entered By: ${entry.enteredBy}</div>
     <hr>
     <table>
+      <colgroup><col class="col-item"><col class="col-qty"><col class="col-rate"><col class="col-amt"></colgroup>
       <thead><tr><th>Item</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Amt</th></tr></thead>
       <tbody>${itemRows}</tbody>
       <tfoot><tr class="totalRow"><td colspan="3">TOTAL</td><td style="text-align:right;">${cur} ${fmt(entry.total)}</td></tr></tfoot>
     </table>
     ${entry.notes ? `<hr><div class="meta">Note: ${entry.notes}</div>` : ''}
     <hr>
-    <div class="footer">Printed: ${now.toLocaleDateString()} ${now.toTimeString().slice(0,5)}</div>
+    <div class="footer">Printed: ${now.toLocaleDateString()} ${formatTime12(now)}</div>
   </body></html>`;
-  const w = window.open('', 'PANTRY_PRINT', 'width=420,height=640');
+  const w = window.open('', 'PANTRY_PRINT', 'width=480,height=640');
   if(!w){ toast('Print window block ho gayi — popup allow karein','warning'); return; }
   w.document.open(); w.document.write(html); w.document.close();
 }
@@ -13729,6 +13748,73 @@ function employeeLogout(){
     if(securityData.enabled) showLoginScreen();
   }
 }
+// ---- Employee's own "New Pantry Order" widget (inside their dashboard) ----
+// Deliberately separate from the admin pantryCart above: the employee can only
+// pick from the fixed item list (no rates shown/editable), the date is always
+// today (not changeable), and "Brought By" is locked to their own name.
+let empPantryCart = [];
+function populateEmpPantryItemSelect(){
+  const sel = document.getElementById('emp-pantry-item-select');
+  if(!sel) return;
+  const keep = sel.value;
+  sel.innerHTML = pantryItems.map(it=>`<option value="${it.id}">${it.name}</option>`).join('');
+  if(keep && pantryItems.some(it=>it.id===keep)) sel.value = keep;
+}
+function renderEmpPantryCart(){
+  const tbody = document.getElementById('empPantryCartTbody');
+  const totalEl = document.getElementById('emp-pantry-cart-total');
+  const cur = settings.currency||'PKR';
+  if(tbody){
+    tbody.innerHTML = empPantryCart.length ? empPantryCart.map((c,idx)=>`<tr>
+      <td>${c.name}</td><td>${c.qty}</td><td>${cur} ${fmt(c.amount)}</td>
+      <td><button class="btn btn-xs btn-red" onclick="removeEmpPantryCartItem(${idx})">🗑️</button></td>
+    </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:10px;">Koi item add nahi hua abhi</td></tr>';
+  }
+  if(totalEl) totalEl.textContent = `${cur} ${fmt(empPantryCart.reduce((s,c)=>s+c.amount,0))}`;
+}
+function addEmpPantryCartItem(){
+  const sel = document.getElementById('emp-pantry-item-select');
+  const qtyEl = document.getElementById('emp-pantry-item-qty');
+  if(!sel){ return; }
+  const it = pantryItems.find(x=>x.id===sel.value);
+  if(!it){ toast('Pehlay item select karein','warning'); return; }
+  const qty = parseFloat(qtyEl.value)||0;
+  if(qty<=0){ toast('Qty theek darj karein','warning'); return; }
+  empPantryCart.push({name: it.name, qty, rate: it.rate, amount: qty*it.rate});
+  renderEmpPantryCart();
+  qtyEl.value = 1;
+}
+function removeEmpPantryCartItem(idx){
+  empPantryCart.splice(idx,1);
+  renderEmpPantryCart();
+}
+function saveEmployeePantryOrder(){
+  if(!currentEmployeeSession) return;
+  const emp = employees[currentEmployeeSession.idx];
+  if(!emp) return;
+  if(!empPantryCart.length){ toast('Pehlay kam az kam 1 item add karein','warning'); return; }
+  const now = new Date();
+  const entry = {
+    id: 'pe'+Date.now(),
+    date: new Date().toISOString().slice(0,10), // always today — employee can't change it
+    time: formatTime12(now),
+    items: empPantryCart.map(c=>({...c})),
+    total: empPantryCart.reduce((s,c)=>s+c.amount,0),
+    notes: '',
+    broughtBy: emp.name,
+    enteredBy: emp.name,
+    enteredByRole: 'employee'
+  };
+  pantryExpenses.push(entry);
+  savePantryExpenses();
+  if(typeof logAudit==='function') logAudit('create','Pantry',`Pantry order (Rs ${fmt(entry.total)}) brought by ${emp.name}`, undefined, entry);
+  toast('Order print ho raha hai!','success');
+  printPantryReceipt(entry);
+  empPantryCart = [];
+  renderEmpPantryCart();
+  renderEmployeeDashboard();
+}
+
 let empDashDispatchList = []; // holds the currently-rendered month's dispatch records, indexed for the View button
 function renderEmployeeDashboard(){
   if(!currentEmployeeSession) return;
@@ -13736,6 +13822,14 @@ function renderEmployeeDashboard(){
   if(!emp){ employeeLogout(); return; }
   document.getElementById('emp-dash-name').textContent = emp.name;
   const cur = settings.currency||'PKR';
+
+  // New Pantry Order widget — fixed to today's date and this employee's name
+  const empPantryBroughtByEl = document.getElementById('emp-pantry-broughtby');
+  if(empPantryBroughtByEl) empPantryBroughtByEl.textContent = emp.name;
+  const empPantryDateEl = document.getElementById('emp-pantry-date');
+  if(empPantryDateEl) empPantryDateEl.textContent = new Date().toISOString().slice(0,10);
+  populateEmpPantryItemSelect();
+  renderEmpPantryCart();
 
   // Month selector — defaults to the current month, keeps whatever the employee picks
   const monthInput = document.getElementById('emp-dash-month');
@@ -14773,6 +14867,26 @@ window.addEventListener('DOMContentLoaded', init);
 
     <div style="font-weight:700;color:var(--neon2);margin:16px 0 6px;">💰 My Commission / Bonus / Advance — Selected Month</div>
     <div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Note</th></tr></thead><tbody id="emp-dash-money"></tbody></table></div>
+
+    <div style="font-weight:700;color:var(--neon2);margin:16px 0 6px;">🍵 New Pantry Order</div>
+    <div class="card" style="margin-bottom:18px;">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--text3);margin-bottom:10px;">
+        <div>📅 Date: <b style="color:var(--text2);" id="emp-pantry-date"></b></div>
+        <div>🙋 Brought By: <b style="color:var(--text2);" id="emp-pantry-broughtby"></b></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2;"><label>Item</label><select id="emp-pantry-item-select"></select></div>
+        <div class="form-group"><label>Qty</label><input type="number" id="emp-pantry-item-qty" value="1" min="1" style="width:80px;"></div>
+        <div class="form-group" style="align-self:flex-end;"><button class="btn btn-green btn-sm" onclick="addEmpPantryCartItem()">➕ Add</button></div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="items-table"><thead><tr><th>Item</th><th>Qty</th><th>Amount</th><th></th></tr></thead><tbody id="empPantryCartTbody"></tbody></table>
+      </div>
+      <div style="text-align:right;font-size:16px;font-weight:700;margin:10px 0;">Total: <span id="emp-pantry-cart-total">0</span></div>
+      <div class="flex-gap">
+        <button class="btn btn-purple" onclick="saveEmployeePantryOrder()">🖨️ Print &amp; Save</button>
+      </div>
+    </div>
 
     <div style="font-weight:700;color:var(--neon2);margin:16px 0 6px;">🍵 My Pantry Requests — Selected Month</div>
     <div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>Date</th><th>Time</th><th>Items</th><th>Amount</th></tr></thead><tbody id="emp-dash-pantry"></tbody></table></div>
