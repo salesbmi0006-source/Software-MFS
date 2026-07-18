@@ -12168,7 +12168,12 @@ function getPOFulfilledQty(map, item){
 function computePOStatus(po){
   const map = getPODispatchedMap(po.poNo);
   const totalQty = po.items.reduce((s,i)=>s+(parseFloat(i.qty)||0),0);
-  const totalFulfilled = po.items.reduce((s,i)=>s+(parseFloat(i.received)||0)+getPOFulfilledQty(map,i),0);
+  // PO Status is intentionally based ONLY on real DC quantity — never on the
+  // manual "📥 Receive" entry (that's a separate legacy/manual stock-in tool,
+  // see openPOReceiveModal, and is deliberately excluded here so "Completed"
+  // always means "DCs were actually raised covering the full qty", matching
+  // what Invoice Status checks against.
+  const totalFulfilled = po.items.reduce((s,i)=>s+getPOFulfilledQty(map,i),0);
   if(totalFulfilled<=0) return 'Pending';
   if(totalFulfilled>=totalQty) return 'Completed';
   return 'Partial';
@@ -12178,7 +12183,7 @@ function getItemPendingPOQty(itemName){
   purchaseOrders.forEach(po=>{
     const map = getPODispatchedMap(po.poNo);
     po.items.forEach(i=>{
-      if(i.name===itemName) pending += Math.max(0, (parseFloat(i.qty)||0) - (parseFloat(i.received)||0) - getPOFulfilledQty(map,i));
+      if(i.name===itemName) pending += Math.max(0, (parseFloat(i.qty)||0) - getPOFulfilledQty(map,i));
     });
   });
   return pending;
@@ -12296,7 +12301,7 @@ function deletePO(idx){
 function openPOReceiveModal(idx){
   const po = purchaseOrders[idx];
   document.getElementById('pr-po-idx').value = idx;
-  document.getElementById('po-receive-items').innerHTML = `<div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Use this only for manual/legacy stock-in. Items already dispatched to this party via a linked DC are tracked automatically and don't need to be entered here.</div>` + po.items.map((it,i)=>`
+  document.getElementById('po-receive-items').innerHTML = `<div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Use this only for manual/legacy stock-in (updates stock & average purchase cost). Items dispatched via a linked DC are tracked automatically. Note: this PO's own Completed/Remaining/Invoice status is based only on actual linked DCs — entries here do NOT mark the PO as Completed.</div>` + po.items.map((it,i)=>`
     <div class="form-row">
       <div class="form-group" style="flex:2;"><label>${it.name} (Ordered: ${it.qty}, Received so far: ${it.received||0})</label></div>
       <div class="form-group"><label>Receive Now</label><input type="number" id="pr-recv-${i}" placeholder="0" max="${it.qty-(it.received||0)}"></div>
@@ -12337,7 +12342,7 @@ function openPOTimeline(idx){
   const linkedDCs = db.map((r,i)=>({r,i})).filter(x=>normPoNo(x.r.poNo)===normPoNo(po.poNo)).sort((a,b)=>(a.r.date||'').localeCompare(b.r.date||''));
   const map = getPODispatchedMap(po.poNo);
   const itemRows = po.items.map(it=>{
-    const dispatched = getPOFulfilledQty(map,it)+(parseFloat(it.received)||0);
+    const dispatched = getPOFulfilledQty(map,it);
     const remaining = Math.max(0,(parseFloat(it.qty)||0)-dispatched);
     const done = remaining<=0;
     return `<tr>
@@ -12426,8 +12431,8 @@ function renderPOTab(){
   tbody.innerHTML = list.map(x=>{
     const map = getPODispatchedMap(x.po.poNo);
     const orderedValue = x.po.items.reduce((s,i)=>s+i.qty*i.rate,0);
-    const remainingQty = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-(parseFloat(i.received)||0)-getPOFulfilledQty(map,i)),0);
-    const balanceValue = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-(parseFloat(i.received)||0)-getPOFulfilledQty(map,i))*i.rate,0);
+    const remainingQty = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-getPOFulfilledQty(map,i)),0);
+    const balanceValue = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-getPOFulfilledQty(map,i))*i.rate,0);
     const invInfo = getPOInvoiceInfo(x.po);
     return `<tr>
       <td>${x.po.poNo}</td><td>${x.po.supplier}</td><td>${x.po.unit||'-'}</td><td>${x.po.buyer||'-'}</td><td>${x.po.date||'-'}</td><td>${x.po.terms?x.po.terms+'d':'-'}</td>
@@ -12533,12 +12538,12 @@ function openPOPickerFromDC(){
   const map = getPODispatchedMap(po.poNo, excludeIdx);
   poPickerCtx = {po, map};
   const cur = settings.currency||'PKR';
-  const allDone = po.items.every(it=>Math.max(0,(parseFloat(it.qty)||0)-(parseFloat(it.received)||0)-getPOFulfilledQty(map,it))<=0);
+  const allDone = po.items.every(it=>Math.max(0,(parseFloat(it.qty)||0)-getPOFulfilledQty(map,it))<=0);
   document.getElementById('poPickerTitle').textContent = `📋 PO ${po.poNo} — ${po.supplier}${po.buyer?' (Buyer: '+po.buyer+')':''}`;
   document.getElementById('poPickerBody').innerHTML = (allDone ? `<div style="color:var(--success);margin-bottom:8px;">✅ This PO's quantities are already fully matched by earlier DCs — nothing pending.</div>` : '') +
     `<div style="overflow-x:auto;"><table class="items-table"><thead><tr><th></th><th>Item</th><th>HS Code</th><th>Ordered</th><th>Already Dispatched</th><th>Remaining</th><th>Qty to add now</th><th>Rate</th></tr></thead><tbody>
     ${po.items.map((it,i)=>{
-      const dispatched = getPOFulfilledQty(map,it)+(parseFloat(it.received)||0);
+      const dispatched = getPOFulfilledQty(map,it);
       const remaining = Math.max(0,(parseFloat(it.qty)||0)-dispatched);
       return `<tr>
         <td><input type="checkbox" class="po-pick-chk" data-i="${i}" ${remaining>0?'checked':''} ${remaining<=0?'disabled':''}></td>
@@ -14634,7 +14639,7 @@ const PDF_MODULES = {
       const invInfo = getPOInvoiceInfo(po);
       return {...po, status:computePOStatus(po), invStatus:invInfo.status, invoiceNos:invInfo.invoiceNos.join(', ')||'-',
         orderedValue:fmt(po.items.reduce((s,i)=>s+i.qty*i.rate,0)),
-        remainingQty:po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-(parseFloat(i.received)||0)-getPOFulfilledQty(map,i)),0)};
+        remainingQty:po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-getPOFulfilledQty(map,i)),0)};
     })
   },
   expenses: {
