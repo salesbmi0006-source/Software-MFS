@@ -206,6 +206,9 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
 /* ITEMS TABLE inside modal */
 .items-table{width:100%;border-collapse:collapse;font-size:12px;}
+.po-table-wrap{overflow-x:auto;}
+.po-table-wrap table{width:max-content;min-width:100%;}
+.po-table-wrap table th,.po-table-wrap table td{white-space:nowrap;}
 .items-table th{background:var(--bg3);padding:7px;color:var(--neon);border:1px solid var(--border);}
 .items-table td{padding:6px;border:1px solid var(--border);background:var(--bg2);}
 .items-table input{padding:5px;font-size:11px;}
@@ -1901,6 +1904,8 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
         <button class="btn btn-green btn-sm" onclick="openPOModal()">➕ New PO</button>
         <button class="btn btn-neon btn-sm" onclick="autoImportPOsFromDC(3)">🤖 Preview 3 (Auto-Import from DC)</button>
         <button class="btn btn-neon btn-sm" onclick="autoImportPOsFromDC()">🤖 Auto-Import All from DC</button>
+        <button class="btn btn-neon btn-sm" onclick="bulkPOSyncPreviewUI()">🔄 Bulk PO Sync — Preview</button>
+        <button class="btn btn-green btn-sm" onclick="bulkPOSyncRunUI()">🔄 Bulk PO Sync — Run</button>
       </div>
     </div>
     <div id="po-status-summary" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
@@ -1914,9 +1919,9 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
         <option value="Completed">Completed</option>
       </select>
     </div>
-    <div style="overflow-x:auto;margin-top:10px;">
+    <div class="po-table-wrap" style="margin-top:10px;">
       <table class="items-table">
-        <thead><tr><th>PO No</th><th>Party</th><th>Unit</th><th>Buyer</th><th>Date</th><th>Terms</th><th>Items</th><th>Ordered Value</th><th>Remaining Qty</th><th>Balance Value</th><th>PO Status</th><th>Invoice Status</th><th>Invoice No(s)</th><th>Approval</th><th></th></tr></thead>
+        <thead><tr><th>Sr#</th><th>PO No</th><th>Party</th><th>Unit</th><th>Buyer</th><th>Date</th><th>Terms</th><th>Items</th><th>Ordered Value</th><th>Remaining Qty</th><th>Balance Value</th><th>PO Status</th><th>DCs</th><th>DC No(s)</th><th>Invoice Status</th><th>Invoices</th><th>Invoice No(s)</th><th>Approval</th><th></th></tr></thead>
         <tbody id="poTableBody"></tbody>
       </table>
     </div>
@@ -12585,19 +12590,25 @@ function renderPOTab(){
   const tbody = document.getElementById('poTableBody');
   if(!tbody) return;
   const invColors = {Pending:'#8892b0', Partial:'#f0a500', OK:'#00e676'};
-  if(!list.length){ tbody.innerHTML='<tr><td colspan="15" style="text-align:center;color:var(--text3);padding:20px;">No purchase orders yet</td></tr>'; return; }
-  tbody.innerHTML = list.map(x=>{
+  if(!list.length){ tbody.innerHTML='<tr><td colspan="19" style="text-align:center;color:var(--text3);padding:20px;">No purchase orders yet</td></tr>'; return; }
+  tbody.innerHTML = list.map((x,i)=>{
     const map = getPODispatchedMap(x.po.poNo);
     const orderedValue = x.po.items.reduce((s,i)=>s+i.qty*i.rate,0);
     const remainingQty = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-getPOFulfilledQty(map,i)),0);
     const balanceValue = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-getPOFulfilledQty(map,i))*i.rate,0);
     const invInfo = getPOInvoiceInfo(x.po);
+    const linkedDCs = getPOLinkedDCs(x.po);
+    const dcNos = linkedDCs.map(r=>r.dcNo||'-');
     return `<tr>
+      <td>${i+1}</td>
       <td>${x.po.poNo}</td><td>${x.po.supplier}</td><td>${x.po.unit||'-'}</td><td>${x.po.buyer||'-'}</td><td>${x.po.date||'-'}</td><td>${x.po.terms?x.po.terms+'d':'-'}</td>
       <td>${x.po.items.length}</td><td>${cur} ${fmt(orderedValue)}</td><td>${remainingQty}</td><td>${cur} ${fmt(balanceValue)}</td>
       <td><span class="badge" style="background:${poColors[x.status]}22;color:${poColors[x.status]};border:1px solid ${poColors[x.status]};">${x.status}</span></td>
+      <td>${dcNos.length}</td>
+      <td title="${dcNos.join(', ')}">${dcNos.length ? dcNos.join(', ') : '-'}</td>
       <td><span class="badge" style="background:${invColors[invInfo.status]}22;color:${invColors[invInfo.status]};border:1px solid ${invColors[invInfo.status]};">${invInfo.status==='OK'?'✅ OK':(invInfo.status==='Partial'?'◐ Partial':'⏳ Pending')}</span></td>
-      <td>${invInfo.invoiceNos.length ? invInfo.invoiceNos.join(', ') : '-'}</td>
+      <td>${invInfo.invoiceNos.length}</td>
+      <td title="${invInfo.invoiceNos.join(', ')}">${invInfo.invoiceNos.length ? invInfo.invoiceNos.join(', ') : '-'}</td>
       <td>${otherApprovalBadge('po', x.idx)}</td>
       <td><button class="btn btn-xs btn-neon" onclick="openPOTimeline(${x.idx})">🕒</button> <button class="btn btn-xs btn-green" onclick="openPOReceiveModal(${x.idx})">📥</button> <button class="btn btn-xs btn-neon" onclick="openPOModal(${x.idx})">✏️</button> <button class="btn btn-xs btn-red" onclick="deletePO(${x.idx})">🗑️</button></td>
     </tr>`;
@@ -15245,4 +15256,326 @@ window.addEventListener('DOMContentLoaded', init);
 </div>
 
 
+<script>
+/* =====================================================================
+   BULK PO SYNC / GENERATE SCRIPT — SAU CORPORATION app
+   =====================================================================
+   Ye script app ke apne globals (db, purchaseOrders, savePurchaseOrders,
+   normPoNo, normKey, logAudit, computePOStatus, partyPaymentTerms, wagera)
+   ko directly use karta hai, is liye isi HTML file ke andar, main script
+   ke BAAD load hota hai.
+
+   UI Buttons (Purchase Order tab mein):
+     🔄 Bulk PO Sync — Preview   -> koi save nahi hota, sirf ek popup
+                                    summary + console table dikhata hai.
+     🔄 Bulk PO Sync — Run       -> confirm dialog ke baad actual sync
+                                    (create/update) commit karta hai.
+
+   Console se bhi chalaya ja sakta hai:
+     bulkPOSync.preview()
+     bulkPOSync.run()
+
+   YE SCRIPT KYA KARTA HAI (khulasa)
+   ----------------------------------
+   - Har DC record (db array, cancelled != true) scan hota hai, poNo
+     field ke through.
+   - Same PO No wali saari DCs normPoNo() se aggregate hoti hain (qty
+     per item add hoti hai; rate/hscode/tax sabse recent DC se aata hai).
+   - Agar PO No purchaseOrders mein already maujood hai:
+       * COMPLETED PO -> sirf VALIDATE hota hai (missing item / qty
+         mismatch report hota hai), MODIFY kabhi nahi hota.
+       * Pending/Partial PO -> sirf wo item lines ADD hoti hain jo DCs
+         mein hain lekin PO mein bilkul missing thi. Already-matched
+         items ki ordered qty ko chheda nahi jata.
+   - Agar PO No purchaseOrders mein nahi hai -> naya PO banta hai
+     (party/unit/date/items copy DC se), payment terms:
+       * Default 30 din
+       * Sirf 'Interloop Limited (Faisalabad)' ke liye 45 din
+       * Agar party ke liye pehle se partyPaymentTerms[party] set hai
+         to wahi use hota hai.
+   - Duplicate PO kabhi nahi banta (normPoNo() match).
+   - dispatchedQty/remainingQty/balanceValue is app mein hamesha
+     PO items vs DC data se LIVE compute hote hain (getPODispatchedMap /
+     computePOStatus) — is liye alag se store nahi kiye jate; PO ke
+     items list ko accurate/complete rakhna hi "write-back" hai.
+   ===================================================================== */
+(function () {
+  'use strict';
+
+  // ---------------- Configuration ----------------
+  const DEFAULT_TERMS_DAYS = 30;
+  const SPECIAL_TERMS_BY_PARTY = {
+    'Interloop Limited (Faisalabad)': 45
+  };
+
+  function getTermsForParty(party) {
+    if (Object.prototype.hasOwnProperty.call(SPECIAL_TERMS_BY_PARTY, party)) {
+      return SPECIAL_TERMS_BY_PARTY[party];
+    }
+    if (typeof partyPaymentTerms !== 'undefined' && partyPaymentTerms[party]) {
+      return partyPaymentTerms[party];
+    }
+    return DEFAULT_TERMS_DAYS;
+  }
+
+  // ---------------- Step 1: Aggregate all DC records by PO No ----------------
+  function aggregateDCsByPO() {
+    const groups = {}; // normPoNo(key) -> group
+    db.forEach(r => {
+      if (r.cancelled) return;
+      const poNoRaw = (r.poNo || '').trim();
+      if (!poNoRaw) return; // no PO number on this DC -> nothing to sync
+
+      const key = normPoNo(poNoRaw);
+      if (!groups[key]) {
+        groups[key] = {
+          poNo: poNoRaw,
+          party: r.partyName || '',
+          unit: r.unitName || '',
+          date: r.date || '',
+          items: {},      // normKey(desc) -> {name,hscode,qty,rate,tax}
+          dcNos: [],
+          issues: []
+        };
+      }
+      const g = groups[key];
+      g.dcNos.push(r.dcNo || '(no DC#)');
+
+      // keep earliest date as the PO's date
+      if (r.date && (!g.date || r.date < g.date)) g.date = r.date;
+
+      // flag (not block) if party name differs across DCs sharing one PO No
+      if (r.partyName && g.party && r.partyName !== g.party) {
+        g.issues.push(`DC ${r.dcNo || '?'}: party "${r.partyName}" DC ke group party "${g.party}" se mismatch karta hai`);
+      }
+
+      (r.items || []).forEach(it => {
+        if (!it.desc) return;
+        const qty = parseFloat(it.qty) || 0;
+        if (qty <= 0) {
+          g.issues.push(`DC ${r.dcNo || '?'}: item "${it.desc}" ki qty invalid/zero hai`);
+          return;
+        }
+        const ik = normKey(it.desc);
+        if (!g.items[ik]) {
+          g.items[ik] = {
+            name: it.desc,
+            hscode: it.hscode || '',
+            qty: 0,
+            rate: parseFloat(it.rate) || 0,
+            tax: parseFloat(it.tax) || 0
+          };
+        }
+        g.items[ik].qty += qty;
+        g.items[ik].rate = parseFloat(it.rate) || g.items[ik].rate;
+        if (it.hscode) g.items[ik].hscode = it.hscode;
+        if (it.tax !== undefined) g.items[ik].tax = parseFloat(it.tax) || g.items[ik].tax;
+      });
+    });
+    return groups;
+  }
+
+  // ---------------- Step 2: Build the sync plan (no writes yet) ----------------
+  function planSync() {
+    const groups = aggregateDCsByPO();
+    const existingIdxByKey = {};
+    purchaseOrders.forEach((po, idx) => { existingIdxByKey[normPoNo(po.poNo)] = idx; });
+
+    const plan = {
+      toCreate: [],
+      toUpdate: [],
+      skippedCompleted: [],
+      dataIssues: [],
+      generatedAt: new Date().toISOString()
+    };
+
+    Object.keys(groups).forEach(key => {
+      const g = groups[key];
+      const dcItems = Object.values(g.items);
+      if (g.issues.length) plan.dataIssues.push({ poNo: g.poNo, issues: g.issues });
+      if (!dcItems.length) return;
+
+      if (Object.prototype.hasOwnProperty.call(existingIdxByKey, key)) {
+        const idx = existingIdxByKey[key];
+        const po = purchaseOrders[idx];
+        const status = (typeof computePOStatus === 'function') ? computePOStatus(po) : 'Unknown';
+
+        if (status === 'Completed') {
+          const mismatches = [];
+          dcItems.forEach(dcItem => {
+            const poItem = po.items.find(pi => normKey(pi.name) === normKey(dcItem.name) ||
+              (dcItem.hscode && pi.hscode && normKey(pi.hscode) === normKey(dcItem.hscode)));
+            if (!poItem) {
+              mismatches.push(`Item "${dcItem.name}" DCs mein hai lekin completed PO ke items mein missing hai`);
+            } else if (dcItem.qty > (parseFloat(poItem.qty) || 0)) {
+              mismatches.push(`Item "${dcItem.name}": dispatched qty (${dcItem.qty}) PO ki ordered qty (${poItem.qty}) se zyada hai`);
+            }
+          });
+          plan.skippedCompleted.push({
+            poNo: po.poNo, party: po.supplier, dcCount: g.dcNos.length, mismatches
+          });
+        } else {
+          const missingItems = dcItems.filter(dcItem =>
+            !po.items.some(pi => normKey(pi.name) === normKey(dcItem.name) ||
+              (dcItem.hscode && pi.hscode && normKey(pi.hscode) === normKey(dcItem.hscode)))
+          );
+          if (missingItems.length) {
+            plan.toUpdate.push({
+              idx, poNo: po.poNo, party: po.supplier, status,
+              dcCount: g.dcNos.length,
+              missingItems,
+              addedValue: missingItems.reduce((s, i) => s + i.qty * i.rate, 0)
+            });
+          }
+        }
+      } else {
+        const totalAmount = dcItems.reduce((s, i) => s + i.qty * i.rate, 0);
+        plan.toCreate.push({
+          poNo: g.poNo,
+          party: g.party,
+          unit: g.unit,
+          date: g.date || new Date().toISOString().slice(0, 10),
+          terms: getTermsForParty(g.party),
+          items: dcItems,
+          totalAmount,
+          dcCount: g.dcNos.length
+        });
+      }
+    });
+
+    return plan;
+  }
+
+  // ---------------- Step 3: Console detail (table) ----------------
+  function printPlan(plan) {
+    console.log('%c=== BULK PO SYNC — DRY RUN PREVIEW ===', 'font-weight:bold;font-size:14px;color:#0af');
+    console.log(`Generated at: ${plan.generatedAt}`);
+    console.log(`New POs to CREATE: ${plan.toCreate.length}`);
+    console.log(`Existing POs to UPDATE: ${plan.toUpdate.length}`);
+    console.log(`COMPLETED POs (validated, not touched): ${plan.skippedCompleted.length}`);
+    console.log(`Data issues found: ${plan.dataIssues.length}`);
+    if (plan.toCreate.length) {
+      console.log('--- POs to CREATE ---');
+      console.table(plan.toCreate.map(c => ({
+        'PO No': c.poNo, Party: c.party, Unit: c.unit, Date: c.date,
+        'Terms(d)': c.terms, '#Items': c.items.length, '#DCs': c.dcCount,
+        'Total Amount': c.totalAmount.toFixed(2)
+      })));
+    }
+    if (plan.toUpdate.length) {
+      console.log('--- POs to UPDATE (missing item lines only) ---');
+      console.table(plan.toUpdate.map(u => ({
+        'PO No': u.poNo, Party: u.party, Status: u.status, '#DCs': u.dcCount,
+        'Missing Items Added': u.missingItems.length, 'Added Value': u.addedValue.toFixed(2)
+      })));
+    }
+    if (plan.skippedCompleted.length) {
+      console.log('--- COMPLETED POs (validation only) ---');
+      plan.skippedCompleted.forEach(s => {
+        if (s.mismatches.length) {
+          console.warn(`PO ${s.poNo} (${s.party}): ${s.mismatches.length} mismatch(es):`);
+          s.mismatches.forEach(m => console.warn('   - ' + m));
+        } else {
+          console.log(`PO ${s.poNo} (${s.party}): OK — consistent`);
+        }
+      });
+    }
+    if (plan.dataIssues.length) {
+      console.log('--- DATA ISSUES (raw DC records) ---');
+      plan.dataIssues.forEach(d => {
+        console.warn(`PO ${d.poNo}:`);
+        d.issues.forEach(i => console.warn('   - ' + i));
+      });
+    }
+  }
+
+  // ---------------- Step 4: Commit the plan (actual writes) ----------------
+  function runSync(plan) {
+    let created = 0, updated = 0;
+
+    plan.toCreate.forEach(c => {
+      const po = {
+        id: 'PO' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        poNo: c.poNo, supplier: c.party, unit: c.unit, address: '', buyer: '',
+        terms: c.terms, date: c.date, expiry: '',
+        notes: 'Auto-synced from DC records (Bulk PO Sync)',
+        items: c.items
+      };
+      purchaseOrders.push(po);
+      if (typeof initApprovalForEntity === 'function') initApprovalForEntity('po', po);
+      if (typeof logAudit === 'function') {
+        logAudit('create', 'Purchase Order', `PO ${po.poNo} (${po.supplier}) bulk-synced (created) from DC records`, undefined, po);
+      }
+      created++;
+    });
+
+    plan.toUpdate.forEach(u => {
+      const po = purchaseOrders[u.idx];
+      const before = JSON.parse(JSON.stringify(po));
+      u.missingItems.forEach(mi => po.items.push({
+        name: mi.name, hscode: mi.hscode, qty: mi.qty, rate: mi.rate, tax: mi.tax
+      }));
+      if (!po.terms) po.terms = getTermsForParty(po.supplier);
+      if (typeof logAudit === 'function') {
+        logAudit('edit', 'Purchase Order',
+          `PO ${po.poNo} (${po.supplier}) bulk-synced — ${u.missingItems.length} missing item line(s) added from DC records`,
+          before, po);
+      }
+      updated++;
+    });
+
+    savePurchaseOrders();
+    if (typeof renderPOTab === 'function') renderPOTab();
+    if (typeof toast === 'function') toast(`✅ Bulk PO Sync complete: ${created} created, ${updated} updated`, 'success');
+    console.log(`%cBulk PO Sync committed: ${created} PO(s) created, ${updated} PO(s) updated.`, 'font-weight:bold;color:#0a0');
+  }
+
+  // ---------------- Console API ----------------
+  window.bulkPOSync = {
+    preview() { const plan = planSync(); printPlan(plan); window.__bulkPOSyncPlan = plan; return plan; },
+    run() { if (!window.__bulkPOSyncPlan) { console.warn('Pehle preview() chalayein.'); return; } runSync(window.__bulkPOSyncPlan); }
+  };
+
+  // ---------------- UI-friendly wrappers (buttons call these) ----------------
+  window.bulkPOSyncPreviewUI = function () {
+    const plan = planSync();
+    printPlan(plan);
+    window.__bulkPOSyncPlan = plan;
+    const msg =
+      `📋 BULK PO SYNC — PREVIEW (koi save nahi hua)\n\n` +
+      `🆕 Naye POs banenge: ${plan.toCreate.length}\n` +
+      `✏️ Existing POs mein missing items add honge: ${plan.toUpdate.length}\n` +
+      `✅ COMPLETED POs (sirf validate honge): ${plan.skippedCompleted.length}\n` +
+      `⚠️ Data issues: ${plan.dataIssues.length}\n\n` +
+      `Poori detail F12 -> Console mein dekhein.\n` +
+      (plan.toCreate.length || plan.toUpdate.length
+        ? `Confirm hone par "🔄 Bulk PO Sync — Run" button dabayein.`
+        : `Kuch bhi sync karne ko nahi mila.`);
+    alert(msg);
+    if (typeof toast === 'function') toast('Bulk PO Sync preview taiyar — console dekhein', 'info');
+  };
+
+  window.bulkPOSyncRunUI = function () {
+    // hamesha fresh plan banate hain taake stale data commit na ho
+    const plan = planSync();
+    window.__bulkPOSyncPlan = plan;
+    if (!plan.toCreate.length && !plan.toUpdate.length) {
+      alert('Kuch bhi sync karne ko nahi mila — sab POs pehle se up-to-date hain (ya sirf COMPLETED POs hain jo validate ho chuke).');
+      return;
+    }
+    const confirmMsg =
+      `Confirm karein: bulk sync chalayein?\n\n` +
+      `🆕 ${plan.toCreate.length} naya PO banega\n` +
+      `✏️ ${plan.toUpdate.length} existing PO mein missing item lines add hongi\n` +
+      `✅ ${plan.skippedCompleted.length} COMPLETED PO(s) sirf validate honge (koi change nahi)\n\n` +
+      `Ye action save ho jayega. Aage badhein?`;
+    if (!confirm(confirmMsg)) return;
+    runSync(plan);
+  };
+
+  console.log('%cBulk PO Sync script loaded.', 'font-weight:bold;color:#0af');
+  console.log('Console API: bulkPOSync.preview() then bulkPOSync.run()');
+  console.log('UI buttons: Purchase Order tab -> "🔄 Bulk PO Sync — Preview" / "🔄 Bulk PO Sync — Run"');
+})();
+</script>
 </body></html>
