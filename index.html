@@ -206,9 +206,11 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
 /* ITEMS TABLE inside modal */
 .items-table{width:100%;border-collapse:collapse;font-size:12px;}
-.po-table-wrap{overflow-x:auto;}
-.po-table-wrap table{width:max-content;min-width:100%;}
-.po-table-wrap table th,.po-table-wrap table td{white-space:nowrap;}
+.po-table-wrap{width:100%;}
+.po-table-wrap table{table-layout:fixed;width:100%;}
+.po-table-wrap table th,.po-table-wrap table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:9px;padding:3px 4px;}
+.po-table-wrap table td button{font-size:9px;padding:2px 4px;}
+.po-table-wrap table td.po-actions{overflow:visible;text-overflow:clip;}
 .items-table th{background:var(--bg3);padding:7px;color:var(--neon);border:1px solid var(--border);}
 .items-table td{padding:6px;border:1px solid var(--border);background:var(--bg2);}
 .items-table input{padding:5px;font-size:11px;}
@@ -1921,6 +1923,9 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     </div>
     <div class="po-table-wrap" style="margin-top:10px;">
       <table class="items-table">
+        <colgroup>
+          <col style="width:3%"><col style="width:7%"><col style="width:9%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:4%"><col style="width:3%"><col style="width:7%"><col style="width:5%"><col style="width:7%"><col style="width:5%"><col style="width:3%"><col style="width:6%"><col style="width:5%"><col style="width:3%"><col style="width:6%"><col style="width:4%"><col style="width:5%">
+        </colgroup>
         <thead><tr><th>Sr#</th><th>PO No</th><th>Party</th><th>Unit</th><th>Buyer</th><th>Date</th><th>Terms</th><th>Items</th><th>Ordered Value</th><th>Remaining Qty</th><th>Balance Value</th><th>PO Status</th><th>DCs</th><th>DC No(s)</th><th>Invoice Status</th><th>Invoices</th><th>Invoice No(s)</th><th>Approval</th><th></th></tr></thead>
         <tbody id="poTableBody"></tbody>
       </table>
@@ -12601,7 +12606,7 @@ function renderPOTab(){
     const dcNos = linkedDCs.map(r=>r.dcNo||'-');
     return `<tr>
       <td>${i+1}</td>
-      <td>${x.po.poNo}</td><td>${x.po.supplier}</td><td>${x.po.unit||'-'}</td><td>${x.po.buyer||'-'}</td><td>${x.po.date||'-'}</td><td>${x.po.terms?x.po.terms+'d':'-'}</td>
+      <td title="${x.po.poNo}">${x.po.poNo}</td><td title="${x.po.supplier}">${x.po.supplier}</td><td title="${x.po.unit||''}">${x.po.unit||'-'}</td><td title="${x.po.buyer||''}">${x.po.buyer||'-'}</td><td>${x.po.date||'-'}</td><td>${x.po.terms?x.po.terms+'d':'-'}</td>
       <td>${x.po.items.length}</td><td>${cur} ${fmt(orderedValue)}</td><td>${remainingQty}</td><td>${cur} ${fmt(balanceValue)}</td>
       <td><span class="badge" style="background:${poColors[x.status]}22;color:${poColors[x.status]};border:1px solid ${poColors[x.status]};">${x.status}</span></td>
       <td>${dcNos.length}</td>
@@ -12610,7 +12615,7 @@ function renderPOTab(){
       <td>${invInfo.invoiceNos.length}</td>
       <td title="${invInfo.invoiceNos.join(', ')}">${invInfo.invoiceNos.length ? invInfo.invoiceNos.join(', ') : '-'}</td>
       <td>${otherApprovalBadge('po', x.idx)}</td>
-      <td><button class="btn btn-xs btn-neon" onclick="openPOTimeline(${x.idx})">🕒</button> <button class="btn btn-xs btn-green" onclick="openPOReceiveModal(${x.idx})">📥</button> <button class="btn btn-xs btn-neon" onclick="openPOModal(${x.idx})">✏️</button> <button class="btn btn-xs btn-red" onclick="deletePO(${x.idx})">🗑️</button></td>
+      <td class="po-actions"><button class="btn btn-xs btn-neon" onclick="openPOTimeline(${x.idx})">🕒</button> <button class="btn btn-xs btn-green" onclick="openPOReceiveModal(${x.idx})">📥</button> <button class="btn btn-xs btn-neon" onclick="openPOModal(${x.idx})">✏️</button> <button class="btn btn-xs btn-red" onclick="deletePO(${x.idx})">🗑️</button></td>
     </tr>`;
   }).join('');
 }
