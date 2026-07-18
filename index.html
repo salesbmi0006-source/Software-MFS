@@ -1957,12 +1957,17 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       <div class="form-group"><label>HS Code</label><input type="text" id="po-item-hscode" placeholder="HS Code"></div>
       <div class="form-group"><label>Qty</label><input type="number" id="po-item-qty" placeholder="0"></div>
       <div class="form-group"><label>Rate</label><input type="number" step="0.01" id="po-item-rate" placeholder="0.00"></div>
-      <div class="form-group"><label>Required By</label><input type="date" id="po-item-reqdate"></div>
+      <div class="form-group"><label>Tax %</label>
+        <select id="po-item-tax">
+          <option value="18">18%</option>
+          <option value="25">25%</option>
+        </select>
+      </div>
       <div class="form-group" style="align-self:flex-end;"><button type="button" class="btn btn-neon btn-sm" onclick="addPOItemRow()">➕ Add</button></div>
     </div>
     <datalist id="stock-item-list"></datalist>
     <div style="overflow-x:auto;">
-      <table class="items-table"><thead><tr><th>Item</th><th>HS Code</th><th>Qty</th><th>Rate</th><th>Required By</th><th>Value</th><th></th></tr></thead><tbody id="po-items-tbody"></tbody></table>
+      <table class="items-table"><thead><tr><th>Item</th><th>HS Code</th><th>Qty</th><th>Rate</th><th>Tax %</th><th>Tax Amt</th><th>Total (Incl. Tax)</th><th></th></tr></thead><tbody id="po-items-tbody"></tbody></table>
     </div>
     <div class="form-group"><label>Notes</label><textarea id="po-notes" rows="2"></textarea></div>
   </div>
@@ -5868,6 +5873,19 @@ function quickView(idx){
     <div><label>Invoice</label><div class="accent-box">${rec.invNo||'-'} / ${rec.invDate||'-'}</div></div>
     <div><label>PO No</label><div class="accent-box">${rec.poNo||'-'}</div></div>
   </div>`;
+  // If this DC is linked to a PO, surface that PO's contact Person Name (and their
+  // saved phone number, if any) right here — so whoever's viewing the DC knows
+  // exactly who to reach out to without having to go dig through the PO tab.
+  if(rec.poNo){
+    const linkedPO = purchaseOrders.find(p=>normPoNo(p.poNo)===normPoNo(rec.poNo));
+    if(linkedPO && linkedPO.buyer){
+      const buyerContact = getPOBuyerContact(linkedPO);
+      html += `<div class="accent-box mb-8" style="border-color:var(--neon2);">
+        📋 <strong>PO ${linkedPO.poNo} — Person Name:</strong> ${linkedPO.buyer}
+        ${buyerContact && buyerContact.mobile ? ` | 📱 <a href="tel:${buyerContact.mobile}" style="color:var(--neon);">${buyerContact.mobile}</a>` : ''}
+      </div>`;
+    }
+  }
   html += `<div class="tbl-wrap"><table class="items-table"><thead><tr>
     <th>#</th><th>Description</th><th>HS Code</th><th>UOM</th><th>Qty</th><th>Rate</th><th>Tax%</th><th>Gross Amt</th><th>Tax Amt</th><th>Incl Tax Total</th>
   </tr></thead><tbody>`;
@@ -12101,28 +12119,56 @@ function normKey(s){
     .trim()
     .toLowerCase();
 }
+// Normalizes a PO number for comparison — trims, uppercases, and collapses all
+// whitespace so "po1126070006", " PO1126070006 ", "PO 1126070006" etc. are all
+// treated as the same PO. This was the root cause of POs staying stuck on
+// "Pending" even when their DCs fully covered the ordered qty: poNo matching
+// used to be case-sensitive exact-string comparison.
+function normPoNo(s){
+  return String(s||'').trim().toUpperCase().replace(/\s+/g,'');
+}
 // Sums qty already put on DCs (dc-pono) against a given PO, per item description. excludeIdx = db index to skip (the DC currently being edited).
 // Map keys are normalized (see normKey) so lookups must also go through normKey(it.name) — never map[it.name] directly.
+// Also indexes by HS code (key prefixed "hs:") as a fallback match, in case the
+// DC's item description text drifted slightly from the PO's item name but the
+// HS code still matches — see getPOFulfilledQty() below for how this is used.
 function getPODispatchedMap(poNo, excludeIdx){
   const map = {};
   if(!poNo) return map;
-  const wantPO = String(poNo||'').trim();
+  const wantPO = normPoNo(poNo);
   db.forEach((r,i)=>{
     if(i===excludeIdx) return;
     if(r.cancelled) return;
-    if((r.poNo||'').trim()!==wantPO) return;
+    if(normPoNo(r.poNo)!==wantPO) return;
     (r.items||[]).forEach(it=>{
       if(!it.desc) return;
       const k = normKey(it.desc);
       map[k] = (map[k]||0) + (parseFloat(it.qty)||0);
+      if(it.hscode){
+        const hk = 'hs:'+normKey(it.hscode);
+        map[hk] = (map[hk]||0) + (parseFloat(it.qty)||0);
+      }
     });
   });
   return map;
 }
+// Looks up how much of a specific PO item has been dispatched: tries an exact
+// name match first, and — only if that finds nothing — falls back to matching
+// by HS code (when the PO item has one). This absorbs small wording
+// differences between the PO's item name and what actually got typed on the DC.
+function getPOFulfilledQty(map, item){
+  const byName = map[normKey(item.name)]||0;
+  if(byName>0) return byName;
+  if(item.hscode){
+    const byHs = map['hs:'+normKey(item.hscode)]||0;
+    if(byHs>0) return byHs;
+  }
+  return 0;
+}
 function computePOStatus(po){
   const map = getPODispatchedMap(po.poNo);
   const totalQty = po.items.reduce((s,i)=>s+(parseFloat(i.qty)||0),0);
-  const totalFulfilled = po.items.reduce((s,i)=>s+(parseFloat(i.received)||0)+(map[normKey(i.name)]||0),0);
+  const totalFulfilled = po.items.reduce((s,i)=>s+(parseFloat(i.received)||0)+getPOFulfilledQty(map,i),0);
   if(totalFulfilled<=0) return 'Pending';
   if(totalFulfilled>=totalQty) return 'Completed';
   return 'Partial';
@@ -12132,7 +12178,7 @@ function getItemPendingPOQty(itemName){
   purchaseOrders.forEach(po=>{
     const map = getPODispatchedMap(po.poNo);
     po.items.forEach(i=>{
-      if(i.name===itemName) pending += Math.max(0, (parseFloat(i.qty)||0) - (parseFloat(i.received)||0) - (map[normKey(i.name)]||0));
+      if(i.name===itemName) pending += Math.max(0, (parseFloat(i.qty)||0) - (parseFloat(i.received)||0) - getPOFulfilledQty(map,i));
     });
   });
   return pending;
@@ -12193,17 +12239,24 @@ function addPOItemRow(){
   const hscode = document.getElementById('po-item-hscode').value.trim();
   const qty = parseFloat(document.getElementById('po-item-qty').value)||0;
   const rate = parseFloat(document.getElementById('po-item-rate').value)||0;
-  const reqDate = document.getElementById('po-item-reqdate').value;
+  const tax = parseFloat(document.getElementById('po-item-tax').value)||0;
   if(!name||!qty){ toast('Item name and qty required','warning'); return; }
-  poTempItems.push({name, hscode, qty, rate, reqDate, received:0});
-  document.getElementById('po-item-name').value=''; document.getElementById('po-item-hscode').value=''; document.getElementById('po-item-qty').value=''; document.getElementById('po-item-rate').value=''; document.getElementById('po-item-reqdate').value='';
+  poTempItems.push({name, hscode, qty, rate, tax, received:0});
+  document.getElementById('po-item-name').value=''; document.getElementById('po-item-hscode').value=''; document.getElementById('po-item-qty').value=''; document.getElementById('po-item-rate').value='';
   renderPOItemsTable();
 }
 function removePOItemRow(i){ poTempItems.splice(i,1); renderPOItemsTable(); }
 function renderPOItemsTable(){
   const tbody = document.getElementById('po-items-tbody');
   const cur = settings.currency||'PKR';
-  tbody.innerHTML = poTempItems.map((it,i)=>`<tr><td>${it.name}</td><td>${it.hscode||'-'}</td><td>${it.qty}</td><td>${cur} ${fmt(it.rate)}</td><td>${it.reqDate||'-'}</td><td>${cur} ${fmt(it.qty*it.rate)}</td><td><button type="button" class="btn btn-xs btn-red" onclick="removePOItemRow(${i})">✕</button></td></tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text3);">No items added</td></tr>';
+  // Everything after qty/rate/tax is computed automatically: Gross = qty*rate,
+  // Tax Amt = Gross * tax%, Total = Gross + Tax Amt — nothing here is manually typed.
+  tbody.innerHTML = poTempItems.map((it,i)=>{
+    const gross = (parseFloat(it.qty)||0)*(parseFloat(it.rate)||0);
+    const taxAmt = gross*(parseFloat(it.tax)||0)/100;
+    const total = gross+taxAmt;
+    return `<tr><td>${it.name}</td><td>${it.hscode||'-'}</td><td>${it.qty}</td><td>${cur} ${fmt(it.rate)}</td><td>${it.tax||0}%</td><td>${cur} ${fmt(taxAmt)}</td><td><strong>${cur} ${fmt(total)}</strong></td><td><button type="button" class="btn btn-xs btn-red" onclick="removePOItemRow(${i})">✕</button></td></tr>`;
+  }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text3);">No items added</td></tr>';
 }
 function savePO(){
   const idx = parseInt(document.getElementById('po-edit-idx').value);
@@ -12281,18 +12334,17 @@ function openPOTimeline(idx){
   if(!po) return;
   document.getElementById('poTimelineTitle').textContent = `🕒 PO ${po.poNo} — ${po.supplier} — Live Timeline`;
   const cur = settings.currency||'PKR';
-  const linkedDCs = db.map((r,i)=>({r,i})).filter(x=>(x.r.poNo||'').trim()===po.poNo).sort((a,b)=>(a.r.date||'').localeCompare(b.r.date||''));
+  const linkedDCs = db.map((r,i)=>({r,i})).filter(x=>normPoNo(x.r.poNo)===normPoNo(po.poNo)).sort((a,b)=>(a.r.date||'').localeCompare(b.r.date||''));
   const map = getPODispatchedMap(po.poNo);
   const itemRows = po.items.map(it=>{
-    const dispatched = (map[normKey(it.name)]||0)+(parseFloat(it.received)||0);
+    const dispatched = getPOFulfilledQty(map,it)+(parseFloat(it.received)||0);
     const remaining = Math.max(0,(parseFloat(it.qty)||0)-dispatched);
     const done = remaining<=0;
-    const reqLate = it.reqDate && !done && new Date(it.reqDate) < new Date();
     return `<tr>
       <td>${it.name}${it.hscode?` <span style="color:var(--text3);font-size:10px;">(HS ${it.hscode})</span>`:''}</td>
       <td>${it.qty}</td><td>${dispatched}</td>
       <td style="color:${done?'var(--success)':'var(--warning)'};font-weight:700;">${remaining}</td>
-      <td style="color:${reqLate?'var(--danger)':'inherit'};">${it.reqDate||'-'}${reqLate?' ⚠️':''}</td>
+      <td>${it.tax!==undefined && it.tax!==null && it.tax!=='' ? it.tax+'%' : '-'}</td>
       <td>${done?'✅ Matched':'⏳ Pending'}</td>
     </tr>`;
   }).join('');
@@ -12304,17 +12356,21 @@ function openPOTimeline(idx){
       <td style="text-align:right;">${cur} ${fmt(total)}</td>
     </tr>`;
   }).join('') : `<tr><td colspan="6" style="text-align:center;color:var(--text3);">No DC raised against this PO yet</td></tr>`;
+  // Person Name + their saved phone number (if a matching Party Contact exists) — so
+  // whoever is looking at this PO/DC knows exactly who to call. Shown only if saved;
+  // if the buyer isn't linked to a saved contact yet, it just shows the name.
+  const buyerContact = getPOBuyerContact(po);
   document.getElementById('poTimelineBody').innerHTML = `
     <div class="form-row" style="font-size:12px;">
       <div><strong>Party:</strong> ${po.supplier}</div>
       <div><strong>Unit:</strong> ${po.unit||'-'}</div>
-      <div><strong>Person:</strong> ${po.buyer||'-'}</div>
+      <div><strong>Person:</strong> ${po.buyer||'-'}${buyerContact && buyerContact.mobile ? ` 📱 <a href="tel:${buyerContact.mobile}" style="color:var(--neon);">${buyerContact.mobile}</a>` : ''}</div>
       <div><strong>PO Date:</strong> ${po.date||'-'}</div>
       <div><strong>Terms:</strong> ${po.terms?po.terms+' days':'-'}</div>
     </div>
     <div class="divider"></div>
     <strong style="color:var(--neon2);">Item Match Status</strong>
-    <div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>Item</th><th>Ordered</th><th>Dispatched</th><th>Remaining</th><th>Required By</th><th>Status</th></tr></thead>
+    <div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>Item</th><th>Ordered</th><th>Dispatched</th><th>Remaining</th><th>Tax %</th><th>Status</th></tr></thead>
     <tbody>${itemRows}</tbody></table></div>
     <div class="divider"></div>
     <strong style="color:var(--neon2);">DC / Invoice History (chronological)</strong>
@@ -12345,8 +12401,8 @@ function renderPOTab(){
   tbody.innerHTML = list.map(x=>{
     const map = getPODispatchedMap(x.po.poNo);
     const orderedValue = x.po.items.reduce((s,i)=>s+i.qty*i.rate,0);
-    const remainingQty = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-(parseFloat(i.received)||0)-(map[normKey(i.name)]||0)),0);
-    const balanceValue = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-(parseFloat(i.received)||0)-(map[normKey(i.name)]||0))*i.rate,0);
+    const remainingQty = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-(parseFloat(i.received)||0)-getPOFulfilledQty(map,i)),0);
+    const balanceValue = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-(parseFloat(i.received)||0)-getPOFulfilledQty(map,i))*i.rate,0);
     return `<tr>
       <td>${x.po.poNo}</td><td>${x.po.supplier}</td><td>${x.po.unit||'-'}</td><td>${x.po.buyer||'-'}</td><td>${x.po.date||'-'}</td><td>${x.po.terms?x.po.terms+'d':'-'}</td>
       <td>${x.po.items.length}</td><td>${cur} ${fmt(orderedValue)}</td><td>${remainingQty}</td><td>${cur} ${fmt(balanceValue)}</td>
@@ -12369,7 +12425,7 @@ function getPOPaymentAlerts(){
   const alerts = [];
   purchaseOrders.forEach(po=>{
     if(!po.terms) return;
-    const linkedInvoiced = db.filter(r=>!r.cancelled && r.invNo && (r.poNo||'').trim()===po.poNo);
+    const linkedInvoiced = db.filter(r=>!r.cancelled && r.invNo && normPoNo(r.poNo)===normPoNo(po.poNo));
     linkedInvoiced.forEach(r=>{
       const isPaid = cheques.some(c=>(c.invoices||[]).includes(r.invNo));
       if(isPaid) return;
@@ -12413,7 +12469,7 @@ function sendPOPaymentAlert(poIdx, invNo, channel){
   const contact = getPOBuyerContact(po);
   if(!contact){ toast('No saved contact matches this PO\'s Person Name — add them under Party Contacts first','warning'); return; }
   const cur = settings.currency||'PKR';
-  const rec = db.find(r=>r.invNo===invNo && (r.poNo||'').trim()===po.poNo);
+  const rec = db.find(r=>r.invNo===invNo && normPoNo(r.poNo)===normPoNo(po.poNo));
   const amount = rec ? getDCTotal(rec) : 0;
   const msg = `Dear ${po.buyer||contact.name}, this is a reminder that payment for Invoice ${invNo} (against PO ${po.poNo}, ${cur} ${fmt(amount)}) is now due as per the agreed ${po.terms}-day payment terms. Kindly arrange payment at your earliest. — ${settings.companyName||'SAU Corporation'}`;
   if(channel==='wa' && contact.mobile){
@@ -12436,23 +12492,25 @@ function getPartyTerms(partyName){ return partyPaymentTerms[partyName] || null; 
 function openPOPickerFromDC(){
   const poNo = (document.getElementById('dc-pono')?.value||'').trim();
   if(!poNo){ toast('Enter the PO No first','warning'); return; }
-  const po = purchaseOrders.find(p=>p.poNo===poNo);
+  const po = purchaseOrders.find(p=>normPoNo(p.poNo)===normPoNo(poNo));
   if(!po){ toast(`No Purchase Order found with No "${poNo}"`,'warning'); return; }
-  // auto-fill party/unit if DC fields are empty
+  // auto-fill party/unit/note if DC fields are empty — never overwrite anything the user already typed
   const partyEl = document.getElementById('dc-party');
   if(partyEl && !partyEl.value.trim()) partyEl.value = po.supplier;
   const unitEl = document.getElementById('dc-unit');
   if(unitEl && !unitEl.value.trim() && po.unit) unitEl.value = po.unit;
+  const noteEl = document.getElementById('dc-note');
+  if(noteEl && !noteEl.value.trim() && po.notes) noteEl.value = po.notes;
   const excludeIdx = editingDcIdx!==null && editingDcIdx!==undefined ? editingDcIdx : undefined;
   const map = getPODispatchedMap(po.poNo, excludeIdx);
   poPickerCtx = {po, map};
   const cur = settings.currency||'PKR';
-  const allDone = po.items.every(it=>Math.max(0,(parseFloat(it.qty)||0)-(parseFloat(it.received)||0)-(map[normKey(it.name)]||0))<=0);
+  const allDone = po.items.every(it=>Math.max(0,(parseFloat(it.qty)||0)-(parseFloat(it.received)||0)-getPOFulfilledQty(map,it))<=0);
   document.getElementById('poPickerTitle').textContent = `📋 PO ${po.poNo} — ${po.supplier}${po.buyer?' (Buyer: '+po.buyer+')':''}`;
   document.getElementById('poPickerBody').innerHTML = (allDone ? `<div style="color:var(--success);margin-bottom:8px;">✅ This PO's quantities are already fully matched by earlier DCs — nothing pending.</div>` : '') +
     `<div style="overflow-x:auto;"><table class="items-table"><thead><tr><th></th><th>Item</th><th>HS Code</th><th>Ordered</th><th>Already Dispatched</th><th>Remaining</th><th>Qty to add now</th><th>Rate</th></tr></thead><tbody>
     ${po.items.map((it,i)=>{
-      const dispatched = (map[normKey(it.name)]||0)+(parseFloat(it.received)||0);
+      const dispatched = getPOFulfilledQty(map,it)+(parseFloat(it.received)||0);
       const remaining = Math.max(0,(parseFloat(it.qty)||0)-dispatched);
       return `<tr>
         <td><input type="checkbox" class="po-pick-chk" data-i="${i}" ${remaining>0?'checked':''} ${remaining<=0?'disabled':''}></td>
@@ -12477,7 +12535,9 @@ function confirmPOPicker(){
     const qtyInput = document.querySelector(`#poPickerBody .po-pick-qty[data-i="${i}"]`);
     const qty = parseFloat(qtyInput?.value)||0;
     if(qty<=0) return;
-    addItemRow({desc:it.name, hscode:it.hscode||'', uom:it.uom||settings.defaultUom||'Pcs', qty, rate:it.rate, tax:settings.defaultTax||18});
+    // Carry the PO item's own Tax% forward onto the DC line automatically —
+    // only falls back to the system default if this PO item has none set.
+    addItemRow({desc:it.name, hscode:it.hscode||'', uom:it.uom||settings.defaultUom||'Pcs', qty, rate:it.rate, tax:(it.tax!==undefined && it.tax!==null && it.tax!=='') ? it.tax : (settings.defaultTax||18)});
     added++;
   });
   updateGrandTotal();
@@ -12929,7 +12989,7 @@ function printPantryReceipt(entry){
       <colgroup><col class="col-item"><col class="col-qty"><col class="col-rate"><col class="col-amt"></colgroup>
       <thead><tr><th>Item</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Amt</th></tr></thead>
       <tbody>${itemRows}</tbody>
-      <tfoot><tr class="totalRow"><td colspan="3">TOTAL</td><td style="text-align:right;">${cur} ${fmt(entry.total)}</td></tr></tfoot>
+      <tfoot><tr class="totalRow"><td colspan="2">TOTAL</td><td colspan="2" style="text-align:right;">${cur} ${fmt(entry.total)}</td></tr></tfoot>
     </table>
     ${entry.notes ? `<hr><div class="meta">Note: ${entry.notes}</div>` : ''}
     <hr>
