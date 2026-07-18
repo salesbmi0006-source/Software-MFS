@@ -3867,22 +3867,10 @@ let cloudSetupPrompted = false;      // true once we've asked the human whether 
 // exactly the sequence that used to silently overwrite the cloud.
 function showCloudLoadingOverlay(){
   if(document.getElementById('cloud-loading-overlay')) return;
-  if(!document.getElementById('mfs-logo-style')){
-    const st = document.createElement('style');
-    st.id = 'mfs-logo-style';
-    st.textContent = `
-      @keyframes mfsSpin { to { transform: rotate(360deg); } }
-      @keyframes mfsPulse { 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.06); } }
-      .mfs-logo-loader{ position:relative; width:84px; height:84px; margin:0 auto 18px; }
-      .mfs-logo-ring{ position:absolute; inset:0; border-radius:50%; border:4px solid rgba(37,99,235,.18); border-top-color:#2563eb; border-right-color:#22d3ee; animation:mfsSpin 1.1s linear infinite; }
-      .mfs-logo-badge{ position:absolute; inset:8px; border-radius:50%; background:linear-gradient(135deg,#2563eb,#0ea5e9); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; letter-spacing:.5px; color:#fff; box-shadow:0 0 18px rgba(37,99,235,.55); animation:mfsPulse 1.6s ease-in-out infinite; font-family:sans-serif; }
-    `;
-    document.head.appendChild(st);
-  }
   const ov = document.createElement('div');
   ov.id = 'cloud-loading-overlay';
   ov.style.cssText = 'position:fixed;inset:0;background:#0b0f14;color:#fff;display:flex;align-items:center;justify-content:center;text-align:center;font-family:sans-serif;z-index:999998;padding:30px;';
-  ov.innerHTML = '<div><div class="mfs-logo-loader"><div class="mfs-logo-ring"></div><div class="mfs-logo-badge">MFS</div></div><h2 style="margin:0 0 10px;">Cloud sy data load ho raha hai…</h2><p id="cloud-loading-msg" style="opacity:.8;max-width:420px;margin:0 auto;line-height:1.6;">Firebase sy connect ho raha hai, thora intezar karein.</p></div>';
+  ov.innerHTML = `<div>${mfsDotSpinnerSVG(110)}<h2 style="margin:16px 0 10px;">Cloud sy data load ho raha hai…</h2><p id="cloud-loading-msg" style="opacity:.8;max-width:420px;margin:0 auto;line-height:1.6;">Firebase sy connect ho raha hai, thora intezar karein.</p></div>`;
   document.body.appendChild(ov);
 }
 function hideCloudLoadingOverlay(reason){
@@ -4980,14 +4968,77 @@ function safeSetItem(key, value){
     return false;
   }
 }
+// ---- Shared "MFS" dot-comet spinner (transparent bg, blue glow) --------
+// Reusable everywhere a loading indicator is needed: the big full-screen
+// cloud overlay AND the brief flash shown for quick actions (tab switch,
+// save/edit/delete). Generates a ring of dots that grow + brighten toward
+// one end (comet tail), spinning continuously — no black background baked
+// in, so it sits on whatever surface it's placed over.
+function mfsDotSpinnerSVG(size){
+  size = size || 90;
+  const dots = 26;
+  const startAngle = -90;   // start at 12 o'clock
+  const arcSpan = 300;      // leaves a gap, like a comet tail
+  const cx = size/2, cy = size/2, r = size*0.36;
+  let circles = '';
+  for(let i=0;i<dots;i++){
+    const t = i/(dots-1);
+    const angle = (startAngle + t*arcSpan) * Math.PI/180;
+    const x = cx + r*Math.cos(angle);
+    const y = cy + r*Math.sin(angle);
+    const dotR = 1.4 + t*3.4;
+    const op = 0.12 + t*0.88;
+    circles += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${dotR.toFixed(2)}" fill="#38bdf8" opacity="${op.toFixed(2)}"/>`;
+  }
+  const fontSize = (size*0.155).toFixed(1);
+  const blur = (size*0.03).toFixed(2);
+  return `<svg class="mfs-dotspin" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" style="overflow:visible;">
+    <defs><filter id="mfsGlow${size}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="${blur}" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+    <g filter="url(#mfsGlow${size})">${circles}</g>
+    <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-family="Arial,sans-serif" font-weight="700" font-size="${fontSize}" fill="#7dd3fc" letter-spacing="2">MFS</text>
+  </svg>`;
+}
+if(!document.getElementById('mfs-dotspin-style')){
+  const st = document.createElement('style');
+  st.id = 'mfs-dotspin-style';
+  st.textContent = `@keyframes mfsDotSpin{ to{ transform:rotate(360deg); } } .mfs-dotspin{ animation: mfsDotSpin 1.1s linear infinite; transform-origin:50% 50%; }`;
+  document.head.appendChild(st);
+}
+// Brief (~280ms) non-blocking loading flash for quick actions — tab
+// switches, save/edit/delete confirmations, etc. Intentionally short and
+// pointer-events:none so it never gets in the way, it's just a consistent
+// little "processing" beat across the app.
+function showMfsQuickLoader(){
+  if(document.getElementById('mfs-quick-loader')) return;
+  const ov = document.createElement('div');
+  ov.id = 'mfs-quick-loader';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(11,15,20,.30);display:flex;align-items:center;justify-content:center;z-index:999996;pointer-events:none;';
+  ov.innerHTML = mfsDotSpinnerSVG(60);
+  document.body.appendChild(ov);
+}
+function hideMfsQuickLoader(){
+  const ov = document.getElementById('mfs-quick-loader');
+  if(ov) ov.remove();
+}
 function toast(msg, type='info'){
-  const c = document.getElementById('toast-container');
-  const t = document.createElement('div');
-  t.className = `toast toast-${type}`;
-  const icons = {success:'✅',error:'❌',warning:'⚠️',info:'ℹ️'};
-  t.innerHTML = `<span>${icons[type]||''}</span><span>${msg}</span>`;
-  c.appendChild(t);
-  setTimeout(()=>t.remove(), 3000);
+  const fire = ()=>{
+    const c = document.getElementById('toast-container');
+    const t = document.createElement('div');
+    t.className = `toast toast-${type}`;
+    const icons = {success:'✅',error:'❌',warning:'⚠️',info:'ℹ️'};
+    t.innerHTML = `<span>${icons[type]||''}</span><span>${msg}</span>`;
+    c.appendChild(t);
+    setTimeout(()=>t.remove(), 3000);
+  };
+  // Save/Update/Delete confirmations all fire as type 'success' — give those
+  // a brief MFS loading beat first, consistent everywhere across the app.
+  // Errors/warnings/info stay instant (no artificial delay on those).
+  if(type==='success'){
+    showMfsQuickLoader();
+    setTimeout(()=>{ hideMfsQuickLoader(); fire(); }, 280);
+  } else {
+    fire();
+  }
 }
 // SYSTEM-WIDE FIX: previously every modal shared the same CSS z-index (5000), so
 // when one modal was opened from INSIDE another already-open modal (e.g. "Load
@@ -5126,17 +5177,19 @@ function renderCurrentTab(){
   renderTabContent(activePanel.id.replace('panel-',''));
 }
 function showTab(id){
+  showMfsQuickLoader();
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   const panel = document.getElementById('panel-'+id);
   const tab = document.getElementById('tab-'+id);
-  if(!panel||!tab) return;
+  if(!panel||!tab){ hideMfsQuickLoader(); return; }
   panel.classList.add('active');
   tab.classList.add('active');
   const label = document.getElementById('current-tab-label');
   if(label) label.textContent = tab.textContent;
   closeTabMenu();
   renderTabContent(id);
+  setTimeout(hideMfsQuickLoader, 260);
 }
 function toggleTabMenu(e){
   if(e) e.stopPropagation();
