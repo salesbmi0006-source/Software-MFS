@@ -1914,7 +1914,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     </div>
     <div style="overflow-x:auto;margin-top:10px;">
       <table class="items-table">
-        <thead><tr><th>PO No</th><th>Party</th><th>Unit</th><th>Buyer</th><th>Date</th><th>Terms</th><th>Items</th><th>Ordered Value</th><th>Remaining Qty</th><th>Balance Value</th><th>Status</th><th>Approval</th><th></th></tr></thead>
+        <thead><tr><th>PO No</th><th>Party</th><th>Unit</th><th>Buyer</th><th>Date</th><th>Terms</th><th>Items</th><th>Ordered Value</th><th>Remaining Qty</th><th>Balance Value</th><th>PO Status</th><th>Invoice Status</th><th>Invoice No(s)</th><th>Approval</th><th></th></tr></thead>
         <tbody id="poTableBody"></tbody>
       </table>
     </div>
@@ -12378,6 +12378,30 @@ function openPOTimeline(idx){
     <tbody>${dcRows}</tbody></table></div>`;
   openModal('poTimelineModal');
 }
+// All non-cancelled DCs raised against this PO (matched the same normalized way
+// PO Status is matched) — the single source of truth for "how many DCs exist
+// against this PO" used by both the Invoice Status column and anything else
+// that needs the linked-DC list.
+function getPOLinkedDCs(po){
+  return db.filter(r=>!r.cancelled && normPoNo(r.poNo)===normPoNo(po.poNo));
+}
+// Invoice Status is separate from PO Status: PO Status tracks whether the ordered
+// QTY has been fully covered by DCs; Invoice Status tracks whether those DCs have
+// actually been invoiced yet (i.e. an Invoice No has been put on them).
+//   - No DCs raised yet, or none of them invoiced  -> "Pending"
+//   - Some invoiced, some not                      -> "Partial"
+//   - Every linked DC has an Invoice No             -> "OK"
+function getPOInvoiceInfo(po){
+  const linked = getPOLinkedDCs(po);
+  if(!linked.length) return {status:'Pending', invoiceNos:[]};
+  const invoiced = linked.filter(r=>r.invNo && r.invNo.trim());
+  const invoiceNos = [...new Set(invoiced.map(r=>r.invNo.trim()))];
+  let status;
+  if(invoiced.length===0) status = 'Pending';
+  else if(invoiced.length>=linked.length) status = 'OK';
+  else status = 'Partial';
+  return {status, invoiceNos};
+}
 function renderPOTab(){
   renderPOPaymentAlerts();
   const q = (document.getElementById('po-search')?.value||'').toLowerCase();
@@ -12397,16 +12421,20 @@ function renderPOTab(){
   list.sort((a,b)=>(b.po.date||'').localeCompare(a.po.date||''));
   const tbody = document.getElementById('poTableBody');
   if(!tbody) return;
-  if(!list.length){ tbody.innerHTML='<tr><td colspan="13" style="text-align:center;color:var(--text3);padding:20px;">No purchase orders yet</td></tr>'; return; }
+  const invColors = {Pending:'#8892b0', Partial:'#f0a500', OK:'#00e676'};
+  if(!list.length){ tbody.innerHTML='<tr><td colspan="15" style="text-align:center;color:var(--text3);padding:20px;">No purchase orders yet</td></tr>'; return; }
   tbody.innerHTML = list.map(x=>{
     const map = getPODispatchedMap(x.po.poNo);
     const orderedValue = x.po.items.reduce((s,i)=>s+i.qty*i.rate,0);
     const remainingQty = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-(parseFloat(i.received)||0)-getPOFulfilledQty(map,i)),0);
     const balanceValue = x.po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-(parseFloat(i.received)||0)-getPOFulfilledQty(map,i))*i.rate,0);
+    const invInfo = getPOInvoiceInfo(x.po);
     return `<tr>
       <td>${x.po.poNo}</td><td>${x.po.supplier}</td><td>${x.po.unit||'-'}</td><td>${x.po.buyer||'-'}</td><td>${x.po.date||'-'}</td><td>${x.po.terms?x.po.terms+'d':'-'}</td>
       <td>${x.po.items.length}</td><td>${cur} ${fmt(orderedValue)}</td><td>${remainingQty}</td><td>${cur} ${fmt(balanceValue)}</td>
       <td><span class="badge" style="background:${poColors[x.status]}22;color:${poColors[x.status]};border:1px solid ${poColors[x.status]};">${x.status}</span></td>
+      <td><span class="badge" style="background:${invColors[invInfo.status]}22;color:${invColors[invInfo.status]};border:1px solid ${invColors[invInfo.status]};">${invInfo.status==='OK'?'✅ OK':(invInfo.status==='Partial'?'◐ Partial':'⏳ Pending')}</span></td>
+      <td>${invInfo.invoiceNos.length ? invInfo.invoiceNos.join(', ') : '-'}</td>
       <td>${otherApprovalBadge('po', x.idx)}</td>
       <td><button class="btn btn-xs btn-neon" onclick="openPOTimeline(${x.idx})">🕒</button> <button class="btn btn-xs btn-green" onclick="openPOReceiveModal(${x.idx})">📥</button> <button class="btn btn-xs btn-neon" onclick="openPOModal(${x.idx})">✏️</button> <button class="btn btn-xs btn-red" onclick="deletePO(${x.idx})">🗑️</button></td>
     </tr>`;
@@ -14600,8 +14628,14 @@ const PDF_MODULES = {
   },
   purchaseorders: {
     title:'Purchase Orders Report', filename:'Purchase_Orders_Report.pdf',
-    columns:[{key:'poNo',label:'PO No'},{key:'supplier',label:'Supplier'},{key:'date',label:'Date'},{key:'expiry',label:'Expiry'},{key:'status',label:'Status'},{key:'orderedValue',label:'Ordered Value'},{key:'remainingQty',label:'Remaining Qty'}],
-    getRows:()=>purchaseOrders.map(po=>({...po, status:computePOStatus(po), orderedValue:fmt(po.items.reduce((s,i)=>s+i.qty*i.rate,0)), remainingQty:po.items.reduce((s,i)=>s+Math.max(0,i.qty-(i.received||0)),0)}))
+    columns:[{key:'poNo',label:'PO No'},{key:'supplier',label:'Supplier'},{key:'date',label:'Date'},{key:'expiry',label:'Expiry'},{key:'status',label:'PO Status'},{key:'invStatus',label:'Invoice Status'},{key:'invoiceNos',label:'Invoice No(s)'},{key:'orderedValue',label:'Ordered Value'},{key:'remainingQty',label:'Remaining Qty'}],
+    getRows:()=>purchaseOrders.map(po=>{
+      const map = getPODispatchedMap(po.poNo);
+      const invInfo = getPOInvoiceInfo(po);
+      return {...po, status:computePOStatus(po), invStatus:invInfo.status, invoiceNos:invInfo.invoiceNos.join(', ')||'-',
+        orderedValue:fmt(po.items.reduce((s,i)=>s+i.qty*i.rate,0)),
+        remainingQty:po.items.reduce((s,i)=>s+Math.max(0,(parseFloat(i.qty)||0)-(parseFloat(i.received)||0)-getPOFulfilledQty(map,i)),0)};
+    })
   },
   expenses: {
     title:'Expense Report', filename:'Expense_Report.pdf',
