@@ -295,6 +295,48 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
 .integrity-ok{background:rgba(0,255,157,.08);}
 .integrity-warn{background:rgba(255,187,0,.08);}
 .integrity-err{background:rgba(255,45,120,.08);}
+
+/* ==================== MOBILE APP-STYLE LAYOUT ====================
+   Desktop is untouched above this point. Below 768px, the desktop dropdown
+   tab menu is hidden in favour of a native-app-style bottom icon nav bar
+   (Records / Purchase Orders / Parties / Reports / More) and every data
+   table in the app is automatically re-flowed into a card list — no
+   individual tab's render function needs to be rewritten; the JS injects
+   a data-label on every <td> (from that table's own <thead>) and this CSS
+   does the rest, so this stays correct even as tabs are added/edited later. */
+.mobile-only{display:none;}
+#mobile-current-tab-label{display:none;}
+@media(max-width:768px){
+  body{padding-bottom:66px;}
+  #main-tabs-bar{display:none!important;}
+  .mobile-only{display:block;}
+  #mobile-current-tab-label{display:flex;align-items:center;gap:6px;padding:9px 14px;background:var(--bg2);border-bottom:1px solid var(--border2);font-weight:700;color:var(--neon2);font-size:13px;position:sticky;top:0;z-index:300;}
+  #mobile-bottom-nav{display:flex;position:fixed;bottom:0;left:0;right:0;height:62px;background:var(--bg2);border-top:1px solid var(--border2);z-index:400;box-shadow:0 -2px 12px rgba(0,0,0,.25);}
+  .mnav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:none;border:none;color:var(--text2);font-size:10px;font-weight:600;cursor:pointer;padding:4px 0;}
+  .mnav-btn .mnav-icon{font-size:20px;line-height:1;}
+  .mnav-btn.active{color:var(--neon);}
+  #mobile-more-sheet{position:fixed;inset:0;z-index:9600;display:none;}
+  #mobile-more-sheet.open{display:block;}
+  .mms-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.5);}
+  .mms-panel{position:absolute;left:0;right:0;bottom:0;max-height:72vh;overflow-y:auto;background:var(--bg2);border-radius:16px 16px 0 0;padding:14px;border-top:1px solid var(--border2);}
+  .mms-handle{width:40px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 12px;}
+  .mms-title{font-weight:700;color:var(--neon2);margin-bottom:10px;font-size:14px;}
+  .mms-group-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin:12px 2px 6px;}
+  .mms-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+  .mms-item{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;background:var(--bg3);border:1px solid var(--border2);border-radius:12px;font-size:10px;color:var(--text);cursor:pointer;text-align:center;}
+  .mms-item.active{border-color:var(--neon);color:var(--neon);}
+  .mms-icon{font-size:20px;}
+  /* ---- Card-ify every data table app-wide ---- */
+  table:not(.no-mobile-card) thead{display:none;}
+  table:not(.no-mobile-card){width:100%;border-collapse:separate;}
+  table:not(.no-mobile-card),table:not(.no-mobile-card) tbody{display:block;width:100%;}
+  table:not(.no-mobile-card) tr{display:block;background:var(--bg2);border:1px solid var(--border2);border-radius:12px;margin-bottom:10px;padding:8px 10px;box-shadow:0 2px 6px rgba(0,0,0,.15);}
+  table:not(.no-mobile-card) td{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 2px;border:none!important;border-bottom:1px dashed var(--border)!important;text-align:right;font-size:12px;}
+  table:not(.no-mobile-card) td:last-child{border-bottom:none!important;flex-wrap:wrap;justify-content:flex-end;}
+  table:not(.no-mobile-card) td:empty{display:none;}
+  table:not(.no-mobile-card) td::before{content:attr(data-label);font-weight:600;color:var(--text2);font-size:10px;text-transform:uppercase;letter-spacing:.3px;margin-right:auto;text-align:left;white-space:nowrap;}
+  table:not(.no-mobile-card) td:not([data-label])::before{content:none;}
+}
 </style>
 </head>
 <body>
@@ -333,16 +375,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       <input type="text" id="globalSearchInput" placeholder="🔍 Search Party / DC / Invoice / Item..." oninput="runGlobalSearch()" onkeydown="if(event.key==='Enter')goToFullAiSearch()" style="width:220px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--radius2);padding:6px 10px;font-size:12px;">
       <div id="globalSearchResults" style="display:none;position:absolute;top:110%;left:0;width:340px;max-height:420px;overflow-y:auto;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius2);box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:500;padding:6px;"></div>
     </div>
-    <div style="position:relative;display:inline-block;">
-      <button class="btn btn-sm" id="notifBellBtn" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);position:relative;" onclick="toggleNotifPanel()">🔔<span id="notifBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:var(--neon3);color:#fff;border-radius:50%;font-size:9px;padding:1px 5px;font-weight:700;"></span></button>
-      <div id="notifPanel" style="display:none;position:absolute;top:110%;left:0;width:320px;max-height:400px;overflow-y:auto;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius2);box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:500;padding:10px;"></div>
-    </div>
-    <button class="btn btn-neon btn-sm" onclick="openModal_addDc()">➕ New DC</button>
-    <button class="btn btn-purple btn-sm" onclick="showTab('dashboard')">📊 Dashboard</button>
-    <button class="btn btn-green btn-sm" onclick="doBackup()">💾 Backup</button>
-    <button class="btn btn-yellow btn-sm" onclick="openModal('settingsModal')">⚙️ Settings</button>
-    <button class="btn btn-sm" id="modeToggleBtn" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);" onclick="toggleModeQuick()" title="Toggle Dark/Light Mode">🌙</button>
-    <button class="btn btn-sm" style="background:var(--bg3);border:1px solid var(--neon4);color:var(--neon4);" onclick="openEmpLoginModal()" title="Employee login — see only your own dispatch/attendance/commission">👤 Employee Login</button>
+    <span id="header-buttons-wrap"></span>
   </div>
   <div id="header-right">
     <div id="autosave-dot" title="Auto-save active"></div>
@@ -405,6 +438,23 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div class="tab" onclick="showTab('aisearch')" id="tab-aisearch">🤖 AI Search</div>
     <div class="tab" onclick="showTab('security')" id="tab-security">🔐 Security</div>
     <div class="tab" onclick="showTab('settings')" id="tab-settings">⚙️ Settings</div>
+  </div>
+</div>
+<!-- MOBILE APP-STYLE NAV (hidden on desktop; replaces the dropdown tab menu below 768px) -->
+<div id="mobile-current-tab-label" class="mobile-only">📋 Records</div>
+<div id="mobile-bottom-nav" class="mobile-only">
+  <button class="mnav-btn active" data-tab="records" onclick="showTab('records')"><span class="mnav-icon">📋</span><span class="mnav-label">Records</span></button>
+  <button class="mnav-btn" data-tab="purchaseorders" onclick="showTab('purchaseorders')"><span class="mnav-icon">📝</span><span class="mnav-label">P.O</span></button>
+  <button class="mnav-btn" data-tab="parties" onclick="showTab('parties')"><span class="mnav-icon">👥</span><span class="mnav-label">Parties</span></button>
+  <button class="mnav-btn" data-tab="reports" onclick="showTab('reports')"><span class="mnav-icon">📄</span><span class="mnav-label">Reports</span></button>
+  <button class="mnav-btn" id="mnav-more-btn" onclick="openMobileMoreSheet()"><span class="mnav-icon">☰</span><span class="mnav-label">More</span></button>
+</div>
+<div id="mobile-more-sheet" class="mobile-only">
+  <div class="mms-backdrop" onclick="closeMobileMoreSheet()"></div>
+  <div class="mms-panel">
+    <div class="mms-handle"></div>
+    <div class="mms-title">📂 All Sections</div>
+    <div id="mms-grid"></div>
   </div>
 </div>
 <!-- TOAST -->
@@ -952,6 +1002,12 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
         </select>
       </div>
     </div>
+  </div>
+  <!-- Header Buttons -->
+  <div class="settings-section">
+    <div class="settings-section-title">🧭 Header Buttons — choose what shows in the top header</div>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Turn any button off to remove it from the header, or back on to bring it back. Changes apply instantly.</div>
+    <div id="header-buttons-settings"></div>
   </div>
   <!-- Quick Theme Toggle (also in header) -->
   <div class="settings-section">
@@ -3422,8 +3478,43 @@ const DEFAULT_SETTINGS = {
   furtherTax:'3', defaultUom:'Pcs', openingQty:0, openingAmt:0, mode:'dark',
   pdfFullDetails:true, pdfReportOrder:'invoice', approvalWorkflowEnabled:false,
   poApprovalWorkflowEnabled:false, expApprovalWorkflowEnabled:false, chqApprovalWorkflowEnabled:false,
-  logoBase64:''
+  logoBase64:'',
+  headerButtons:{notif:true,newdc:true,dashboard:true,backup:true,po:true,settings:true,mode:true,emplogin:true}
 };
+// Definitions for every optional header button. id must match a key in settings.headerButtons.
+const HEADER_BTN_DEFS = [
+  {id:'notif',   label:'🔔 Notifications Bell', html:()=>`<div style="position:relative;display:inline-block;"><button class="btn btn-sm" id="notifBellBtn" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);position:relative;" onclick="toggleNotifPanel()">🔔<span id="notifBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:var(--neon3);color:#fff;border-radius:50%;font-size:9px;padding:1px 5px;font-weight:700;"></span></button><div id="notifPanel" style="display:none;position:absolute;top:110%;left:0;width:320px;max-height:400px;overflow-y:auto;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius2);box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:500;padding:10px;"></div></div>`},
+  {id:'newdc',   label:'➕ New DC', html:()=>`<button class="btn btn-neon btn-sm" onclick="openModal_addDc()">➕ New DC</button>`},
+  {id:'dashboard', label:'📊 Dashboard', html:()=>`<button class="btn btn-purple btn-sm" onclick="showTab('dashboard')">📊 Dashboard</button>`},
+  {id:'backup',  label:'💾 Backup', html:()=>`<button class="btn btn-green btn-sm" onclick="doBackup()">💾 Backup</button>`},
+  {id:'po',      label:'📝 Purchase Order Module', html:()=>`<button class="btn btn-sm" style="background:var(--bg3);border:1px solid var(--neon2);color:var(--neon2);" onclick="showTab('purchaseorders')">📝 Purchase Orders</button>`},
+  {id:'settings',label:'⚙️ Settings', html:()=>`<button class="btn btn-yellow btn-sm" onclick="openModal('settingsModal')">⚙️ Settings</button>`},
+  {id:'mode',    label:'🌙 Dark/Light Mode Toggle', html:()=>`<button class="btn btn-sm" id="modeToggleBtn" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);" onclick="toggleModeQuick()" title="Toggle Dark/Light Mode">${settings.mode==='light'?'☀️':'🌙'}</button>`},
+  {id:'emplogin',label:'👤 Employee Login', html:()=>`<button class="btn btn-sm" style="background:var(--bg3);border:1px solid var(--neon4);color:var(--neon4);" onclick="openEmpLoginModal()" title="Employee login — see only your own dispatch/attendance/commission">👤 Employee Login</button>`}
+];
+function renderHeaderButtons(){
+  const wrap = document.getElementById('header-buttons-wrap');
+  if(!wrap) return;
+  if(!settings.headerButtons) settings.headerButtons = {...DEFAULT_SETTINGS.headerButtons};
+  wrap.innerHTML = HEADER_BTN_DEFS.filter(b=>settings.headerButtons[b.id]!==false).map(b=>b.html()).join('');
+}
+function renderHeaderButtonsSettings(){
+  const el = document.getElementById('header-buttons-settings');
+  if(!el) return;
+  if(!settings.headerButtons) settings.headerButtons = {...DEFAULT_SETTINGS.headerButtons};
+  el.innerHTML = HEADER_BTN_DEFS.map(b=>`
+    <label class="toggle-wrap" style="margin-bottom:6px;cursor:pointer;">
+      <label class="toggle"><input type="checkbox" onchange="toggleHeaderButton('${b.id}',this.checked)" ${settings.headerButtons[b.id]!==false?'checked':''}><span class="toggle-slider"></span></label>
+      <span style="font-size:12px;">${b.label}</span>
+    </label>`).join('');
+}
+function toggleHeaderButton(id,checked){
+  if(!settings.headerButtons) settings.headerButtons = {...DEFAULT_SETTINGS.headerButtons};
+  settings.headerButtons[id] = checked;
+  safeSetItem('sau_settings', JSON.stringify(settings));
+  renderHeaderButtons();
+  toast('Header updated','success');
+}
 
 function loadSettings(){
   const s = localStorage.getItem('sau_settings');
@@ -3517,9 +3608,11 @@ function applySettings(){
   if(abl) abl.textContent = settings.autoBackup==='on' ? 'On':'Off';
   const sm = document.getElementById('set-mode');
   if(sm) sm.value = settings.mode||'dark';
+  renderHeaderButtons();
   const btn=document.getElementById('modeToggleBtn');
   if(btn) btn.textContent = (settings.mode==='light')?'🌙':'☀️';
   applyTheme();
+  renderHeaderButtonsSettings();
 }
 function applyTheme(){
   const mode = settings.mode||'dark';
@@ -5197,10 +5290,109 @@ function showTab(id){
   tab.classList.add('active');
   const label = document.getElementById('current-tab-label');
   if(label) label.textContent = tab.textContent;
+  const mLabel = document.getElementById('mobile-current-tab-label');
+  if(mLabel) mLabel.textContent = tab.textContent;
+  updateMobileNavActive(id);
   closeTabMenu();
   renderTabContent(id);
   setTimeout(hideMfsQuickLoader, 260);
 }
+
+// ==================== MOBILE APP-STYLE NAVIGATION ====================
+// Bottom nav shows the 4 primary sections chosen for quick access; every other
+// tab lives in the "More" sheet, grouped the same way as the desktop dropdown menu.
+const MOBILE_PRIMARY_TABS = ['records','purchaseorders','parties','reports'];
+const MOBILE_MORE_GROUPS = [
+  {label:'Core', tabs:[
+    {id:'dashboard',label:'Dashboard',icon:'📊'},{id:'analytics',label:'Analytics',icon:'📊'}
+  ]},
+  {label:'Sales & Documents', tabs:[
+    {id:'ledger',label:'Ledger',icon:'📒'},{id:'fbr',label:'FBR/Tax',icon:'🧾'},
+    {id:'quotation',label:'Quotation',icon:'💬'},{id:'descriptions',label:'Descriptions',icon:'📄'},
+    {id:'digitalinvoices',label:'D.Invoices',icon:'📎'},{id:'docmanager',label:'Documents',icon:'📁'}
+  ]},
+  {label:'Parties & Communication', tabs:[
+    {id:'partylookup',label:'Party Lookup',icon:'📨'},{id:'crm',label:'CRM',icon:'🤝'},
+    {id:'sendcenter',label:'Send Center',icon:'📤'},{id:'dispatch',label:'Dispatch',icon:'🚚'}
+  ]},
+  {label:'Operations', tabs:[
+    {id:'employees',label:'Employees',icon:'👔'},{id:'stock',label:'Stock',icon:'📦'},
+    {id:'warehouses',label:'Warehouses',icon:'🏭'},{id:'hscodes',label:'HS Codes',icon:'🏷️'}
+  ]},
+  {label:'Finance', tabs:[
+    {id:'cheques',label:'Cheques',icon:'🏦'},{id:'salesreturns',label:'Sales Returns',icon:'🔄'},
+    {id:'bank',label:'Bank',icon:'🏛️'},{id:'expenses',label:'Expenses',icon:'💸'},
+    {id:'pantry',label:'Pantry',icon:'🍵'},{id:'receipts',label:'Receipts',icon:'🧾'}
+  ]},
+  {label:'System', tabs:[
+    {id:'tools',label:'Tools',icon:'🔧'},{id:'auditlog',label:'Audit Log',icon:'📜'},
+    {id:'aisearch',label:'AI Search',icon:'🤖'},{id:'security',label:'Security',icon:'🔐'},
+    {id:'settings',label:'Settings',icon:'⚙️'}
+  ]}
+];
+function renderMobileMoreSheetGrid(activeId){
+  const grid = document.getElementById('mms-grid');
+  if(!grid) return;
+  grid.innerHTML = MOBILE_MORE_GROUPS.map(g=>`
+    <div class="mms-group-label">${g.label}</div>
+    <div class="mms-grid">${g.tabs.map(t=>`<div class="mms-item${t.id===activeId?' active':''}" onclick="showTab('${t.id}');closeMobileMoreSheet();"><div class="mms-icon">${t.icon}</div><div class="mms-label">${t.label}</div></div>`).join('')}</div>
+  `).join('');
+}
+function openMobileMoreSheet(){
+  const currentId = (document.querySelector('.tab-panel.active')||{}).id ? document.querySelector('.tab-panel.active').id.replace('panel-','') : '';
+  renderMobileMoreSheetGrid(currentId);
+  const el = document.getElementById('mobile-more-sheet');
+  if(el) el.classList.add('open');
+}
+function closeMobileMoreSheet(){
+  const el = document.getElementById('mobile-more-sheet');
+  if(el) el.classList.remove('open');
+}
+function updateMobileNavActive(id){
+  document.querySelectorAll('.mnav-btn[data-tab]').forEach(b=>b.classList.toggle('active', b.dataset.tab===id));
+  const moreBtn = document.getElementById('mnav-more-btn');
+  if(moreBtn) moreBtn.classList.toggle('active', !MOBILE_PRIMARY_TABS.includes(id));
+}
+
+// ==================== MOBILE TABLE-TO-CARD AUTO-LABELLING ====================
+// Rather than rewriting every render*() function's table markup by hand, this
+// reads each table's own <thead> once and stamps a data-label on every <td> in
+// its body — the CSS above then uses that label to lay the row out as a card.
+// Runs only when the viewport is actually mobile-width, and is re-run (debounced)
+// whenever the DOM changes, so newly rendered tabs/modals are covered automatically.
+function isMobileViewport(){ return window.matchMedia('(max-width:768px)').matches; }
+function injectMobileTableLabels(){
+  if(!isMobileViewport()) return;
+  document.querySelectorAll('table:not(.no-mobile-card)').forEach(tbl=>{
+    const headerCells = tbl.querySelectorAll('thead th');
+    if(!headerCells.length) return;
+    const labels = Array.from(headerCells).map(th=>th.textContent.trim());
+    tbl.querySelectorAll('tbody tr').forEach(tr=>{
+      Array.from(tr.children).forEach((td,i)=>{
+        if(labels[i] && td.tagName==='TD') td.setAttribute('data-label', labels[i]);
+      });
+    });
+  });
+}
+let _mobileLabelTimer=null;
+function scheduleMobileLabelInjection(){
+  if(_mobileLabelTimer) clearTimeout(_mobileLabelTimer);
+  _mobileLabelTimer = setTimeout(injectMobileTableLabels, 150);
+}
+(function initMobileNavSystem(){
+  const apply = ()=>{
+    document.body.classList.toggle('mobile-view', isMobileViewport());
+    scheduleMobileLabelInjection();
+  };
+  const start = ()=>{
+    apply();
+    const mo = new MutationObserver(()=>scheduleMobileLabelInjection());
+    mo.observe(document.body, {childList:true, subtree:true});
+  };
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+  window.addEventListener('resize', apply);
+})();
 function toggleTabMenu(e){
   if(e) e.stopPropagation();
   const menu = document.getElementById('main-tabs');
@@ -6727,16 +6919,41 @@ function saveLedgerEntry(){
   const entry = {id:'L'+uid(),partyName:party,date,type,refNo:ref,invNo:inv,dcNo:'',desc:narration,amount,deduction,narration,paymode};
   ledgerData.push(entry);
   logAudit('create','Ledger',`${type} entry for ${party} — amount ${amount}`, undefined, entry);
+  // AUTO-SYNC: any "Payment" entry made directly in the Ledger should also show up in
+  // 🏦 Cheque / Payment Manager (previously only DC-button payments and manually-added
+  // cheques appeared there), and it auto-links to whichever invoice(s) were typed in
+  // the Invoice Ref field so the payment is connected to that bill everywhere.
+  if(type==='payment'){
+    const invoicesArr = inv ? inv.split(',').map(s=>s.trim()).filter(Boolean) : [];
+    const chequeRef = ref || ('LED-'+entry.id);
+    let ch = cheques.find(c=>c.chequeNo===chequeRef && c.party===party);
+    if(!ch){
+      ch = {chequeNo:chequeRef, date, amount, deduction, party, invoices:invoicesArr, notes:narration, paymode, source:'ledger'};
+      cheques.push(ch);
+      if(typeof initApprovalForEntity==='function') initApprovalForEntity('cheque', ch);
+    } else {
+      ch.date=date; ch.amount=amount; ch.deduction=deduction; ch.notes=narration||ch.notes; ch.paymode=paymode||ch.paymode;
+      invoicesArr.forEach(no=>{ if(!ch.invoices.includes(no)) ch.invoices.push(no); });
+    }
+  }
   saveData(); closeModal('addLedgerModal'); renderLedger();
-  toast('Ledger entry added','success');
+  toast('Ledger entry added — also linked in Cheque/Payment Manager','success');
   renderCheques();
 }
 function deleteLedgerEntry(id){
   if(!confirm('Delete this ledger entry?')) return;
   const entry = ledgerData.find(e=>e.id===id);
-  if(entry){ logAudit('delete','Ledger',`${entry.type} entry for ${entry.partyName} — amount ${entry.amount} deleted`, entry, undefined); dzCapture('ledger','📒 Ledger',`${entry.type} — ${entry.partyName} (${entry.amount})`, entry); }
+  if(entry){
+    logAudit('delete','Ledger',`${entry.type} entry for ${entry.partyName} — amount ${entry.amount} deleted`, entry, undefined);
+    dzCapture('ledger','📒 Ledger',`${entry.type} — ${entry.partyName} (${entry.amount})`, entry);
+    // If this payment created a matching auto-synced entry in the Cheque/Payment Manager, remove it too
+    if(entry.type==='payment'){
+      const chequeRef = entry.refNo || ('LED-'+entry.id);
+      cheques = cheques.filter(c=>!(c.chequeNo===chequeRef && c.party===entry.partyName && c.source==='ledger'));
+    }
+  }
   ledgerData=ledgerData.filter(e=>e.id!==id);
-  saveData(); renderLedger();
+  saveData(); renderLedger(); renderCheques();
   toast('Entry deleted','warning');
 }
 function exportLedgerPDF(){
@@ -10297,15 +10514,23 @@ function renderSecuritySettings(){
   </div>`;
 
   // Render admin list
-  document.getElementById('admin-users-list').innerHTML = sd.adminUsers.length?sd.adminUsers.map((u,i)=>`
+  document.getElementById('admin-users-list').innerHTML = sd.adminUsers.length?sd.adminUsers.map((u,i)=>{
+    // The owner admin (DZ_OWNER_USERNAME) can never be edited, deactivated, or deleted by
+    // any other admin — only the owner themselves can manage their own account.
+    const isOwnerRow = u.username===DZ_OWNER_USERNAME;
+    const lockedForCurrentUser = isOwnerRow && !isDzOwner();
+    return `
     <div class="integrity-item integrity-ok" style="margin-bottom:4px;">
       <div style="flex:1;"><strong>${u.username}</strong> <span class="badge badge-invoiced">Admin</span>
+        ${isOwnerRow?'<span class="badge badge-ready">Owner</span>':''}
         ${u.active?'':'<span class="badge badge-cancelled">Inactive</span>'}
       </div>
+      ${lockedForCurrentUser?'<span style="font-size:10px;color:var(--text3);padding:0 6px;">🔒 Protected</span>':`
       <button class="btn btn-yellow btn-xs" onclick="editUser('admin',${i})">✏️</button>
       <button class="btn btn-${u.active?'yellow':'green'} btn-xs" onclick="toggleUserActive('admin',${i})">${u.active?'🚫 Deactivate':'✅ Activate'}</button>
-      <button class="btn btn-red btn-xs" onclick="deleteUser('admin',${i})">🗑️</button>
-    </div>`).join(''):'<div style="color:var(--text3);font-size:12px;">No admin users yet</div>';
+      <button class="btn btn-red btn-xs" onclick="deleteUser('admin',${i})">🗑️</button>`}
+    </div>`;
+  }).join(''):'<div style="color:var(--text3);font-size:12px;">No admin users yet</div>';
 
   // Render guest list
   document.getElementById('guest-users-list').innerHTML = sd.guestUsers.length?sd.guestUsers.map((u,i)=>`
@@ -10333,11 +10558,12 @@ function toggleSecurity(){
     saveSecurity(); renderSecuritySettings();
     toast('Security enabled! Login required on next open.','success');
   } else {
-    // Must be admin to disable
-    const pwd=prompt('Enter your Admin password to disable security:');
+    // Only the OWNER admin (DZ_OWNER_USERNAME) can disable app-wide security —
+    // a second admin's password is not accepted here, even if they know it.
+    const pwd=prompt('Enter the OWNER Admin password to disable security:');
     if(pwd===null) return;
-    const admin=securityData.adminUsers.find(u=>u.password===pwd&&u.active);
-    if(!admin){toast('Wrong password!','error');return;}
+    const admin=securityData.adminUsers.find(u=>u.username===DZ_OWNER_USERNAME&&u.password===pwd&&u.active);
+    if(!admin){toast('❌ Wrong password, or you are not the owner admin','error');return;}
     securityData.enabled=false; securityData.currentUser=null;
     saveSecurity(); renderSecuritySettings();
     toast('Security disabled','warning');
@@ -10386,6 +10612,7 @@ function saveUserModal(){
   if(role==='guest'){
     permissions=Object.keys(PERM_LABELS).filter(k=>document.querySelector(`[name="user-perm-${k}"]`)?.checked);
   }
+  if(isProtectedOwnerTarget(role,editIdx)){ toast('❌ Only the owner admin can change this account (username/password/settings)','error'); closeModal('userManageModal'); return; }
   const userObj={username,password,active:true,permissions,role,approvalRole:document.getElementById('user-modal-approval-role').value};
   if(editIdx>=0){
     if(role==='admin') securityData.adminUsers[editIdx]=userObj;
@@ -10402,14 +10629,27 @@ function saveUserModal(){
   }
   saveSecurity(); closeModal('userManageModal'); renderSecuritySettings();
 }
-function editUser(role,idx){openAddUserModal(role,idx);}
+// The owner admin account (DZ_OWNER_USERNAME) is protected: only the owner
+// themselves — logged in as that account — may edit, deactivate, or delete it.
+// A second admin can manage their own account and any guest users, but never the owner's.
+function isProtectedOwnerTarget(role,idx){
+  if(role!=='admin') return false;
+  const target = securityData.adminUsers[idx];
+  return !!target && target.username===DZ_OWNER_USERNAME && !isDzOwner();
+}
+function editUser(role,idx){
+  if(isProtectedOwnerTarget(role,idx)){ toast('❌ Only the owner admin can edit this account','error'); return; }
+  openAddUserModal(role,idx);
+}
 function toggleUserActive(role,idx){
+  if(isProtectedOwnerTarget(role,idx)){ toast('❌ Only the owner admin can deactivate this account','error'); return; }
   const arr=role==='admin'?securityData.adminUsers:securityData.guestUsers;
   arr[idx].active=!arr[idx].active;
   saveSecurity(); renderSecuritySettings();
   toast('User status updated','info');
 }
 function deleteUser(role,idx){
+  if(isProtectedOwnerTarget(role,idx)){ toast('❌ Only the owner admin can delete this account','error'); return; }
   if(!confirm('Delete this user?')) return;
   if(role==='admin') securityData.adminUsers.splice(idx,1);
   else securityData.guestUsers.splice(idx,1);
@@ -12644,6 +12884,13 @@ function getPOBuyerContact(po){
   const contacts = (typeof partyContacts!=='undefined' ? partyContacts[po.supplier] : null) || [];
   return contacts.find(c=>c.name && c.name.trim().toLowerCase()===po.buyer.trim().toLowerCase()) || null;
 }
+// All contact persons saved against this PO's party in FBR Party Master (👥 Parties tab),
+// each already carrying their role/designation (Purchase Manager, Accounts Manager, etc.)
+// — used so the alert always shows every saved person for that party, not only one that
+// happens to match the PO's typed Buyer name exactly.
+function getPOAllContacts(po){
+  return (typeof partyContacts!=='undefined' ? (partyContacts[po.supplier]||[]) : []);
+}
 // Finds every DC/Invoice raised against a PO whose Payment Terms have elapsed and is still unpaid.
 function getPOPaymentAlerts(){
   const today = new Date();
@@ -12659,7 +12906,7 @@ function getPOPaymentAlerts(){
       const days = Math.floor((today - new Date(refDate))/(1000*60*60*24));
       const overdueDays = days - po.terms;
       if(overdueDays > 0){
-        alerts.push({po, dc:r, overdueDays, amount:getDCTotal(r), contact:getPOBuyerContact(po)});
+        alerts.push({po, dc:r, overdueDays, amount:getDCTotal(r), contact:getPOBuyerContact(po), contacts:getPOAllContacts(po)});
       }
     });
   });
@@ -12674,29 +12921,40 @@ function renderPOPaymentAlerts(){
   if(!alerts.length){ el.innerHTML = ''; return; }
   el.innerHTML = `<div class="accent-box" style="border-color:var(--danger);margin-bottom:10px;">
     <div style="font-weight:700;color:var(--danger);margin-bottom:6px;">🔔 Payment Alerts — PO Terms Elapsed (${alerts.length})</div>
-    <div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>PO No</th><th>Party</th><th>Person</th><th>Invoice</th><th>Amount</th><th>Overdue</th><th></th></tr></thead><tbody>
-    ${alerts.map(a=>`<tr>
-      <td>${a.po.poNo}</td><td>${a.po.supplier}</td><td>${a.po.buyer||'-'}${a.contact?'':' <span style="color:var(--warning);font-size:10px;">(no matching contact saved)</span>'}</td>
+    <div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>PO No</th><th>Party</th><th>Person(s)</th><th>Invoice</th><th>Amount</th><th>Overdue</th><th></th></tr></thead><tbody>
+    ${alerts.map(a=>{
+      const poIdx = purchaseOrders.indexOf(a.po);
+      const contacts = a.contacts && a.contacts.length ? a.contacts : [];
+      const personCell = contacts.length ? contacts.map(c=>
+        `<div style="margin-bottom:2px;">${c.name}${c.role?` <span style="color:var(--text3);font-size:10px;">(${c.role})</span>`:''}</div>`
+      ).join('') : `${a.po.buyer||'-'} <span style="color:var(--warning);font-size:10px;">(no contact saved for this party in FBR Party Master)</span>`;
+      const sendBtns = contacts.length ? contacts.map((c,ci)=>`
+        ${c.mobile?`<button class="btn btn-xs btn-green" style="margin-bottom:2px;" onclick="sendPOPaymentAlert(${poIdx}, '${a.dc.invNo}', 'wa', ${ci})">💬 ${c.name}</button>`:''}
+        ${c.email?`<button class="btn btn-xs btn-neon" style="margin-bottom:2px;" onclick="sendPOPaymentAlert(${poIdx}, '${a.dc.invNo}', 'email', ${ci})">✉️ ${c.name}</button>`:''}
+      `).join('<br>') : '';
+      return `<tr>
+      <td>${a.po.poNo}</td><td>${a.po.supplier}</td><td>${personCell}</td>
       <td>${a.dc.invNo}</td><td>${cur} ${fmt(a.amount)}</td>
       <td style="color:var(--danger);font-weight:700;">${a.overdueDays}d</td>
-      <td>
-        ${a.contact && a.contact.mobile ? `<button class="btn btn-xs btn-green" onclick="sendPOPaymentAlert(${purchaseOrders.indexOf(a.po)}, '${a.dc.invNo}', 'wa')">💬 WhatsApp</button>` : ''}
-        ${a.contact && a.contact.email ? `<button class="btn btn-xs btn-neon" onclick="sendPOPaymentAlert(${purchaseOrders.indexOf(a.po)}, '${a.dc.invNo}', 'email')">✉️ Email</button>` : ''}
-      </td>
-    </tr>`).join('')}
+      <td>${sendBtns}</td>
+    </tr>`;
+    }).join('')}
     </tbody></table></div>
     <div style="font-size:11px;color:var(--text3);margin-top:6px;">This app runs entirely on your device/browser — it can flag overdue payments the moment you open it and prepare the message, but it can't send WhatsApp/Email silently in the background without you tapping Send (no server is running to do that for you).</div>
   </div>`;
 }
-function sendPOPaymentAlert(poIdx, invNo, channel){
+function sendPOPaymentAlert(poIdx, invNo, channel, contactIdx){
   const po = purchaseOrders[poIdx];
   if(!po) return;
-  const contact = getPOBuyerContact(po);
-  if(!contact){ toast('No saved contact matches this PO\'s Person Name — add them under Party Contacts first','warning'); return; }
+  // If a specific contact was picked from the FBR Party Master list, use them;
+  // otherwise fall back to the old exact buyer-name match.
+  const partyContactList = getPOAllContacts(po);
+  const contact = (contactIdx!==undefined && partyContactList[contactIdx]) ? partyContactList[contactIdx] : getPOBuyerContact(po);
+  if(!contact){ toast('No saved contact for this party — add one under 👥 FBR Party Master first','warning'); return; }
   const cur = settings.currency||'PKR';
   const rec = db.find(r=>r.invNo===invNo && normPoNo(r.poNo)===normPoNo(po.poNo));
   const amount = rec ? getDCTotal(rec) : 0;
-  const msg = `Dear ${po.buyer||contact.name}, this is a reminder that payment for Invoice ${invNo} (against PO ${po.poNo}, ${cur} ${fmt(amount)}) is now due as per the agreed ${po.terms}-day payment terms. Kindly arrange payment at your earliest. — ${settings.companyName||'SAU Corporation'}`;
+  const msg = `Dear ${contact.name||po.buyer}, this is a reminder that payment for Invoice ${invNo} (against PO ${po.poNo}, ${cur} ${fmt(amount)}) is now due as per the agreed ${po.terms}-day payment terms. Kindly arrange payment at your earliest. — ${settings.companyName||'SAU Corporation'}`;
   if(channel==='wa' && contact.mobile){
     let num = contact.mobile.replace(/\D/g,'');
     if(num.startsWith('0')) num = '92'+num.slice(1);
