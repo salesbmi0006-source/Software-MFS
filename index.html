@@ -1911,7 +1911,6 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       </div>
     </div>
     <div id="po-status-summary" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
-    <div id="po-payment-alerts"></div>
     <div class="search-bar" style="display:flex;gap:8px;flex-wrap:wrap;">
       <input type="text" id="po-search" placeholder="Search PO no, party, buyer, item, qty, amount..." oninput="renderPOTab()" style="flex:1;min-width:200px;">
       <select id="po-status-filter" onchange="renderPOTab()">
@@ -1930,6 +1929,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
         <tbody id="poTableBody"></tbody>
       </table>
     </div>
+    <div id="po-payment-alerts" style="margin-top:10px;"></div>
   </div>
 </div>
 
@@ -1966,7 +1966,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div style="font-weight:700;color:var(--neon2);margin-bottom:8px;">Items</div>
     <div class="form-row">
       <div class="form-group" style="flex:2;"><label>Item</label><input type="text" id="po-item-name" list="stock-item-list" placeholder="Item name"></div>
-      <div class="form-group"><label>HS Code</label><input type="text" id="po-item-hscode" placeholder="HS Code"></div>
+      <div class="form-group"><label>HS Code</label><input type="text" id="po-item-hscode" placeholder="HS Code" oninput="formatHsCodeInput(this)"></div>
       <div class="form-group"><label>Qty</label><input type="number" id="po-item-qty" placeholder="0"></div>
       <div class="form-group"><label>Rate</label><input type="number" step="0.01" id="po-item-rate" placeholder="0.00"></div>
       <div class="form-group"><label>Tax %</label>
@@ -2506,7 +2506,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       </div>
       <div class="form-row">
         <div class="form-group"><label>GST/Tax %</label><input type="text" id="ocr-gst"></div>
-        <div class="form-group"><label>HS Code</label><input type="text" id="ocr-hscode"></div>
+        <div class="form-group"><label>HS Code</label><input type="text" id="ocr-hscode" oninput="formatHsCodeInput(this)"></div>
       </div>
       <div style="font-weight:700;color:var(--neon2);margin:10px 0 6px;">Raw OCR Text (for reference)</div>
       <textarea id="ocr-raw-text" rows="6" style="font-size:11px;" readonly></textarea>
@@ -2812,7 +2812,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
   <div class="modal-header"><h3 id="descModalTitle">➕ Add Item Description</h3><button class="close-btn" onclick="closeModal('addDescModal')">✕</button></div>
   <div class="modal-body">
     <div class="form-group"><label>Description *</label><input type="text" id="desc-name" placeholder="Item description"></div>
-    <div class="form-group"><label>HS Code</label><input type="text" id="desc-hscode" placeholder="e.g. 8539.5220"></div>
+    <div class="form-group"><label>HS Code</label><input type="text" id="desc-hscode" placeholder="e.g. 8539.5220" oninput="formatHsCodeInput(this)"></div>
     <div class="form-group"><label>UOM</label><input type="text" id="desc-uom" placeholder="e.g. Pcs"></div>
     <button class="btn btn-green" onclick="saveDescription()">💾 Save</button>
     <button class="btn btn-neon" onclick="closeModal('addDescModal')">Cancel</button>
@@ -5616,7 +5616,7 @@ function addItemRow(it=null){
   tr.dataset.rowid = rowId;
   tr.innerHTML = `
     <td><input type="text" value="${desc}" placeholder="Description" list="desc-master-list" oninput="updateGrandTotal()" style="min-width:180px;"></td>
-    <td><input type="text" value="${hscode}" placeholder="HS Code" style="width:110px;"></td>
+    <td><input type="text" value="${hscode}" placeholder="HS Code" oninput="formatHsCodeInput(this)" style="width:110px;"></td>
     <td><select onchange="updateGrandTotal()" style="width:70px;">
       ${['Pcs','Nos','Sets','Kg','Mtr','Box','Rolls','Lot','Units','Ltr','Bags','Sheets'].map(u=>`<option ${u===uom?'selected':''}>${u}</option>`).join('')}
     </select></td>
@@ -6461,7 +6461,7 @@ function showMultiInvDCs(){
       <td>${fmtDate(r.date)}</td>
       <td style="font-size:11px;">${r.partyName}</td>
       <td>${(r.items||[]).length} items ${hasItemInvNo?'<span style="color:var(--neon4);font-size:10px;">✓ inv set</span>':'<span style="color:var(--neon5);font-size:10px;">⚠ not set</span>'}</td>
-      <td><button class="btn btn-yellow btn-xs" onclick="editRecord(${db.indexOf(r)})">✏️ Edit & Set Inv</button></td>
+      <td><button class="btn btn-yellow btn-xs" onclick="editDC(${db.indexOf(r)})">✏️ Edit & Set Inv</button></td>
     </tr>`;
   }).join('')}
   </tbody></table></div>
@@ -10037,6 +10037,18 @@ function printDCChallan(){
   setTimeout(()=>win.print(),300);
 }
 
+// Auto-formats an HS code input as the user types: first 4 digits, then a
+// dot is inserted automatically, then the remaining digits — e.g. typing
+// "94051190" becomes "9405.1190". Prevents the dot being missed/mistyped,
+// which was causing HS codes to not match up correctly.
+function formatHsCodeInput(el){
+  const start = el.selectionStart;
+  const before = el.value.length;
+  let digits = el.value.replace(/[^0-9]/g,'').slice(0,8);
+  el.value = digits.length > 4 ? digits.slice(0,4)+'.'+digits.slice(4) : digits;
+  const diff = el.value.length - before;
+  try{ el.setSelectionRange(start+diff, start+diff); }catch(e){}
+}
 // ==================== HS CODE TAX RATE BREAKDOWN ====================
 function generateHSReportWithTaxBreakdown(){
   const month = document.getElementById('hsReportMonth').value;
@@ -10048,13 +10060,19 @@ function generateHSReportWithTaxBreakdown(){
   recs.forEach(r=>{
     (r.items||[]).forEach(it=>{
       const hs=it.hscode||'MISSING';
-      if(!hsMap[hs]) hsMap[hs]={qty:0,basic:0,tax:0,total:0,dcs:[],taxRate:it.tax||0};
+      // Group by HS code + tax rate (not HS code alone). Some HS codes (e.g.
+      // 9405.1190) get used on DCs at BOTH 18% and 25% tax — keeping them in
+      // one merged row hid the split and showed a wrong single tax rate. This
+      // key gives each HS-code/tax-rate combination its own row automatically;
+      // HS codes that only ever appear at one tax rate are unaffected.
+      const hsKey = hs+'|'+String(parseFloat(it.tax||0));
+      if(!hsMap[hsKey]) hsMap[hsKey]={hs,qty:0,basic:0,tax:0,total:0,dcs:[],taxRate:it.tax||0};
       const b=parseFloat(it.qty||0)*parseFloat(it.rate||0);
       const t=b*parseFloat(it.tax||0)/100;
-      hsMap[hs].qty+=parseFloat(it.qty||0);
-      hsMap[hs].basic+=b; hsMap[hs].tax+=t; hsMap[hs].total+=b+t;
+      hsMap[hsKey].qty+=parseFloat(it.qty||0);
+      hsMap[hsKey].basic+=b; hsMap[hsKey].tax+=t; hsMap[hsKey].total+=b+t;
       gQty+=parseFloat(it.qty||0); gBasic+=b; gTax+=t; gTotal+=b+t;
-      if(!hsMap[hs].dcs.includes(r.dcNo+' ('+r.invNo+')')) hsMap[hs].dcs.push(r.dcNo+' ('+r.invNo+')');
+      if(!hsMap[hsKey].dcs.includes(r.dcNo+' ('+r.invNo+')')) hsMap[hsKey].dcs.push(r.dcNo+' ('+r.invNo+')');
       // Tax bucket
       const taxKey = String(parseFloat(it.tax||0));
       if(!taxBuckets[taxKey]) taxBuckets[taxKey]={qty:0,basic:0,tax:0,total:0,items:[]};
@@ -10066,8 +10084,8 @@ function generateHSReportWithTaxBreakdown(){
   const cur=settings.currency||'PKR';
   const sortOrder=(document.getElementById('hsReportSort')||{}).value||'hs_asc';
   let entries = Object.entries(hsMap);
-  if(sortOrder==='hs_asc') entries.sort((a,b)=>a[0].localeCompare(b[0]));
-  else if(sortOrder==='hs_desc') entries.sort((a,b)=>b[0].localeCompare(a[0]));
+  if(sortOrder==='hs_asc') entries.sort((a,b)=>a[1].hs.localeCompare(b[1].hs)||(a[1].taxRate-b[1].taxRate));
+  else if(sortOrder==='hs_desc') entries.sort((a,b)=>b[1].hs.localeCompare(a[1].hs)||(a[1].taxRate-b[1].taxRate));
   else if(sortOrder==='qty_desc') entries.sort((a,b)=>b[1].qty-a[1].qty);
   else if(sortOrder==='qty_asc') entries.sort((a,b)=>a[1].qty-b[1].qty);
   else if(sortOrder==='amt_desc') entries.sort((a,b)=>b[1].total-a[1].total);
@@ -10093,8 +10111,8 @@ function generateHSReportWithTaxBreakdown(){
     <div class="tbl-wrap"><table><thead><tr>
       <th>Sr#</th><th>HS Code</th><th>Tax%</th><th>Qty</th><th>Basic Amount</th><th>Tax Amount</th><th>Total (Incl Tax)</th><th>DCs (Invoice)</th>
     </tr></thead><tbody>
-    ${entries.map(([hs,d],i)=>`
-      <tr><td style="color:var(--text3);">${i+1}</td><td><strong>${hs}</strong></td>
+    ${entries.map(([hsKey,d],i)=>`
+      <tr><td style="color:var(--text3);">${i+1}</td><td><strong>${d.hs}</strong></td>
       <td style="text-align:center;">${d.taxRate||''}%</td>
       <td>${fmt(d.qty)}</td>
       <td style="text-align:right;">${cur} ${fmt(d.basic)}</td>
