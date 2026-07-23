@@ -12240,8 +12240,13 @@ function renderAttendanceDashboard(){
   const date = dateEl ? dateEl.value : '';
   const wrap = document.getElementById('att-dashboard-list');
   if(!wrap) return;
-  if(!employees.length){ wrap.innerHTML = '<div style="color:var(--text3);padding:10px;">No employees added yet — add one below first.</div>'; return; }
-  wrap.innerHTML = employees.map((emp,idx)=>{
+  // Terminated/Resigned employees have left, so they no longer need daily
+  // attendance tracking — exclude them from the Quick Mark list.
+  const activeIdxList = employees
+    .map((emp,idx)=>({emp,idx}))
+    .filter(({emp})=>emp.status!=='terminated' && emp.status!=='resigned');
+  if(!activeIdxList.length){ wrap.innerHTML = '<div style="color:var(--text3);padding:10px;">No active employees to mark — add one below first.</div>'; return; }
+  wrap.innerHTML = activeIdxList.map(({emp,idx})=>{
     const entry = (emp.attendance||[]).find(a=>a.date===date);
     const cur = entry ? entry.type : '';
     return `<div class="accent-box" style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
@@ -12261,6 +12266,14 @@ function quickMarkAttendance(idx, type){
   if(!emp) return;
   if(!emp.attendance) emp.attendance=[];
   const existingIdx = emp.attendance.findIndex(a=>a.date===date);
+  if(existingIdx>=0 && emp.attendance[existingIdx].type===type){
+    // Clicking the already-active status again clears it for that day.
+    emp.attendance.splice(existingIdx,1);
+    saveEmployees();
+    renderAttendanceDashboard();
+    toast(emp.name+' — '+type+' removed for '+date,'success');
+    return;
+  }
   if(existingIdx>=0) emp.attendance[existingIdx].type = type; else emp.attendance.push({date, type});
   saveEmployees();
   renderAttendanceDashboard();
@@ -12270,13 +12283,14 @@ function markAllPresent(){
   const date = document.getElementById('att-dash-date').value;
   if(!date){ toast('Select a date first','warning'); return; }
   employees.forEach(emp=>{
+    if(emp.status==='terminated' || emp.status==='resigned') return;
     if(!emp.attendance) emp.attendance=[];
     const existingIdx = emp.attendance.findIndex(a=>a.date===date);
     if(existingIdx>=0) emp.attendance[existingIdx].type='present'; else emp.attendance.push({date,type:'present'});
   });
   saveEmployees();
   renderAttendanceDashboard();
-  toast('All employees marked present for '+date,'success');
+  toast('All active employees marked present for '+date,'success');
 }
 
 // ==================== MONTHLY SALARY SLIPS ====================
@@ -12303,7 +12317,7 @@ function computeEmployeeSalaryForMonth(emp, month){
   const halfday = records.filter(a=>a.type==='halfday').length;
   const late = records.filter(a=>a.type==='late').length;
   const baseSalary = parseFloat(emp.salary)||0;
-  const perDayRate = daysInMonth ? baseSalary/daysInMonth : 0;
+  const perDayRate = baseSalary/30; // Salary is always calculated on a fixed 30-day basis, even for 31-day months
   const deduction = (absent * perDayRate) + (halfday * perDayRate * 0.5);
   const moneyThisMonth = (emp.money||[]).filter(mo=>mo.date && mo.date.slice(0,7)===month);
   const bonus = moneyThisMonth.filter(mo=>mo.type==='bonus').reduce((s,mo)=>s+(parseFloat(mo.amount)||0),0);
