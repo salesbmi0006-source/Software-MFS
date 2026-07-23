@@ -1266,20 +1266,79 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     </div>
   </div>
 
-  <!-- New Quotation + Rate Lists -->
-  <div class="card">
+  <!-- New Quotation Builder -->
+  <div class="card" id="qb-card">
     <div class="card-header">
-      <div class="card-title">📋 Rate Lists — Search & Add to Basket</div>
+      <div class="card-title">🧾 New Quotation</div>
       <div class="flex-gap">
-        <button class="btn btn-yellow btn-sm" onclick="document.getElementById('rl-import-file').click()">📂 Import PDF Rate List</button>
-        <input type="file" id="rl-import-file" accept=".pdf" style="display:none;" onchange="importRateListPDF(event)">
-        <button class="btn btn-green btn-sm" onclick="openAddRateItemModal()">➕ Add Custom Item</button>
-        <button class="btn btn-purple btn-sm" onclick="openBasketModal()">🛒 Basket / Quotation</button>
         <button class="btn btn-neon btn-sm" onclick="openQuotSettingsModal()">⚙️ Settings</button>
       </div>
     </div>
-    <div id="rl-basket-summary" class="accent-box mb-8"></div>
-    <div id="rate-lists-hub" class="grid3" style="margin-bottom:12px;"></div>
+    <div class="flex-gap" style="margin-bottom:10px;flex-wrap:wrap;" id="qb-template-picker"></div>
+    <div id="qb-custom-fields" style="display:none;margin-bottom:10px;"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Party / Customer Name</label><input type="text" id="qb-party" list="party-list" placeholder="Party name"></div>
+      <div class="form-group"><label>Project</label><input type="text" id="qb-project" placeholder="e.g. Cable+Lights"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Our Ref</label><input type="text" id="qb-ourref" placeholder="Auto e.g. SAU/LHR/Q/1"></div>
+      <div class="form-group"><label>Date</label><input type="date" id="qb-date"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Contact Person</label><input type="text" id="qb-contactperson" placeholder="Contact person"></div>
+      <div class="form-group"><label>Tax</label>
+        <select id="qb-taxmode" onchange="onTaxModeChange()">
+          <option value="18" selected>GST 18% (auto)</option>
+          <option value="25">GST 25%</option>
+          <option value="off">No Tax (Off)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="accent-box mb-8" style="font-size:11px;">➕ Description type karte hi neeche is item ki last rate history show ho jayegi.</div>
+    <div class="form-row" style="align-items:flex-end;flex-wrap:wrap;">
+      <div class="form-group" style="flex:2;min-width:180px;"><label>Description</label><input type="text" id="qb-desc" list="quot-desc-list" oninput="renderQbDescPreview()" placeholder="Item description..."></div>
+      <div class="form-group" style="width:90px;"><label>Unit</label><input type="text" id="qb-unit" value="Pcs"></div>
+      <div class="form-group" style="width:70px;"><label>Qty</label><input type="number" id="qb-qty" value="1"></div>
+      <div class="form-group" style="width:110px;"><label>Unit Price</label><input type="number" id="qb-price"></div>
+      <div class="form-group" style="width:70px;"><label>Tax %</label><input type="number" id="qb-itemtax" placeholder="18"></div>
+      <button class="btn btn-green btn-sm" onclick="addQbItem()">➕ Add</button>
+    </div>
+    <datalist id="quot-desc-list"></datalist>
+    <div id="qb-desc-preview" style="margin-bottom:10px;"></div>
+
+    <div class="tbl-wrap">
+      <table><thead><tr><th>Sr</th><th>Description</th><th>Unit</th><th>Qty</th><th>Unit Price</th><th>Tax%</th><th>Total</th><th></th></tr></thead>
+      <tbody id="qb-items-tbody"></tbody></table>
+    </div>
+    <div id="qb-totals" style="text-align:right;margin-top:8px;font-size:13px;"></div>
+
+    <div style="margin-top:14px;">
+      <div style="font-weight:700;color:var(--neon2);margin-bottom:6px;">Other terms and conditions :</div>
+      <div id="qb-terms-list"></div>
+    </div>
+
+    <div class="flex-gap" style="margin-top:14px;">
+      <button class="btn btn-green" onclick="saveQbQuotation()">💾 Save Quotation</button>
+      <button class="btn btn-purple" onclick="previewQbQuotation()">👁️ Preview / PDF</button>
+      <button class="btn btn-red btn-sm" onclick="clearQbBuilder()">🗑️ Clear</button>
+    </div>
+  </div>
+
+  <!-- Brand Price Lists -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">📋 Brand Price Lists</div>
+      <div class="flex-gap"><button class="btn btn-yellow btn-sm" onclick="showTopItemsDash()">⭐ Top Items Dashboard</button></div>
+    </div>
+    <div class="flex-gap" id="bpl-tabs" style="margin-bottom:10px;flex-wrap:wrap;"></div>
+    <div id="bpl-content"></div>
+  </div>
+
+  <!-- Top Items Dashboard -->
+  <div class="card" id="bpl-top-dash" style="display:none;">
+    <div class="card-header"><div class="card-title">⭐ Top Items Dashboard</div><button class="btn btn-neon btn-sm" onclick="document.getElementById('bpl-top-dash').style.display='none';">✕ Close</button></div>
+    <div id="bpl-top-content"></div>
   </div>
 
   <!-- Saved Quotations -->
@@ -2854,6 +2913,39 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
         <div class="toggle-wrap"><label class="toggle"><input type="checkbox" id="qs-show-address" checked><span class="toggle-slider"></span></label><span>Show Address</span></div>
       </div>
     </div>
+    <div class="settings-section">
+      <div class="settings-section-title">🏢 Quotation Templates — Company Details</div>
+      <div class="form-group"><label>Template</label>
+        <select id="qs-tpl-select" onchange="loadTplEditor()">
+          <option value="sau">SAU</option>
+          <option value="osram">OSRAM</option>
+          <option value="abdulsamad">Abdul Samad Traders</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Company Name</label><input type="text" id="qs-tpl-name"></div>
+        <div class="form-group"><label>Authorized Text (under logos)</label><input type="text" id="qs-tpl-auth" placeholder="e.g. Authorized Distributor"></div>
+      </div>
+      <div class="form-group"><label>Address (footer, below company name)</label><textarea id="qs-tpl-address" rows="2"></textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label>Contact Person</label><input type="text" id="qs-tpl-contact"></div>
+        <div class="form-group"><label>Cell</label><input type="text" id="qs-tpl-cell"></div>
+      </div>
+      <div class="form-group"><label>Email</label><input type="text" id="qs-tpl-email"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Company Logo (left side)</label><input type="file" accept="image/*" id="qs-tpl-logo-file" onchange="handleTplLogoUpload('company')"></div>
+        <div class="form-group"><label>Brand Logos Image (top-right, optional)</label><input type="file" accept="image/*" id="qs-tpl-headerlogo-file" onchange="handleTplLogoUpload('header')"></div>
+      </div>
+      <button class="btn btn-green btn-sm" onclick="saveTplEditor()">💾 Save Template</button>
+    </div>
+    <div class="settings-section">
+      <div class="settings-section-title">📋 Other Terms &amp; Conditions (default order — shown on every quotation)</div>
+      <div id="qs-terms-editor"></div>
+      <div class="flex-gap" style="margin-top:6px;">
+        <button class="btn btn-neon btn-sm" onclick="addTermRow()">➕ Add Line</button>
+        <button class="btn btn-green btn-sm" onclick="saveTermsFromSettings()">💾 Save Terms</button>
+      </div>
+    </div>
   </div>
   <div class="modal-footer">
     <button class="btn btn-green" onclick="saveQuotSettings()">💾 Save Settings</button>
@@ -2891,90 +2983,18 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
 </div>
 </div>
 
-<!-- RATE LIST VIEWER MODAL -->
-<div class="modal-overlay" id="rateListViewerModal">
-<div class="modal modal-lg">
-  <div class="modal-header"><h3 id="rl-viewer-title">📋 Rate List</h3><button class="close-btn" onclick="closeModal('rateListViewerModal')">✕</button></div>
-  <div class="modal-body">
-    <div class="form-group">
-      <label>Search Items (this list only — matches description or catalog number)</label>
-      <input type="text" id="rl-search" placeholder="Type to search..." oninput="searchRateList()" autofocus>
-    </div>
-    <div class="flex-gap mb-8">
-      <button class="btn btn-green btn-sm" onclick="openAddRateItemModal()">➕ Add Custom Item to This List</button>
-    </div>
-    <div id="rl-search-results"></div>
-  </div>
-</div>
-</div>
-
-<!-- BASKET MODAL -->
-<div class="modal-overlay" id="basketModal">
-<div class="modal modal-lg">
-  <div class="modal-header"><h3>🛒 Quotation Basket</h3><button class="close-btn" onclick="closeModal('basketModal')">✕</button></div>
-  <div class="modal-body">
-    <div class="tbl-wrap">
-      <table><thead><tr>
-        <th>#</th><th>Item</th><th>Qty</th><th>List Price</th><th>Discount %</th><th>Final Price</th><th>Line Total</th><th></th>
-      </tr></thead><tbody id="basket-tbody"></tbody></table>
-    </div>
-    <div style="text-align:right;margin-top:10px;font-size:15px;font-weight:800;">Grand Total: <span class="neon-text" id="basket-total">0.00</span></div>
-  </div>
-  <div class="modal-footer">
-    <button class="btn btn-green" onclick="openQuotationCustomerForm()">📄 Generate Quotation PDF</button>
-    <button class="btn btn-red btn-sm" onclick="clearBasket()">🗑️ Clear Basket</button>
-    <button class="btn btn-neon" onclick="closeModal('basketModal')">Close</button>
-  </div>
-</div>
-</div>
-
-<!-- QUOTATION CUSTOMER MODAL -->
-<div class="modal-overlay" id="quotationCustomerModal">
+<!-- ADD BRAND PRICE LIST ITEM MODAL -->
+<div class="modal-overlay" id="addBrandItemModal">
 <div class="modal modal-sm">
-  <div class="modal-header"><h3>📄 Quotation — Customer Details</h3><button class="close-btn" onclick="closeModal('quotationCustomerModal')">✕</button></div>
+  <div class="modal-header"><h3>➕ Add Item to Price List</h3><button class="close-btn" onclick="closeModal('addBrandItemModal')">✕</button></div>
   <div class="modal-body">
-    <div class="form-group"><label>Customer / Party Name *</label><input type="text" id="quote-customer-name" list="party-list" placeholder="Customer name"></div>
-    <div class="form-group"><label>Address (optional)</label><textarea id="quote-customer-address" rows="2" placeholder="Customer address..."></textarea></div>
+    <input type="hidden" id="bpl-add-brand">
+    <div class="form-group"><label>Description *</label><input type="text" id="bpl-add-desc" placeholder="Item description"></div>
+    <div class="form-group"><label>Rate *</label><input type="number" id="bpl-add-rate" placeholder="0.00"></div>
   </div>
   <div class="modal-footer">
-    <button class="btn btn-green" onclick="generateQuotationPDF()">📄 Generate PDF</button>
-    <button class="btn btn-neon" onclick="closeModal('quotationCustomerModal')">Cancel</button>
-  </div>
-</div>
-</div>
-
-<!-- ADD RATE ITEM MODAL -->
-<div class="modal-overlay" id="addRateItemModal">
-<div class="modal modal-sm">
-  <div class="modal-header"><h3>➕ Add Item to Rate List</h3><button class="close-btn" onclick="closeModal('addRateItemModal')">✕</button></div>
-  <div class="modal-body">
-    <div class="form-group"><label>Rate List</label><select id="ari-list-select"></select></div>
-    <div class="form-group"><label>Brand / Sub-Group</label><input type="text" id="ari-brand" placeholder="e.g. Custom"></div>
-    <div class="form-group"><label>Catalog Number</label><input type="text" id="ari-cat" placeholder="Item code"></div>
-    <div class="form-group"><label>Description *</label><input type="text" id="ari-desc" placeholder="Item description"></div>
-    <div class="form-group"><label>Price *</label><input type="number" id="ari-price" placeholder="0.00"></div>
-  </div>
-  <div class="modal-footer">
-    <button class="btn btn-green" onclick="saveNewRateItem()">💾 Save</button>
-    <button class="btn btn-neon" onclick="closeModal('addRateItemModal')">Cancel</button>
-  </div>
-</div>
-</div>
-
-<!-- IMPORT PDF REVIEW MODAL -->
-<div class="modal-overlay" id="importPdfReviewModal">
-<div class="modal modal-lg">
-  <div class="modal-header"><h3>📂 Review Imported PDF Price List</h3><button class="close-btn" onclick="closeModal('importPdfReviewModal')">✕</button></div>
-  <div class="modal-body">
-    <div class="form-group"><label>Raw extracted text (edit if needed, then click Parse)</label><textarea id="import-pdf-preview" rows="6" style="font-family:monospace;font-size:11px;"></textarea></div>
-    <button class="btn btn-neon btn-sm" onclick="parseImportedPdfText()">🔍 Parse Items from Text</button>
-    <div id="import-preview-count" class="accent-box mt-8" style="display:none;"></div>
-    <div class="form-group mt-8"><label>Import into</label><select id="import-pdf-target-list"></select></div>
-    <div id="import-items-list" style="max-height:300px;overflow-y:auto;margin-top:8px;"></div>
-  </div>
-  <div class="modal-footer">
-    <button class="btn btn-green" onclick="confirmImportPdfItems()">✅ Import Selected Items</button>
-    <button class="btn btn-neon" onclick="closeModal('importPdfReviewModal')">Cancel</button>
+    <button class="btn btn-green" onclick="saveBrandItem()">💾 Save</button>
+    <button class="btn btn-neon" onclick="closeModal('addBrandItemModal')">Cancel</button>
   </div>
 </div>
 </div>
@@ -5378,8 +5398,13 @@ function renderTabContent(id){
   if(id==='settings') { applySettings(); renderAutoNumberConfig(); const abf=document.getElementById('ab-frequency'); if(abf) abf.value = advancedBackupSettings.frequency; renderBackupVersionsList(); const ape=document.getElementById('ap-enabled'); if(ape) ape.checked = !!settings.approvalWorkflowEnabled; const apPo=document.getElementById('ap-po-enabled'); if(apPo) apPo.checked = !!settings.poApprovalWorkflowEnabled; const apExp=document.getElementById('ap-exp-enabled'); if(apExp) apExp.checked = !!settings.expApprovalWorkflowEnabled; const apChq=document.getElementById('ap-chq-enabled'); if(apChq) apChq.checked = !!settings.chqApprovalWorkflowEnabled; refreshGDriveSettingsUI(); if(typeof refreshDzOwnerPanel==='function') refreshDzOwnerPanel(); }
   if(id==='digitalinvoices'){ renderDigitalInvoices(); updateDiCount(); }
   if(id==='security') renderSecuritySettings();
-  if(id==='reports'){ renderRateListsHub(); renderRateListBasketSummary(); }
-  if(id==='quotation'){ renderRateListsHub(); renderRateListBasketSummary(); renderSavedQuotations(); renderQuotationDashboard(); }
+  if(id==='quotation'){
+    renderSavedQuotations(); renderQuotationDashboard();
+    renderQbTemplatePicker(); renderQbItemsTable(); renderQbTermsList();
+    populateQuotDescDatalist();
+    renderBplTabs(); renderBplContent(); renderTopItemsDash();
+    if(!document.getElementById('qb-date').value) document.getElementById('qb-date').value = new Date().toISOString().slice(0,10);
+  }
   if(id==='descriptions') renderDescriptions();
   if(id==='partylookup') renderPartyLookup();
   if(id==='dispatch') { renderDispatchTab(); renderEnvelopeDispatchTab(); }
@@ -8132,6 +8157,9 @@ function init(){
   loadSavedQuotations();
   loadQuotSettings();
   loadSearchFreq();
+  loadQuotTemplates();
+  loadQuotDescHistory();
+  loadBrandPriceLists();
   loadDocumentManager();
   loadCrmData();
   loadEmailCenter();
@@ -10040,6 +10068,8 @@ function openQuotSettingsModal(){
   if(document.getElementById('qs-show-phone')) document.getElementById('qs-show-phone').checked = quotSettings.showPhone!==false;
   if(document.getElementById('qs-show-email')) document.getElementById('qs-show-email').checked = quotSettings.showEmail!==false;
   if(document.getElementById('qs-show-address')) document.getElementById('qs-show-address').checked = quotSettings.showAddress!==false;
+  if(document.getElementById('qs-tpl-select')){ document.getElementById('qs-tpl-select').value='sau'; loadTplEditor(); }
+  tempTermsEdit = null; renderTermsEditor();
   openModal('quotSettingsModal');
 }
 
@@ -10073,9 +10103,9 @@ function renderQuotationDashboard(){
     <div class="stat-card c1"><div class="stat-val">${total}</div><div class="stat-label">Total Quotations</div></div>
     <div class="stat-card c4"><div class="stat-val" style="font-size:16px;">${cur} ${fmt(totalVal)}</div><div class="stat-label">Total Value</div></div>
     <div class="stat-card c2"><div class="stat-val">${monthCount}</div><div class="stat-label">This Month</div></div>
-    <div class="stat-card c5"><div class="stat-val">${quotationBasket.length}</div><div class="stat-label">In Basket</div></div>
+    <div class="stat-card c5"><div class="stat-val">${qbItems.length}</div><div class="stat-label">In Builder</div></div>
   `;
-  // Top items from basket and saved quotations
+  // Top items from saved quotations
   const itemFreq = {};
   savedQuotations.forEach(q=>{
     (q.items||[]).forEach(it=>{
@@ -10083,17 +10113,14 @@ function renderQuotationDashboard(){
       itemFreq[key] = (itemFreq[key]||0)+1;
     });
   });
-  quotationBasket.forEach(it=>{
-    itemFreq[it.desc] = (itemFreq[it.desc]||0)+1;
-  });
   const topItems = Object.entries(itemFreq).sort((a,b)=>b[1]-a[1]).slice(0,8);
   document.getElementById('quot-top-items').innerHTML = topItems.length
     ? topItems.map(([desc,cnt])=>`<div class="accent-box mb-8" style="display:flex;align-items:center;gap:8px;">
         <span class="badge badge-invoiced">${cnt}x</span>
         <span style="font-size:12px;flex:1;">${desc}</span>
-        <button class="btn btn-neon btn-xs" onclick="document.getElementById('rl-search').value='${desc.split(' ')[0]}';searchRateList();showTab('quotation');">🔍 Search</button>
+        <button class="btn btn-neon btn-xs" onclick="document.getElementById('qb-desc').value='${desc.replace(/'/g,"\\'")}';renderQbDescPreview();document.getElementById('qb-card').scrollIntoView({behavior:'smooth'});">➕ Reuse</button>
       </div>`).join('')
-    : '<div style="color:var(--text3);font-size:12px;">No items yet. Add from rate lists above.</div>';
+    : '<div style="color:var(--text3);font-size:12px;">No items yet. Save a quotation to see top items.</div>';
   // Recent parties
   const partyFreq = {};
   savedQuotations.forEach(q=>{ if(q.party) partyFreq[q.party]=(partyFreq[q.party]||0)+1; });
@@ -10242,7 +10269,7 @@ function previewQuotation(q, isBill){
 }
 function printBillPreview(size){
   if(!currentBillData) return;
-  const html = buildQuotHTML(currentBillData.q, currentBillData.isBill, size);
+  const html = currentBillData.q.templateKey ? buildQuotHTMLv2(currentBillData.q, currentBillData.isBill, size) : buildQuotHTML(currentBillData.q, currentBillData.isBill, size);
   const isThermal = size==='thermal';
   const margin = quotSettings.margin||10;
   const win = window.open('','_blank');
@@ -10259,6 +10286,7 @@ function printBillPreview(size){
 function downloadBillPDF(){
   if(!currentBillData) return;
   const {q, isBill} = currentBillData;
+  if(q.templateKey){ downloadQuotationPDFv2(q, isBill); return; }
   const doc = new jspdf.jsPDF();
   let y = pdfHeader(doc, isBill?'BILL / INVOICE':quotSettings.titleText||'QUOTATION');
   const cur = settings.currency||'PKR';
@@ -10294,23 +10322,35 @@ function downloadBillPDF(){
 function viewSavedQuotation(id){
   const q = savedQuotations.find(x=>x.id===id);
   if(!q) return;
-  previewQuotation(q, false);
+  if(q.templateKey) previewQuotationV2(q, false); else previewQuotation(q, false);
 }
 function editSavedQuotation(id){
   const q = savedQuotations.find(x=>x.id===id);
   if(!q) return;
-  quotationBasket = (q.items||[]).map(it=>({...it}));
-  renderRateListBasketSummary();
-  savedQuotations = savedQuotations.filter(x=>x.id!==id);
-  saveSavedQuotations();
-  renderSavedQuotations();
-  openBasketModal();
-  toast(`Quotation #${q.srNo} loaded into basket for editing`,'info');
+  if(q.templateKey){
+    qbSelectedTemplate = q.templateKey;
+    qbItems = (q.items||[]).map(it=>({...it}));
+    qbEditingSavedId = q.id;
+    document.getElementById('qb-party').value = q.party||'';
+    document.getElementById('qb-project').value = q.project||'';
+    document.getElementById('qb-ourref').value = q.ourRef||'';
+    document.getElementById('qb-contactperson').value = q.contactPerson||'';
+    document.getElementById('qb-date').value = q.date||'';
+    document.getElementById('qb-taxmode').value = q.taxMode||'18';
+    renderQbTemplatePicker();
+    renderQbItemsTable();
+    document.getElementById('qb-card').scrollIntoView({behavior:'smooth'});
+    toast(`Quotation #${q.srNo} loaded into builder for editing`,'info');
+  } else {
+    // legacy (pre-rebuild) quotation — kept view-only, no old basket UI to edit into anymore
+    previewQuotation(q, false);
+    toast('Ye purana format ka quotation hai — sirf view/print ho sakta hai','info');
+  }
 }
 function convertToBill(id){
   const q = savedQuotations.find(x=>x.id===id);
   if(!q) return;
-  previewQuotation(q, true);
+  if(q.templateKey) previewQuotationV2(q, true); else previewQuotation(q, true);
 }
 function printSavedQuotation(id, size){
   const q = savedQuotations.find(x=>x.id===id);
@@ -10325,6 +10365,739 @@ function deleteSavedQuotation(id){
   saveSavedQuotations(); renderSavedQuotations(); renderQuotationDashboard();
   toast('Quotation deleted','warning');
 }
+
+// ==================== QUOTATION BUILDER v2 (rebuilt 2026-07-22, replaces old Rate List/Basket UI) ====================
+const QUOT_TEMPLATE_DEFAULT = {
+  sau: {
+    key:'sau', label:'SAU', companyName:'SAU Corporation', tagline:'',
+    brandLogos:['nitto','schneider','philips','newage'], authorizedText:'Authorized Distributor',
+    footerName:'SAU Corporation',
+    address:'167B Railway Road Faisalabad.\nZam Zam Tower H22 Johar Town,Lahore.',
+    contactPerson:'Syed Asim Umair', cell:'0307-7776464 /0333-6511698', email:'asimumair86@gmail.com',
+    companyLogoImg:'', headerLogosImg:''
+  },
+  osram: {
+    key:'osram', label:'OSRAM', companyName:'SAU Corporation', tagline:'',
+    brandLogos:['ledvance'], authorizedText:'',
+    footerName:'SAU Corporation',
+    address:'167B Railway Road Faisalabad.\nZam Zam Tower H22 Johar Town,Lahore.',
+    contactPerson:'Syed Asim Umair', cell:'0307-7776464 /0333-6511698', email:'asimumair86@gmail.com',
+    companyLogoImg:'', headerLogosImg:''
+  },
+  abdulsamad: {
+    key:'abdulsamad', label:'Abdul Samad Traders', companyName:'Abdul Samad Traders', tagline:'',
+    brandLogos:['nitto','schneider','philips','newage'], authorizedText:'Authorized Distributor',
+    footerName:'Abdul Samad Traders',
+    address:'167 Mehar Sadiq Market RAILWAY ROAD FSD',
+    contactPerson:'Syed Asim Umair', cell:'0307-7776464 /0333-6511698', email:'asimumair86@gmail.com',
+    companyLogoImg:'', headerLogosImg:''
+  },
+  custom: {
+    key:'custom', label:'Custom / Empty', companyName:'', tagline:'',
+    brandLogos:[], logoChoice:'none', authorizedText:'',
+    footerName:'', address:'', contactPerson:'', cell:'', email:'',
+    companyLogoImg:'', headerLogosImg:''
+  }
+};
+const BRAND_LOGO_LABELS = {
+  nitto:'NITTO', schneider:'Schneider Electric | CLIPSAL', philips:'PHILIPS', newage:'newage CABLES', ledvance:'LEDVANCE OSRAM'
+};
+const BRAND_LOGO_STYLES = {
+  nitto:'color:#e2001a;font-style:italic;font-weight:800;',
+  schneider:'color:#3dcd58;font-weight:800;',
+  philips:'color:#0b5ed7;font-weight:800;',
+  newage:'color:#0a8a3c;font-weight:800;',
+  ledvance:'color:#ff6a00;font-weight:800;'
+};
+let quotTemplates = {};
+function loadQuotTemplates(){
+  const d = localStorage.getItem('sau_quot_templates_v2');
+  quotTemplates = d ? JSON.parse(d) : {};
+  Object.keys(QUOT_TEMPLATE_DEFAULT).forEach(k=>{
+    quotTemplates[k] = {...QUOT_TEMPLATE_DEFAULT[k], ...(quotTemplates[k]||{})};
+  });
+}
+function saveQuotTemplates(){
+  safeSetItem('sau_quot_templates_v2', JSON.stringify(quotTemplates));
+  if(typeof triggerAutoSync==='function') triggerAutoSync();
+}
+
+// ---- Item description usage history (independent of Item Descriptions Master List tab) ----
+let quotDescHistory = {};
+function loadQuotDescHistory(){
+  const d = localStorage.getItem('sau_quot_desc_history');
+  quotDescHistory = d ? JSON.parse(d) : {};
+}
+function saveQuotDescHistory(){
+  safeSetItem('sau_quot_desc_history', JSON.stringify(quotDescHistory));
+  if(typeof triggerAutoSync==='function') triggerAutoSync();
+}
+function recordQuotDescUsage(desc, entry){
+  const key = (desc||'').trim().toLowerCase();
+  if(!key) return;
+  if(!quotDescHistory[key]) quotDescHistory[key] = {desc:desc.trim(), uses:[]};
+  quotDescHistory[key].uses.unshift(entry);
+  quotDescHistory[key].uses = quotDescHistory[key].uses.slice(0,20);
+  saveQuotDescHistory();
+}
+function populateQuotDescDatalist(){
+  const dl = document.getElementById('quot-desc-list');
+  if(!dl) return;
+  dl.innerHTML = Object.values(quotDescHistory).map(d=>`<option value="${(d.desc||'').replace(/"/g,'&quot;')}">`).join('');
+}
+function renderQbDescPreview(){
+  const val = (document.getElementById('qb-desc')||{}).value||'';
+  const el = document.getElementById('qb-desc-preview');
+  if(!el) return;
+  const key = val.trim().toLowerCase();
+  const rec = quotDescHistory[key];
+  if(!val.trim() || !rec || !rec.uses.length){ el.innerHTML=''; return; }
+  const cur = settings.currency||'PKR';
+  const rows = rec.uses.slice(0,5).map(u=>`<tr>
+    <td style="padding:2px 6px;">${u.date||''}</td>
+    <td style="padding:2px 6px;">${u.party||'-'}</td>
+    <td style="padding:2px 6px;text-align:right;">${u.qty||''}</td>
+    <td style="padding:2px 6px;text-align:right;">${cur} ${fmt(u.rate||0)}</td>
+    <td style="padding:2px 6px;">${u.quotNo?'#'+u.quotNo:''}</td>
+  </tr>`).join('');
+  el.innerHTML = `<div class="accent-box" style="font-size:11px;">
+    <strong style="color:var(--neon2);">📊 Is item ki last rates:</strong>
+    <table style="width:100%;margin-top:4px;"><thead><tr style="color:var(--text3);">
+      <th style="text-align:left;padding:2px 6px;">Date</th><th style="text-align:left;padding:2px 6px;">Party</th><th style="text-align:right;padding:2px 6px;">Qty</th><th style="text-align:right;padding:2px 6px;">Rate</th><th style="text-align:left;padding:2px 6px;">Quot#</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+  </div>`;
+}
+
+// ---- Builder state ----
+let qbSelectedTemplate = 'sau';
+let qbItems = [];
+let qbEditingSavedId = null;
+
+function renderQbTemplatePicker(){
+  const wrap = document.getElementById('qb-template-picker');
+  if(!wrap) return;
+  const keys = ['sau','osram','abdulsamad','custom'];
+  const icons = {sau:'🟢',osram:'🔶',abdulsamad:'🔷',custom:'✏️'};
+  wrap.innerHTML = keys.map(k=>{
+    const t = quotTemplates[k]||QUOT_TEMPLATE_DEFAULT[k];
+    const active = qbSelectedTemplate===k;
+    return `<button type="button" class="btn ${active?'btn-neon':''} btn-sm" style="${active?'':'background:var(--bg3);border:1px solid var(--border2);color:var(--text);'}" onclick="selectQbTemplate('${k}')">${icons[k]} ${t.label}</button>`;
+  }).join('');
+  renderQbCustomFields();
+}
+function selectQbTemplate(k){
+  qbSelectedTemplate = k;
+  renderQbTemplatePicker();
+}
+function renderQbCustomFields(){
+  const wrap = document.getElementById('qb-custom-fields');
+  if(!wrap) return;
+  if(qbSelectedTemplate!=='custom'){ wrap.style.display='none'; wrap.innerHTML=''; return; }
+  const t = quotTemplates.custom;
+  wrap.style.display='block';
+  wrap.innerHTML = `
+    <div class="accent-box mb-8">
+      <div class="form-row">
+        <div class="form-group"><label>Company Name</label><input type="text" id="qbc-name" value="${(t.companyName||'').replace(/"/g,'&quot;')}" placeholder="Company / Shop name"></div>
+        <div class="form-group"><label>Logo</label>
+          <select id="qbc-logo">
+            <option value="none" ${t.logoChoice==='none'?'selected':''}>Without Logo</option>
+            <option value="nitto" ${t.logoChoice==='nitto'?'selected':''}>Nitto</option>
+            <option value="schneider" ${t.logoChoice==='schneider'?'selected':''}>Schneider Electric / Clipsal</option>
+            <option value="philips" ${t.logoChoice==='philips'?'selected':''}>Philips</option>
+            <option value="newage" ${t.logoChoice==='newage'?'selected':''}>Newage Cables</option>
+            <option value="ledvance" ${t.logoChoice==='ledvance'?'selected':''}>LEDVANCE OSRAM</option>
+            <option value="upload" ${t.logoChoice==='upload'?'selected':''}>Uploaded Logo (Settings mein set karein)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label>Address</label><textarea id="qbc-address" rows="2" placeholder="Address">${t.address||''}</textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label>Contact Person</label><input type="text" id="qbc-contact" value="${(t.contactPerson||'').replace(/"/g,'&quot;')}"></div>
+        <div class="form-group"><label>Cell</label><input type="text" id="qbc-cell" value="${(t.cell||'').replace(/"/g,'&quot;')}"></div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);">Ye details is quotation ke liye hain. Default Settings &gt; Quotation Templates mein "custom" ke liye bhi save ho sakti hain.</div>
+    </div>`;
+}
+function collectCustomTemplateFromForm(){
+  if(qbSelectedTemplate!=='custom') return quotTemplates.custom;
+  const t = {...quotTemplates.custom};
+  t.companyName = (document.getElementById('qbc-name')||{}).value||'';
+  t.logoChoice = (document.getElementById('qbc-logo')||{}).value||'none';
+  t.address = (document.getElementById('qbc-address')||{}).value||'';
+  t.contactPerson = (document.getElementById('qbc-contact')||{}).value||'';
+  t.cell = (document.getElementById('qbc-cell')||{}).value||'';
+  return t;
+}
+
+function addQbItem(){
+  const desc = (document.getElementById('qb-desc').value||'').trim();
+  const unit = (document.getElementById('qb-unit').value||'Pcs').trim()||'Pcs';
+  const qty = parseFloat(document.getElementById('qb-qty').value)||1;
+  const unitPrice = parseFloat(document.getElementById('qb-price').value)||0;
+  const taxModeVal = document.getElementById('qb-taxmode').value;
+  const defaultTax = taxModeVal==='off'?0:parseFloat(taxModeVal);
+  const taxPctInput = document.getElementById('qb-itemtax').value;
+  const taxPct = taxPctInput!==''? (parseFloat(taxPctInput)||0) : defaultTax;
+  if(!desc){ toast('Description likhein','warning'); return; }
+  if(!unitPrice){ toast('Unit price likhein','warning'); return; }
+  qbItems.push({id:'I'+Date.now()+Math.random().toString(36).slice(2,6), desc, unit, qty, unitPrice, taxPct});
+  document.getElementById('qb-desc').value='';
+  document.getElementById('qb-price').value='';
+  document.getElementById('qb-itemtax').value='';
+  document.getElementById('qb-qty').value='1';
+  document.getElementById('qb-desc-preview').innerHTML='';
+  renderQbItemsTable();
+}
+function removeQbItem(id){
+  qbItems = qbItems.filter(i=>i.id!==id);
+  renderQbItemsTable();
+}
+function updateQbItemField(id, field, value){
+  const it = qbItems.find(i=>i.id===id);
+  if(!it) return;
+  if(field==='qty'||field==='unitPrice'||field==='taxPct') it[field] = parseFloat(value)||0;
+  else it[field] = value;
+  renderQbItemsTable();
+}
+function onTaxModeChange(){
+  const v = document.getElementById('qb-taxmode').value;
+  document.getElementById('qb-itemtax').placeholder = v==='off'?'0':v;
+}
+function computeQbTotals(){
+  const rates = [...new Set(qbItems.map(i=>+(i.taxPct||0)))];
+  const mixed = rates.length>1;
+  let subTotal=0, taxAmt=0;
+  qbItems.forEach(it=>{
+    const line = (it.qty||0)*(it.unitPrice||0);
+    subTotal += line;
+    taxAmt += line*(it.taxPct||0)/100;
+  });
+  return {mixed, rate:rates[0]||0, subTotal, taxAmt, grandTotal:subTotal+taxAmt};
+}
+function renderQbItemsTable(){
+  const cur = settings.currency||'PKR';
+  const tbody = document.getElementById('qb-items-tbody');
+  if(!tbody) return;
+  if(!qbItems.length){
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center" style="padding:14px;color:var(--text3);">Koi item add nahi hua abhi.</td></tr>';
+  } else {
+    tbody.innerHTML = qbItems.map((it,i)=>{
+      const line = (it.qty||0)*(it.unitPrice||0);
+      return `<tr>
+        <td>${i+1}</td>
+        <td style="max-width:240px;"><input type="text" value="${(it.desc||'').replace(/"/g,'&quot;')}" onchange="updateQbItemField('${it.id}','desc',this.value)" style="width:100%;"></td>
+        <td><input type="text" value="${it.unit}" style="width:60px;" onchange="updateQbItemField('${it.id}','unit',this.value)"></td>
+        <td><input type="number" value="${it.qty}" style="width:55px;" onchange="updateQbItemField('${it.id}','qty',this.value)"></td>
+        <td><input type="number" value="${it.unitPrice}" style="width:85px;" onchange="updateQbItemField('${it.id}','unitPrice',this.value)"></td>
+        <td><input type="number" value="${it.taxPct}" style="width:55px;" onchange="updateQbItemField('${it.id}','taxPct',this.value)"></td>
+        <td style="text-align:right;font-weight:700;">${cur} ${fmt(line)}</td>
+        <td><button class="btn btn-red btn-xs" onclick="removeQbItem('${it.id}')">🗑️</button></td>
+      </tr>`;
+    }).join('');
+  }
+  const t = computeQbTotals();
+  const totEl = document.getElementById('qb-totals');
+  if(totEl){
+    if(!qbItems.length){ totEl.innerHTML=''; }
+    else if(t.mixed){
+      totEl.innerHTML = `Mixed tax rates — har item ka tax alag calculate ho ga.<br>
+      <strong>Grand Total: <span class="neon-text">${cur} ${fmt(t.grandTotal)}</span></strong>`;
+    } else {
+      totEl.innerHTML = `Sub Total: ${cur} ${fmt(t.subTotal)}<br>
+      ${t.rate>0?`GST ${t.rate}%: ${cur} ${fmt(t.taxAmt)}<br>`:''}
+      <strong style="font-size:15px;">Total: <span class="neon-text">${cur} ${fmt(t.grandTotal)}</span></strong>`;
+    }
+  }
+}
+
+// ---- Terms & Conditions ----
+function getQbTermsForRender(){
+  return (quotSettings.termsList && quotSettings.termsList.length) ? quotSettings.termsList : [
+    {label:'Warranty', value:'As per mentioned above.'},
+    {label:'Payment Terms', value:'Payment 100% Advance'},
+    {label:'Validity', value:'07 days'}
+  ];
+}
+function renderQbTermsList(){
+  const wrap = document.getElementById('qb-terms-list');
+  if(!wrap) return;
+  const terms = getQbTermsForRender();
+  wrap.innerHTML = terms.map(t=>`<div style="font-size:12px;color:var(--text2);">${t.label} : ${t.value}</div>`).join('') +
+    `<div style="font-size:10px;color:var(--text3);margin-top:4px;">In terms ko Settings &gt; Other Terms &amp; Conditions se edit/reorder karein.</div>`;
+}
+
+function clearQbBuilder(){
+  qbItems=[]; qbEditingSavedId=null;
+  if(document.getElementById('qb-party')) document.getElementById('qb-party').value='';
+  if(document.getElementById('qb-project')) document.getElementById('qb-project').value='';
+  if(document.getElementById('qb-ourref')) document.getElementById('qb-ourref').value='';
+  if(document.getElementById('qb-contactperson')) document.getElementById('qb-contactperson').value='';
+  if(document.getElementById('qb-date')) document.getElementById('qb-date').value = new Date().toISOString().slice(0,10);
+  renderQbItemsTable();
+  toast('Builder clear ho gaya','info');
+}
+
+function nextQuotNoForDate(){
+  const maxSr = savedQuotations.reduce((m,q)=>Math.max(m,q.srNo||0),0);
+  return maxSr+1;
+}
+
+function saveQbQuotation(){
+  if(!qbItems.length){ toast('Koi item nahi hai','warning'); return; }
+  const party = document.getElementById('qb-party').value.trim()||'Cash Customer';
+  const project = document.getElementById('qb-project').value.trim();
+  const ourRef = document.getElementById('qb-ourref').value.trim();
+  const date = document.getElementById('qb-date').value || new Date().toISOString().slice(0,10);
+  const contactPerson = document.getElementById('qb-contactperson').value.trim();
+  const taxMode = document.getElementById('qb-taxmode').value;
+  const t = computeQbTotals();
+  const srNo = qbEditingSavedId ? ((savedQuotations.find(q=>q.id===qbEditingSavedId)||{}).srNo || nextQuotNoForDate()) : nextQuotNoForDate();
+  const templateSnapshot = qbSelectedTemplate==='custom' ? collectCustomTemplateFromForm() : quotTemplates[qbSelectedTemplate];
+  const q = {
+    id: qbEditingSavedId || ('QB'+Date.now()),
+    srNo, date, party, project, ourRef, contactPerson,
+    templateKey: qbSelectedTemplate, templateSnapshot,
+    taxMode,
+    items: qbItems.map(it=>({...it})),
+    terms: getQbTermsForRender(),
+    subTotal:t.subTotal, taxAmt:t.taxAmt, grandTotal:t.grandTotal, mixedTax:t.mixed
+  };
+  if(qbEditingSavedId){
+    savedQuotations = savedQuotations.map(x=>x.id===qbEditingSavedId?q:x);
+  } else {
+    savedQuotations.push(q);
+  }
+  saveSavedQuotations();
+  qbItems.forEach(it=>{
+    recordQuotDescUsage(it.desc, {date, party, qty:it.qty, rate:it.unitPrice, quotNo:q.srNo});
+  });
+  populateQuotDescDatalist();
+  qbEditingSavedId = null;
+  qbItems = [];
+  renderQbItemsTable();
+  renderSavedQuotations();
+  renderQuotationDashboard();
+  toast(`Quotation #${q.srNo} save ho gaya`,'success');
+  return q;
+}
+function buildQbCurrentQuotObj(){
+  const party = document.getElementById('qb-party').value.trim()||'Cash Customer';
+  const project = document.getElementById('qb-project').value.trim();
+  const ourRef = document.getElementById('qb-ourref').value.trim();
+  const date = document.getElementById('qb-date').value || new Date().toISOString().slice(0,10);
+  const contactPerson = document.getElementById('qb-contactperson').value.trim();
+  const taxMode = document.getElementById('qb-taxmode').value;
+  const t = computeQbTotals();
+  const templateSnapshot = qbSelectedTemplate==='custom' ? collectCustomTemplateFromForm() : quotTemplates[qbSelectedTemplate];
+  return {
+    id:'PREVIEW', srNo: qbEditingSavedId ? (savedQuotations.find(x=>x.id===qbEditingSavedId)||{}).srNo : nextQuotNoForDate(),
+    date, party, project, ourRef, contactPerson, templateKey:qbSelectedTemplate, templateSnapshot, taxMode,
+    items:qbItems.map(it=>({...it})), terms:getQbTermsForRender(),
+    subTotal:t.subTotal, taxAmt:t.taxAmt, grandTotal:t.grandTotal, mixedTax:t.mixed
+  };
+}
+function previewQbQuotation(){
+  if(!qbItems.length){ toast('Koi item nahi hai','warning'); return; }
+  previewQuotationV2(buildQbCurrentQuotObj(), false);
+}
+
+// ---- Rendering the actual quotation document (HTML for screen/print + PDF) ----
+function logoBadgeHtml(key){
+  const label = BRAND_LOGO_LABELS[key]||key;
+  return `<span style="display:inline-block;padding:2px 6px;border:1px solid #ccc;border-radius:4px;font-size:10px;margin-left:4px;${BRAND_LOGO_STYLES[key]||''}">${label}</span>`;
+}
+function buildQuotHeaderHtml(q, fs){
+  const tpl = q.templateSnapshot || quotTemplates[q.templateKey] || QUOT_TEMPLATE_DEFAULT.sau;
+  let logoLeft;
+  if(tpl.companyLogoImg){
+    logoLeft = `<img src="${tpl.companyLogoImg}" style="max-height:50px;max-width:170px;">`;
+  } else {
+    const nameLines = (tpl.companyName||'Company').split('\n');
+    logoLeft = `<div style="font-size:${fs+8}px;font-weight:800;color:#0a8a3c;letter-spacing:.5px;">${nameLines.join('<br>')}</div>`;
+  }
+  let logosRight = '';
+  if(tpl.headerLogosImg){
+    logosRight = `<img src="${tpl.headerLogosImg}" style="max-height:44px;max-width:230px;">`;
+  } else if(q.templateKey==='custom' && tpl.logoChoice && tpl.logoChoice!=='none' && tpl.logoChoice!=='upload'){
+    logosRight = logoBadgeHtml(tpl.logoChoice);
+  } else if(tpl.brandLogos && tpl.brandLogos.length){
+    logosRight = tpl.brandLogos.map(k=>logoBadgeHtml(k)).join('');
+  }
+  return `<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:6px;">
+    <div>${logoLeft}</div>
+    <div style="text-align:right;">${logosRight}${tpl.authorizedText?`<div style="font-size:${fs-2}px;color:#555;text-align:right;margin-top:2px;">${tpl.authorizedText}</div>`:''}</div>
+  </div>`;
+}
+function buildQuotHTMLv2(q, isBill, printSize){
+  const cur = settings.currency||'PKR';
+  const isThermal = printSize==='thermal';
+  const fs = isThermal?11:parseInt(quotSettings.fontSize||12);
+  const tpl = q.templateSnapshot || quotTemplates[q.templateKey] || QUOT_TEMPLATE_DEFAULT.sau;
+  const header = buildQuotHeaderHtml(q, fs);
+  const width = isThermal? `${quotSettings.thermalWidth||80}mm`:'190mm';
+
+  const infoLeft = `<table style="font-size:${fs}px;">
+    <tr><td style="padding:1px 6px 1px 0;font-weight:700;">Party Name</td><td>${q.party||'-'}</td></tr>
+    ${q.project?`<tr><td style="padding:1px 6px 1px 0;font-weight:700;">Project</td><td>${q.project}</td></tr>`:''}
+    <tr><td style="padding:1px 6px 1px 0;font-weight:700;">Our Ref</td><td>${q.ourRef||('SAU/LHR/Q/'+q.srNo)}</td></tr>
+    <tr><td style="padding:1px 6px 1px 0;font-weight:700;">Date</td><td>${q.date||''}</td></tr>
+    ${q.contactPerson?`<tr><td style="padding:1px 6px 1px 0;font-weight:700;">Contact Person</td><td>${q.contactPerson}</td></tr>`:''}
+  </table>`;
+
+  let tableHtml;
+  if(q.mixedTax){
+    const rows = (q.items||[]).map((it,i)=>{
+      const excl = (it.qty||0)*(it.unitPrice||0);
+      const taxA = excl*(it.taxPct||0)/100;
+      const incl = excl+taxA;
+      return `<tr>
+        <td style="padding:3px 5px;border:1px solid #999;text-align:center;">${i+1}</td>
+        <td style="padding:3px 5px;border:1px solid #999;">${it.desc}</td>
+        <td style="padding:3px 5px;border:1px solid #999;text-align:center;">${it.unit}</td>
+        <td style="padding:3px 5px;border:1px solid #999;text-align:center;">${it.qty}</td>
+        <td style="padding:3px 5px;border:1px solid #999;text-align:right;">${fmt(excl)}</td>
+        <td style="padding:3px 5px;border:1px solid #999;text-align:center;">${it.taxPct}%</td>
+        <td style="padding:3px 5px;border:1px solid #999;text-align:right;">${fmt(taxA)}</td>
+        <td style="padding:3px 5px;border:1px solid #999;text-align:right;font-weight:700;">${fmt(incl)}</td>
+      </tr>`;
+    }).join('');
+    const head = `<tr style="background:#f0f0f0;"><th style="border:1px solid #999;padding:4px;">Sr</th><th style="border:1px solid #999;padding:4px;">Description</th><th style="border:1px solid #999;padding:4px;">Unit</th><th style="border:1px solid #999;padding:4px;">Qty</th><th style="border:1px solid #999;padding:4px;">Excl. Value</th><th style="border:1px solid #999;padding:4px;">Rate of S.Tax</th><th style="border:1px solid #999;padding:4px;">Sales Tax Payable</th><th style="border:1px solid #999;padding:4px;">Incl. Value</th></tr>`;
+    const foot = `<tr><td colspan="7" style="text-align:right;padding:6px;font-weight:800;border:1px solid #999;">Total</td><td style="padding:6px;font-weight:800;border:1px solid #999;text-align:right;">${cur} ${fmt(q.grandTotal)}</td></tr>`;
+    tableHtml = `<table style="width:100%;border-collapse:collapse;font-size:${fs-1}px;margin-top:8px;"><thead>${head}</thead><tbody>${rows}</tbody><tfoot>${foot}</tfoot></table>`;
+  } else {
+    const rows = (q.items||[]).map((it,i)=>{
+      const line=(it.qty||0)*(it.unitPrice||0);
+      return `<tr>
+        <td style="padding:3px 5px;border:1px solid #999;text-align:center;">${i+1}</td>
+        <td style="padding:3px 5px;border:1px solid #999;">${it.desc}</td>
+        <td style="padding:3px 5px;border:1px solid #999;text-align:center;">${it.unit}</td>
+        <td style="padding:3px 5px;border:1px solid #999;text-align:center;">${it.qty}</td>
+        <td style="padding:3px 5px;border:1px solid #999;text-align:right;">${fmt(it.unitPrice)}</td>
+        <td style="padding:3px 5px;border:1px solid #999;text-align:right;font-weight:700;">${fmt(line)}</td>
+      </tr>`;
+    }).join('');
+    const head = `<tr style="background:#f0f0f0;"><th style="border:1px solid #999;padding:4px;">Sr</th><th style="border:1px solid #999;padding:4px;">Description</th><th style="border:1px solid #999;padding:4px;">Unit</th><th style="border:1px solid #999;padding:4px;">Qty</th><th style="border:1px solid #999;padding:4px;">Unit Price</th><th style="border:1px solid #999;padding:4px;">Total</th></tr>`;
+    const taxRate = (q.items&&q.items[0]&&q.items[0].taxPct)||0;
+    const foot = q.taxAmt>0 ?
+      `<tr><td colspan="5" style="text-align:right;padding:5px;border:1px solid #999;">Sub Total</td><td style="padding:5px;border:1px solid #999;text-align:right;">${fmt(q.subTotal)}</td></tr>
+       <tr><td colspan="5" style="text-align:right;padding:5px;border:1px solid #999;">GST ${taxRate}%</td><td style="padding:5px;border:1px solid #999;text-align:right;">${fmt(q.taxAmt)}</td></tr>
+       <tr><td colspan="5" style="text-align:right;padding:6px;font-weight:800;border:1px solid #999;">Total</td><td style="padding:6px;font-weight:800;border:1px solid #999;text-align:right;">${cur} ${fmt(q.grandTotal)}</td></tr>`
+      : `<tr><td colspan="5" style="text-align:right;padding:6px;font-weight:800;border:1px solid #999;">Total</td><td style="padding:6px;font-weight:800;border:1px solid #999;text-align:right;">${cur} ${fmt(q.grandTotal)}</td></tr>`;
+    tableHtml = `<table style="width:100%;border-collapse:collapse;font-size:${fs-1}px;margin-top:8px;"><thead>${head}</thead><tbody>${rows}</tbody><tfoot>${foot}</tfoot></table>`;
+  }
+
+  const termsHtml = (q.terms||[]).map(t=>`<div>${t.label} : ${t.value}</div>`).join('');
+  const footerBlock = `<div style="margin-top:16px;display:flex;justify-content:space-between;font-size:${fs-1}px;">
+    <div>
+      <div style="font-weight:700;">Regards,</div>
+      <div>${tpl.contactPerson||''}</div>
+      <div>${tpl.cell?'Cell:'+tpl.cell:''}</div>
+      <div>${tpl.email||''}</div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-weight:700;">${tpl.footerName||tpl.companyName||''}</div>
+      <div>${(tpl.address||'').replace(/\n/g,'<br>')}</div>
+    </div>
+  </div>`;
+
+  return `<div style="font-family:Arial,sans-serif;font-size:${fs}px;width:${width};max-width:${width};margin:0 auto;padding:${quotSettings.margin||10}mm;color:#111;background:#fff;">
+    ${header}
+    <div style="text-align:center;font-size:${fs+3}px;font-weight:800;margin:6px 0;">${isBill?'BILL / INVOICE':(quotSettings.titleText||'Quotation')}</div>
+    ${infoLeft}
+    ${tableHtml}
+    <div style="margin-top:10px;font-size:${fs-1}px;">
+      <div style="font-weight:700;">Other terms and conditions :</div>
+      ${termsHtml}
+    </div>
+    ${footerBlock}
+  </div>`;
+}
+function previewQuotationV2(q, isBill){
+  currentBillData = {q, isBill};
+  document.getElementById('bill-preview-title').textContent = isBill?'🧾 Bill Preview':'📄 Quotation Preview - #'+q.srNo;
+  document.getElementById('bill-preview-frame').innerHTML = buildQuotHTMLv2(q, isBill, 'a4');
+  openModal('billPreviewModal');
+}
+function downloadQuotationPDFv2(q, isBill){
+  const doc = new jspdf.jsPDF();
+  const cur = settings.currency||'PKR';
+  const tpl = q.templateSnapshot || quotTemplates[q.templateKey] || QUOT_TEMPLATE_DEFAULT.sau;
+  let y=15;
+  doc.setFontSize(16); doc.setFont(undefined,'bold'); doc.setTextColor(10,138,60);
+  doc.text((tpl.companyName||'').split('\n')[0]||'', 14, y);
+  doc.setFontSize(9); doc.setFont(undefined,'normal'); doc.setTextColor(80,80,80);
+  if(tpl.authorizedText) doc.text(tpl.authorizedText, 196, y, {align:'right'});
+  y+=6;
+  doc.setDrawColor(0); doc.line(14,y,196,y); y+=6;
+  doc.setFontSize(13); doc.setTextColor(0,0,0); doc.setFont(undefined,'bold');
+  doc.text(isBill?'BILL / INVOICE':(quotSettings.titleText||'Quotation'), 105, y, {align:'center'}); y+=8;
+  doc.setFontSize(10); doc.setFont(undefined,'normal');
+  doc.text(`Party Name: ${q.party||'-'}`, 14, y);
+  doc.text(`Date: ${q.date||''}`, 140, y); y+=5;
+  if(q.project){ doc.text(`Project: ${q.project}`, 14, y); y+=5; }
+  doc.text(`Our Ref: ${q.ourRef||('SAU/LHR/Q/'+q.srNo)}`, 14, y); y+=5;
+  if(q.contactPerson){ doc.text(`Contact Person: ${q.contactPerson}`, 14, y); y+=5; }
+  y+=3;
+
+  let body, head;
+  if(q.mixedTax){
+    head=[['Sr','Description','Unit','Qty','Excl. Value','Tax %','Tax Payable','Incl. Value']];
+    body=(q.items||[]).map((it,i)=>{
+      const excl=(it.qty||0)*(it.unitPrice||0), taxA=excl*(it.taxPct||0)/100, incl=excl+taxA;
+      return [i+1, it.desc, it.unit, it.qty, fmt(excl), (it.taxPct||0)+'%', fmt(taxA), fmt(incl)];
+    });
+    body.push([{content:'Total', colSpan:7, styles:{fontStyle:'bold',halign:'right'}},{content:cur+' '+fmt(q.grandTotal), styles:{fontStyle:'bold'}}]);
+  } else {
+    head=[['Sr','Description','Unit','Qty','Unit Price','Total']];
+    body=(q.items||[]).map((it,i)=>[i+1, it.desc, it.unit, it.qty, fmt(it.unitPrice), fmt((it.qty||0)*(it.unitPrice||0))]);
+    if(q.taxAmt>0){
+      const taxRate=(q.items&&q.items[0]&&q.items[0].taxPct)||0;
+      body.push([{content:'Sub Total',colSpan:5,styles:{halign:'right'}},{content:fmt(q.subTotal)}]);
+      body.push([{content:`GST ${taxRate}%`,colSpan:5,styles:{halign:'right'}},{content:fmt(q.taxAmt)}]);
+    }
+    body.push([{content:'Total', colSpan:5, styles:{fontStyle:'bold',halign:'right'}},{content:cur+' '+fmt(q.grandTotal), styles:{fontStyle:'bold'}}]);
+  }
+  doc.autoTable({startY:y, head, body, styles:{fontSize:8}, headStyles:{fillColor:[240,240,240],textColor:[0,0,0]}});
+  y = doc.lastAutoTable.finalY+8;
+  doc.setFontSize(9); doc.setFont(undefined,'bold'); doc.text('Other terms and conditions :',14,y); y+=5;
+  doc.setFont(undefined,'normal');
+  (q.terms||[]).forEach(t=>{ doc.text(`${t.label} : ${t.value}`,14,y); y+=5; });
+  y+=6;
+  doc.setFont(undefined,'bold'); doc.text('Regards,',14,y);
+  doc.text(tpl.footerName||tpl.companyName||'', 140, y); y+=5;
+  doc.setFont(undefined,'normal');
+  doc.text(tpl.contactPerson||'',14,y);
+  if(tpl.address){ const addrLines = doc.splitTextToSize(tpl.address, 60); doc.text(addrLines, 140, y); }
+  y+=5;
+  if(tpl.cell) doc.text(`Cell:${tpl.cell}`,14,y);
+  y+=5;
+  if(tpl.email) doc.text(tpl.email,14,y);
+  doc.save(`${isBill?'Bill':'Quotation'}_${q.srNo}_${(q.party||'Customer').replace(/[^a-zA-Z0-9]/g,'_')}.pdf`);
+  toast('PDF download ho gayi','success');
+}
+
+// ==================== BRAND PRICE LISTS (Newage / Osram / Philips / Clipsal) ====================
+let brandPriceLists = {Newage:[], Osram:[], Philips:[], Clipsal:[]};
+let bplActiveTab = 'Newage';
+function loadBrandPriceLists(){
+  const d = localStorage.getItem('sau_brand_price_lists_v2');
+  brandPriceLists = d? JSON.parse(d) : {Newage:[],Osram:[],Philips:[],Clipsal:[]};
+  ['Newage','Osram','Philips','Clipsal'].forEach(k=>{ if(!brandPriceLists[k]) brandPriceLists[k]=[]; });
+}
+function saveBrandPriceLists(){
+  safeSetItem('sau_brand_price_lists_v2', JSON.stringify(brandPriceLists));
+  if(typeof triggerAutoSync==='function') triggerAutoSync();
+}
+function renderBplTabs(){
+  const wrap = document.getElementById('bpl-tabs');
+  if(!wrap) return;
+  const brands = ['Newage','Osram','Philips','Clipsal'];
+  wrap.innerHTML = brands.map(b=>{
+    const active = bplActiveTab===b;
+    return `<button type="button" class="btn ${active?'btn-purple':''} btn-sm" style="${active?'':'background:var(--bg3);border:1px solid var(--border2);color:var(--text);'}" onclick="switchBplTab('${b}')">${b}</button>`;
+  }).join('');
+}
+function switchBplTab(b){ bplActiveTab=b; renderBplTabs(); renderBplContent(); }
+function usesDiscountPct(brand){ return brand==='Newage'||brand==='Clipsal'; }
+function renderBplContent(){
+  const wrap = document.getElementById('bpl-content');
+  if(!wrap) return;
+  const brand = bplActiveTab;
+  const items = brandPriceLists[brand]||[];
+  const cur = settings.currency||'PKR';
+  const showDisc = usesDiscountPct(brand);
+  let html = `<div class="flex-gap mb-8" style="align-items:flex-end;flex-wrap:wrap;">
+    <button class="btn btn-green btn-sm" onclick="openAddBrandItemModal('${brand}')">➕ Add Item</button>
+    ${showDisc? `<div class="form-group" style="margin:0;"><label style="font-size:10px;">Global Discount %</label><input type="number" id="bpl-global-disc" value="0" style="width:80px;" onchange="applyGlobalBplDiscount('${brand}', this.value)"></div>`:''}
+  </div>`;
+  if(!items.length){
+    html += `<div style="color:var(--text3);padding:14px;">Abhi is list mein koi item nahi hai. "➕ Add Item" se add karein.</div>`;
+  } else {
+    html += `<div class="tbl-wrap"><table><thead><tr>
+      <th>Sr</th><th>Description</th><th>Rate</th>${showDisc?'<th>%</th><th>Final</th>':''}<th>⭐</th><th></th>
+    </tr></thead><tbody>`;
+    items.forEach((it,i)=>{
+      const disc = showDisc?(it.disc||0):0;
+      const final = it.rate*(1-disc/100);
+      html += `<tr>
+        <td>${i+1}</td>
+        <td style="max-width:260px;">${it.desc}</td>
+        <td style="text-align:right;">${cur} ${fmt(it.rate)}</td>
+        ${showDisc?`<td><input type="number" value="${disc}" style="width:55px;" onchange="updateBplItem('${brand}','${it.id}','disc',this.value)"></td><td style="text-align:right;color:var(--neon4);">${cur} ${fmt(final)}</td>`:''}
+        <td><button class="btn btn-xs" style="background:${it.top?'var(--neon3)':'var(--bg3)'};border:1px solid var(--border2);" onclick="toggleBplTop('${brand}','${it.id}')" title="Top List mein add/remove">${it.top?'⭐':'☆'}</button></td>
+        <td style="white-space:nowrap;">
+          <button class="btn btn-neon btn-xs" onclick="addBplItemToQuotation('${brand}','${it.id}')" title="Quotation mein add karein">➕ Quotation</button>
+          <button class="btn btn-red btn-xs" onclick="deleteBplItem('${brand}','${it.id}')">🗑️</button>
+        </td>
+      </tr>`;
+    });
+    html += `</tbody></table></div>`;
+  }
+  wrap.innerHTML = html;
+}
+function applyGlobalBplDiscount(brand, val){
+  const d = parseFloat(val)||0;
+  (brandPriceLists[brand]||[]).forEach(it=>{ it.disc=d; });
+  saveBrandPriceLists();
+  renderBplContent();
+}
+function updateBplItem(brand, id, field, val){
+  const it = (brandPriceLists[brand]||[]).find(x=>x.id===id);
+  if(!it) return;
+  it[field] = parseFloat(val)||0;
+  saveBrandPriceLists();
+  renderBplContent();
+}
+function toggleBplTop(brand, id){
+  const it = (brandPriceLists[brand]||[]).find(x=>x.id===id);
+  if(!it) return;
+  it.top = !it.top;
+  saveBrandPriceLists();
+  renderBplContent();
+  renderTopItemsDash();
+}
+function deleteBplItem(brand, id){
+  if(!confirm('Ye item delete karein?')) return;
+  brandPriceLists[brand] = (brandPriceLists[brand]||[]).filter(x=>x.id!==id);
+  saveBrandPriceLists();
+  renderBplContent();
+  renderTopItemsDash();
+}
+function openAddBrandItemModal(brand){
+  document.getElementById('bpl-add-brand').value = brand;
+  document.getElementById('bpl-add-desc').value='';
+  document.getElementById('bpl-add-rate').value='';
+  openModal('addBrandItemModal');
+}
+function saveBrandItem(){
+  const brand = document.getElementById('bpl-add-brand').value;
+  const desc = document.getElementById('bpl-add-desc').value.trim();
+  const rate = parseFloat(document.getElementById('bpl-add-rate').value)||0;
+  if(!desc||!rate){ toast('Description aur rate likhein','warning'); return; }
+  if(!brandPriceLists[brand]) brandPriceLists[brand]=[];
+  brandPriceLists[brand].push({id:'BP'+Date.now()+Math.random().toString(36).slice(2,6), desc, rate, disc:0, top:false});
+  saveBrandPriceLists();
+  closeModal('addBrandItemModal');
+  renderBplContent();
+  toast('Item add ho gaya','success');
+}
+function addBplItemToQuotation(brand, id){
+  const it = (brandPriceLists[brand]||[]).find(x=>x.id===id);
+  if(!it) return;
+  const disc = usesDiscountPct(brand)?(it.disc||0):0;
+  const finalRate = it.rate*(1-disc/100);
+  const taxModeVal = (document.getElementById('qb-taxmode')||{}).value||'18';
+  const defaultTax = taxModeVal==='off'?0:parseFloat(taxModeVal);
+  qbItems.push({id:'I'+Date.now()+Math.random().toString(36).slice(2,6), desc:it.desc, unit:'Pcs', qty:1, unitPrice:finalRate, taxPct:defaultTax});
+  renderQbItemsTable();
+  const card = document.getElementById('qb-card');
+  if(card) card.scrollIntoView({behavior:'smooth'});
+  toast(`"${it.desc}" quotation mein add ho gaya`,'success');
+}
+
+// ---- Top Items Dashboard ----
+function renderTopItemsDash(){
+  const wrap = document.getElementById('bpl-top-content');
+  if(!wrap) return;
+  const cur = settings.currency||'PKR';
+  const brands = ['Newage','Osram','Philips','Clipsal'];
+  let html='';
+  brands.forEach(brand=>{
+    const tops = (brandPriceLists[brand]||[]).filter(it=>it.top);
+    if(!tops.length) return;
+    html += `<div style="font-weight:700;color:var(--neon2);margin:10px 0 6px;">${brand}</div>`;
+    html += `<div class="grid3">`+tops.map(it=>{
+      const disc = usesDiscountPct(brand)?(it.disc||0):0;
+      const final = it.rate*(1-disc/100);
+      return `<div class="card" style="padding:10px;">
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">${it.desc}</div>
+        <div style="color:var(--neon4);font-weight:700;">${cur} ${fmt(final)}</div>
+        <div class="flex-gap" style="margin-top:6px;">
+          <button class="btn btn-neon btn-xs" onclick="addBplItemToQuotation('${brand}','${it.id}')">➕ Quotation</button>
+          <button class="btn btn-red btn-xs" onclick="toggleBplTop('${brand}','${it.id}')">Remove</button>
+        </div>
+      </div>`;
+    }).join('')+`</div>`;
+  });
+  wrap.innerHTML = html || '<div style="color:var(--text3);padding:14px;">Abhi koi Top Item nahi hai. Kisi item ke ⭐ button se add karein.</div>';
+}
+function showTopItemsDash(){
+  const el = document.getElementById('bpl-top-dash');
+  if(!el) return;
+  el.style.display = el.style.display==='none'?'block':'none';
+  if(el.style.display==='block'){ renderTopItemsDash(); el.scrollIntoView({behavior:'smooth'}); }
+}
+
+// ==================== SETTINGS: Template editor & Terms editor ====================
+function loadTplEditor(){
+  const sel = document.getElementById('qs-tpl-select');
+  if(!sel) return;
+  const k = sel.value;
+  const t = quotTemplates[k]||QUOT_TEMPLATE_DEFAULT[k];
+  document.getElementById('qs-tpl-name').value = t.companyName||'';
+  document.getElementById('qs-tpl-auth').value = t.authorizedText||'';
+  document.getElementById('qs-tpl-address').value = t.address||'';
+  document.getElementById('qs-tpl-contact').value = t.contactPerson||'';
+  document.getElementById('qs-tpl-cell').value = t.cell||'';
+  document.getElementById('qs-tpl-email').value = t.email||'';
+}
+function handleTplLogoUpload(which){
+  const inputId = which==='company'?'qs-tpl-logo-file':'qs-tpl-headerlogo-file';
+  const file = document.getElementById(inputId).files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    const k = document.getElementById('qs-tpl-select').value;
+    if(!quotTemplates[k]) quotTemplates[k] = {...QUOT_TEMPLATE_DEFAULT[k]};
+    if(which==='company') quotTemplates[k].companyLogoImg = e.target.result;
+    else quotTemplates[k].headerLogosImg = e.target.result;
+    toast('Logo load ho gaya, "Save Template" dabayein','info');
+  };
+  reader.readAsDataURL(file);
+}
+function saveTplEditor(){
+  const k = document.getElementById('qs-tpl-select').value;
+  if(!quotTemplates[k]) quotTemplates[k] = {...QUOT_TEMPLATE_DEFAULT[k]};
+  const t = quotTemplates[k];
+  t.companyName = document.getElementById('qs-tpl-name').value;
+  t.authorizedText = document.getElementById('qs-tpl-auth').value;
+  t.address = document.getElementById('qs-tpl-address').value;
+  t.contactPerson = document.getElementById('qs-tpl-contact').value;
+  t.cell = document.getElementById('qs-tpl-cell').value;
+  t.email = document.getElementById('qs-tpl-email').value;
+  saveQuotTemplates();
+  renderQbTemplatePicker();
+  toast('Template save ho gaya','success');
+}
+let tempTermsEdit = null;
+function renderTermsEditor(){
+  if(!tempTermsEdit) tempTermsEdit = JSON.parse(JSON.stringify(getQbTermsForRender()));
+  const wrap = document.getElementById('qs-terms-editor');
+  if(!wrap) return;
+  wrap.innerHTML = tempTermsEdit.map((t,i)=>`
+    <div class="flex-gap" style="margin-bottom:6px;align-items:center;">
+      <input type="text" value="${(t.label||'').replace(/"/g,'&quot;')}" style="width:140px;" onchange="tempTermsEdit[${i}].label=this.value">
+      <input type="text" value="${(t.value||'').replace(/"/g,'&quot;')}" style="flex:1;" onchange="tempTermsEdit[${i}].value=this.value">
+      <button class="btn btn-xs" style="background:var(--bg3);border:1px solid var(--border2);" onclick="moveTermRow(${i},-1)">⬆️</button>
+      <button class="btn btn-xs" style="background:var(--bg3);border:1px solid var(--border2);" onclick="moveTermRow(${i},1)">⬇️</button>
+      <button class="btn btn-red btn-xs" onclick="removeTermRow(${i})">🗑️</button>
+    </div>`).join('');
+}
+function addTermRow(){ tempTermsEdit.push({label:'New Term',value:''}); renderTermsEditor(); }
+function removeTermRow(i){ tempTermsEdit.splice(i,1); renderTermsEditor(); }
+function moveTermRow(i,dir){
+  const j=i+dir; if(j<0||j>=tempTermsEdit.length) return;
+  const tmp=tempTermsEdit[i]; tempTermsEdit[i]=tempTermsEdit[j]; tempTermsEdit[j]=tmp;
+  renderTermsEditor();
+}
+function saveTermsFromSettings(){
+  quotSettings.termsList = tempTermsEdit;
+  safeSetItem('sau_quot_settings', JSON.stringify(quotSettings));
+  renderQbTermsList();
+  toast('Terms save ho gaye','success');
+}
+
 
 // ==================== DC DELIVERY CHALLAN PRINT ====================
 let currentDCPrintIdx = -1;
