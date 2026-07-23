@@ -10386,10 +10386,10 @@ const BRAND_FOOTER_LOGO_ASPECT = 245/450; // height/width of source image
 function stampBrandLogoOnAllPages(doc){
   try{
     const pageCount = doc.internal.getNumberOfPages();
-    const logoWmm = 38.1;  // 1.5 inch
-    const maxHmm = 25.4;   // 1 inch max height cap
+    let logoWmm = 25.4;  // 1 inch
+    const maxHmm = 12.7;   // 0.5 inch max height cap
     let logoHmm = logoWmm*BRAND_FOOTER_LOGO_ASPECT;
-    if(logoHmm>maxHmm) logoHmm = maxHmm;
+    if(logoHmm>maxHmm){ const scale = maxHmm/logoHmm; logoHmm = maxHmm; logoWmm = logoWmm*scale; }
     const margin = 6;
     for(let i=1;i<=pageCount;i++){
       doc.setPage(i);
