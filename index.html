@@ -12320,23 +12320,30 @@ let salarySlips = [];
 function loadSalarySlips(){
   const d = localStorage.getItem('sau_salary_slips');
   salarySlips = d ? JSON.parse(d) : [];
-  // Migrate slips saved before the dual-formula update (they only have the
-  // old single "netSalary" field, no fullMonthNetSalary/presentBasedNetSalary)
-  let migrated = false;
+  // Always recompute the derived totals (earnedDays, fullMonthNetSalary,
+  // presentBasedNetSalary, netSalary) from the slip's raw stored numbers
+  // (present/leave/halfday/baseSalary/deduction/bonus/advance/statutory)
+  // every time the app loads. This is cheap and self-heals any record that
+  // previously got a wrong/zero value baked in, regardless of how it happened.
   salarySlips.forEach(s=>{
-    if(s.fullMonthNetSalary===undefined || s.presentBasedNetSalary===undefined){
-      const perDayRate = s.perDayRate || ((s.baseSalary||0)/30);
-      const earnedDays = (s.earnedDays!==undefined) ? s.earnedDays : ((s.present||0) + (s.leave||0) + ((s.halfday||0)*0.5));
-      const bonus = s.bonus||0, overtime = s.overtime||0, advance = s.advance||0, statutoryDeductions = s.statutoryDeductions||0;
-      s.earnedDays = earnedDays;
-      // old netSalary field WAS the full-month formula, so preserve it as-is
-      s.fullMonthNetSalary = (s.netSalary!==undefined) ? s.netSalary : ((s.baseSalary||0) - (s.deduction||0) + bonus + overtime - advance - statutoryDeductions);
-      s.presentBasedNetSalary = (earnedDays * perDayRate) + bonus + overtime - advance - statutoryDeductions;
-      s.netSalary = s.presentBasedNetSalary;
-      migrated = true;
-    }
+    const baseSalary = parseFloat(s.baseSalary)||0;
+    const perDayRate = baseSalary/30;
+    const present = parseFloat(s.present)||0;
+    const leave = parseFloat(s.leave)||0;
+    const halfday = parseFloat(s.halfday)||0;
+    const deduction = parseFloat(s.deduction)||0;
+    const bonus = parseFloat(s.bonus)||0;
+    const overtime = parseFloat(s.overtime)||0;
+    const advance = parseFloat(s.advance)||0;
+    const statutoryDeductions = parseFloat(s.statutoryDeductions)||0;
+    const earnedDays = present + leave + (halfday*0.5);
+    s.perDayRate = perDayRate;
+    s.earnedDays = earnedDays;
+    s.fullMonthNetSalary = baseSalary - deduction + bonus + overtime - advance - statutoryDeductions;
+    s.presentBasedNetSalary = (earnedDays * perDayRate) + bonus + overtime - advance - statutoryDeductions;
+    s.netSalary = s.presentBasedNetSalary;
   });
-  if(migrated) saveSalarySlips();
+  saveSalarySlips();
 }
 function saveSalarySlips(){
   safeSetItem('sau_salary_slips', JSON.stringify(salarySlips));
