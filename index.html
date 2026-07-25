@@ -1545,7 +1545,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Only Absent days reduce salary (per-day rate = Base Salary ÷ days in month). Leave days are paid, same as Present. Bonus adds to net pay; Advance is deducted (since it was already paid out).</div>
     <div style="overflow-x:auto;">
       <table class="items-table">
-        <thead><tr><th>Employee</th><th>Present</th><th>Absent</th><th>Leave</th><th>Base Salary</th><th>Deduction</th><th>Bonus/OT</th><th>Advance</th><th>Tax/EOBI/PF</th><th>Net Payable</th><th></th><th>Share</th></tr></thead>
+        <thead><tr><th>Employee</th><th>Present</th><th>Absent</th><th>Leave</th><th>Base Salary</th><th>Deduction</th><th>Bonus/OT</th><th>Advance</th><th>Tax/EOBI/PF</th><th title="Full base salary minus only Absent deduction">Net (Full Month)</th><th title="Present days × per-day rate — final payable">Net (Present-Based)</th><th></th><th>Share</th></tr></thead>
         <tbody id="salarySlipsTbody"><tr><td colspan="10" style="text-align:center;color:var(--text3);">Select a month and click Generate.</td></tr></tbody>
       </table>
     </div>
@@ -12327,8 +12327,18 @@ function computeEmployeeSalaryForMonth(emp, month){
   const eobi = parseFloat(emp.eobi)||0;
   const pf = parseFloat(emp.pf)||0;
   const statutoryDeductions = tax + eobi + pf;
-  const netSalary = baseSalary - deduction + bonus + overtime - advance - statutoryDeductions;
-  return {present, absent, leave, halfday, late, daysInMonth, baseSalary, perDayRate, deduction, bonus, overtime, advance, tax, eobi, pf, statutoryDeductions, netSalary};
+  // Full-month formula (old): pays the whole base salary minus only the
+  // absent/half-day deduction — assumes every non-absent day of the month
+  // (including untracked days) was worked.
+  const fullMonthNetSalary = baseSalary - deduction + bonus + overtime - advance - statutoryDeductions;
+  // Present-based formula (actual/final payable): pays only for the days
+  // actually marked Present (+ Leave, paid same as Present, + half-day at
+  // 0.5) — safer when an employee leaves mid-month, since it never pays for
+  // days beyond what was actually recorded.
+  const earnedDays = present + leave + (halfday*0.5);
+  const presentBasedNetSalary = (earnedDays * perDayRate) + bonus + overtime - advance - statutoryDeductions;
+  const netSalary = presentBasedNetSalary; // <-- this is the amount actually paid / shown as final Net Payable
+  return {present, absent, leave, halfday, late, daysInMonth, baseSalary, perDayRate, deduction, bonus, overtime, advance, tax, eobi, pf, statutoryDeductions, earnedDays, fullMonthNetSalary, presentBasedNetSalary, netSalary};
 }
 function generateMonthlySalarySlips(){
   const month = document.getElementById('salary-month').value;
@@ -12360,13 +12370,14 @@ function renderSalarySlipsTable(){
   const tbody = document.getElementById('salarySlipsTbody');
   if(!tbody) return;
   const list = month ? salarySlips.filter(s=>s.month===month) : [];
-  if(!list.length){ tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text3);">'+(month?'No slips generated for this month yet — click Generate.':'Select a month and click Generate.')+'</td></tr>'; return; }
+  if(!list.length){ tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text3);">'+(month?'No slips generated for this month yet — click Generate.':'Select a month and click Generate.')+'</td></tr>'; return; }
   const cur = settings.currency||'PKR';
   tbody.innerHTML = list.map(s=>`<tr>
     <td>${s.empName}</td><td>${s.present}</td><td>${s.absent}</td><td>${s.leave}</td>
     <td>${cur} ${fmt(s.baseSalary)}</td><td>${cur} ${fmt(s.deduction)}</td><td>${cur} ${fmt((s.bonus||0)+(s.overtime||0))}</td><td>${cur} ${fmt(s.advance)}</td>
     <td>${cur} ${fmt(s.statutoryDeductions||0)}</td>
-    <td style="font-weight:700;color:var(--neon);">${cur} ${fmt(s.netSalary)}</td>
+    <td style="color:var(--text3);" title="Full base salary minus only Absent deduction">${cur} ${fmt(s.fullMonthNetSalary)}</td>
+    <td style="font-weight:700;color:var(--neon);" title="Present days × per-day rate (final payable)">${cur} ${fmt(s.presentBasedNetSalary)}</td>
     <td><button class="btn btn-neon btn-xs" onclick="downloadSalarySlipPDF('${s.id}')">📄 Slip</button></td>
     <td><button class="btn btn-xs" style="background:#25D366;color:#fff;" onclick="shareSalarySlipWhatsApp('${s.id}')" title="Share via WhatsApp">💬</button> <button class="btn btn-xs btn-neon" onclick="shareSalarySlipEmail('${s.id}')" title="Share via Email">✉️</button></td>
   </tr>`).join('');
@@ -12414,17 +12425,22 @@ function buildSalarySlipPage(doc, s, startY){
     body:[
       ['Base Salary', cur+' '+fmt(s.baseSalary)],
       ['Per-Day Rate', cur+' '+fmt(s.perDayRate)],
-      ['Absent/Half-Day Deduction', '- '+cur+' '+fmt(s.deduction)],
+      ['Earned Days (Present + Leave + Half-Day/2)', ''+fmt(s.earnedDays)],
+      ['Earned Salary (Earned Days × Per-Day Rate)', cur+' '+fmt(s.earnedDays*s.perDayRate)],
       ['Bonus', '+ '+cur+' '+fmt(s.bonus||0)],
       ['Overtime', '+ '+cur+' '+fmt(s.overtime||0)],
       ['Advance Deducted', '- '+cur+' '+fmt(s.advance)],
       ['Tax Deduction', '- '+cur+' '+fmt(s.tax||0)],
       ['EOBI', '- '+cur+' '+fmt(s.eobi||0)],
       ['Provident Fund', '- '+cur+' '+fmt(s.pf||0)],
-      ['Net Payable', cur+' '+fmt(s.netSalary)]
+      ['Net Payable', cur+' '+fmt(s.presentBasedNetSalary)],
+      ['(Reference only) Full-Month Basis Net', cur+' '+fmt(s.fullMonthNetSalary)]
     ],
     styles:{fontSize:9}, headStyles:{fillColor:[20,20,40]},
-    didParseCell: function(data){ if(data.row.index===9){ data.cell.styles.fontStyle='bold'; data.cell.styles.fontSize=11; } }
+    didParseCell: function(data){
+      if(data.row.index===10){ data.cell.styles.fontStyle='bold'; data.cell.styles.fontSize=11; }
+      if(data.row.index===11){ data.cell.styles.textColor=[150,150,150]; data.cell.styles.fontSize=8; data.cell.styles.fontStyle='italic'; }
+    }
   });
   y = doc.lastAutoTable.finalY + 20;
   doc.setFontSize(9);
