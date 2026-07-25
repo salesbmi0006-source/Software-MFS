@@ -12320,30 +12320,26 @@ let salarySlips = [];
 function loadSalarySlips(){
   const d = localStorage.getItem('sau_salary_slips');
   salarySlips = d ? JSON.parse(d) : [];
-  // Always recompute the derived totals (earnedDays, fullMonthNetSalary,
-  // presentBasedNetSalary, netSalary) from the slip's raw stored numbers
-  // (present/leave/halfday/baseSalary/deduction/bonus/advance/statutory)
-  // every time the app loads. This is cheap and self-heals any record that
-  // previously got a wrong/zero value baked in, regardless of how it happened.
-  salarySlips.forEach(s=>{
-    const baseSalary = parseFloat(s.baseSalary)||0;
-    const perDayRate = baseSalary/30;
-    const present = parseFloat(s.present)||0;
-    const leave = parseFloat(s.leave)||0;
-    const halfday = parseFloat(s.halfday)||0;
-    const deduction = parseFloat(s.deduction)||0;
-    const bonus = parseFloat(s.bonus)||0;
-    const overtime = parseFloat(s.overtime)||0;
-    const advance = parseFloat(s.advance)||0;
-    const statutoryDeductions = parseFloat(s.statutoryDeductions)||0;
-    const earnedDays = present + leave + (halfday*0.5);
-    s.perDayRate = perDayRate;
-    s.earnedDays = earnedDays;
-    s.fullMonthNetSalary = baseSalary - deduction + bonus + overtime - advance - statutoryDeductions;
-    s.presentBasedNetSalary = (earnedDays * perDayRate) + bonus + overtime - advance - statutoryDeductions;
-    s.netSalary = s.presentBasedNetSalary;
-  });
-  saveSalarySlips();
+}
+// Always derive the two net totals fresh from a slip's raw stored numbers.
+// Called at render/PDF/share time everywhere — never trusts any
+// precomputed/cached field, so it can't go stale no matter what happened
+// during a previous save/migration.
+function deriveSalaryTotals(s){
+  const baseSalary = parseFloat(s.baseSalary)||0;
+  const perDayRate = baseSalary/30;
+  const present = parseFloat(s.present)||0;
+  const leave = parseFloat(s.leave)||0;
+  const halfday = parseFloat(s.halfday)||0;
+  const deduction = parseFloat(s.deduction)||0;
+  const bonus = parseFloat(s.bonus)||0;
+  const overtime = parseFloat(s.overtime)||0;
+  const advance = parseFloat(s.advance)||0;
+  const statutoryDeductions = parseFloat(s.statutoryDeductions)||0;
+  const earnedDays = present + leave + (halfday*0.5);
+  const fullMonthNetSalary = baseSalary - deduction + bonus + overtime - advance - statutoryDeductions;
+  const presentBasedNetSalary = (earnedDays * perDayRate) + bonus + overtime - advance - statutoryDeductions;
+  return {perDayRate, earnedDays, fullMonthNetSalary, presentBasedNetSalary};
 }
 function saveSalarySlips(){
   safeSetItem('sau_salary_slips', JSON.stringify(salarySlips));
@@ -12418,35 +12414,41 @@ function renderSalarySlipsTable(){
   const list = month ? salarySlips.filter(s=>s.month===month) : [];
   if(!list.length){ tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text3);">'+(month?'No slips generated for this month yet — click Generate.':'Select a month and click Generate.')+'</td></tr>'; return; }
   const cur = settings.currency||'PKR';
-  tbody.innerHTML = list.map(s=>`<tr>
+  tbody.innerHTML = list.map(s=>{
+    const t = deriveSalaryTotals(s);
+    return `<tr>
     <td>${s.empName}</td><td>${s.present}</td><td>${s.absent}</td><td>${s.leave}</td>
     <td>${cur} ${fmt(s.baseSalary)}</td><td>${cur} ${fmt(s.deduction)}</td><td>${cur} ${fmt((s.bonus||0)+(s.overtime||0))}</td><td>${cur} ${fmt(s.advance)}</td>
     <td>${cur} ${fmt(s.statutoryDeductions||0)}</td>
-    <td style="color:var(--text3);" title="Full base salary minus only Absent deduction">${cur} ${fmt(s.fullMonthNetSalary)}</td>
-    <td style="font-weight:700;color:var(--neon);" title="Present days × per-day rate (final payable)">${cur} ${fmt(s.presentBasedNetSalary)}</td>
+    <td style="color:var(--text3);" title="Full base salary minus only Absent deduction">${cur} ${fmt(t.fullMonthNetSalary)}</td>
+    <td style="font-weight:700;color:var(--neon);" title="Present days × per-day rate (final payable)">${cur} ${fmt(t.presentBasedNetSalary)}</td>
     <td><button class="btn btn-neon btn-xs" onclick="downloadSalarySlipPDF('${s.id}')">📄 Full Slip</button> <button class="btn btn-xs" onclick="downloadQuickSalarySlipPDF('${s.id}')">📃 Quick Slip</button> <button class="btn btn-xs" style="background:var(--danger);color:#fff;" onclick="deleteSalarySlip('${s.id}')" title="Remove this record">🗑️</button></td>
     <td><button class="btn btn-xs" style="background:#25D366;color:#fff;" onclick="shareSalarySlipWhatsApp('${s.id}')" title="Share via WhatsApp">💬</button> <button class="btn btn-xs btn-neon" onclick="shareSalarySlipEmail('${s.id}')" title="Share via Email">✉️</button></td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 }
 function shareSalarySlipWhatsApp(slipId){
   const s = salarySlips.find(x=>x.id===slipId);
   if(!s){ toast('Slip not found','error'); return; }
   if(!s.phone){ toast('This employee has no phone number on file','warning'); return; }
   const cur = settings.currency||'PKR';
+  const t = deriveSalaryTotals(s);
   const phone = s.phone.replace(/[^0-9]/g,'');
-  const text = `Salary Slip — ${s.empName} (${s.month})\nBase Salary: ${cur} ${fmt(s.baseSalary)}\nDeduction: ${cur} ${fmt(s.deduction)}\nBonus/Overtime: ${cur} ${fmt((s.bonus||0)+(s.overtime||0))}\nAdvance Deducted: ${cur} ${fmt(s.advance)}\nTax/EOBI/PF: ${cur} ${fmt(s.statutoryDeductions||0)}\nNet Payable: ${cur} ${fmt(s.netSalary)}\n\nDownload the full PDF slip from the office. Please note: the PDF file itself isn't attached automatically — download it from the app and attach it in WhatsApp if needed.`;
+  const text = `Salary Slip — ${s.empName} (${s.month})\nBase Salary: ${cur} ${fmt(s.baseSalary)}\nDeduction: ${cur} ${fmt(s.deduction)}\nBonus/Overtime: ${cur} ${fmt((s.bonus||0)+(s.overtime||0))}\nAdvance Deducted: ${cur} ${fmt(s.advance)}\nTax/EOBI/PF: ${cur} ${fmt(s.statutoryDeductions||0)}\nNet Payable: ${cur} ${fmt(t.presentBasedNetSalary)}\n\nDownload the full PDF slip from the office. Please note: the PDF file itself isn't attached automatically — download it from the app and attach it in WhatsApp if needed.`;
   window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
 }
 function shareSalarySlipEmail(slipId){
   const s = salarySlips.find(x=>x.id===slipId);
   if(!s){ toast('Slip not found','error'); return; }
   const cur = settings.currency||'PKR';
+  const t = deriveSalaryTotals(s);
   const subject = `Salary Slip — ${s.empName} (${s.month})`;
-  const body = `Dear ${s.empName},\n\nHere is your salary summary for ${s.month}:\nBase Salary: ${cur} ${fmt(s.baseSalary)}\nDeduction: ${cur} ${fmt(s.deduction)}\nBonus/Overtime: ${cur} ${fmt((s.bonus||0)+(s.overtime||0))}\nAdvance Deducted: ${cur} ${fmt(s.advance)}\nTax/EOBI/PF: ${cur} ${fmt(s.statutoryDeductions||0)}\nNet Payable: ${cur} ${fmt(s.netSalary)}\n\n(Please attach the downloaded PDF slip before sending — email links can't attach files automatically.)\n\nRegards`;
+  const body = `Dear ${s.empName},\n\nHere is your salary summary for ${s.month}:\nBase Salary: ${cur} ${fmt(s.baseSalary)}\nDeduction: ${cur} ${fmt(s.deduction)}\nBonus/Overtime: ${cur} ${fmt((s.bonus||0)+(s.overtime||0))}\nAdvance Deducted: ${cur} ${fmt(s.advance)}\nTax/EOBI/PF: ${cur} ${fmt(s.statutoryDeductions||0)}\nNet Payable: ${cur} ${fmt(t.presentBasedNetSalary)}\n\n(Please attach the downloaded PDF slip before sending — email links can't attach files automatically.)\n\nRegards`;
   window.location.href = `mailto:${s.email||''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 function buildSalarySlipPage(doc, s, startY){
   const cur = settings.currency||'PKR';
+  const t = deriveSalaryTotals(s);
   let y = startY;
   if(startY===undefined) y = pdfHeader(doc, 'Salary Slip');
   doc.setFontSize(11); doc.setFont(undefined,'bold');
@@ -12470,17 +12472,17 @@ function buildSalarySlipPage(doc, s, startY){
     head:[['Description','Amount']],
     body:[
       ['Base Salary', cur+' '+fmt(s.baseSalary)],
-      ['Per-Day Rate', cur+' '+fmt(s.perDayRate)],
-      ['Earned Days (Present + Leave + Half-Day/2)', ''+fmt(s.earnedDays)],
-      ['Earned Salary (Earned Days × Per-Day Rate)', cur+' '+fmt(s.earnedDays*s.perDayRate)],
+      ['Per-Day Rate', cur+' '+fmt(t.perDayRate)],
+      ['Earned Days (Present + Leave + Half-Day/2)', ''+fmt(t.earnedDays)],
+      ['Earned Salary (Earned Days × Per-Day Rate)', cur+' '+fmt(t.earnedDays*t.perDayRate)],
       ['Bonus', '+ '+cur+' '+fmt(s.bonus||0)],
       ['Overtime', '+ '+cur+' '+fmt(s.overtime||0)],
       ['Advance Deducted', '- '+cur+' '+fmt(s.advance)],
       ['Tax Deduction', '- '+cur+' '+fmt(s.tax||0)],
       ['EOBI', '- '+cur+' '+fmt(s.eobi||0)],
       ['Provident Fund', '- '+cur+' '+fmt(s.pf||0)],
-      ['Net Payable', cur+' '+fmt(s.presentBasedNetSalary)],
-      ['(Reference only) Full-Month Basis Net', cur+' '+fmt(s.fullMonthNetSalary)]
+      ['Net Payable', cur+' '+fmt(t.presentBasedNetSalary)],
+      ['(Reference only) Full-Month Basis Net', cur+' '+fmt(t.fullMonthNetSalary)]
     ],
     styles:{fontSize:9}, headStyles:{fillColor:[20,20,40]},
     didParseCell: function(data){
@@ -12525,23 +12527,24 @@ function downloadAllSalarySlipsPDF(){
 // ---- Quick/Simple Slip: just Days × Per-Day Rate + Bonus - Advance = Net ----
 function buildQuickSalarySlipPage(doc, s, startY){
   const cur = settings.currency||'PKR';
+  const t = deriveSalaryTotals(s);
   let y = startY;
   if(startY===undefined) y = pdfHeader(doc, 'Salary Slip (Quick)');
   doc.setFontSize(11); doc.setFont(undefined,'bold');
   doc.text(`Employee: ${s.empName}`, 14, y); y+=6;
   doc.setFont(undefined,'normal'); doc.setFontSize(10);
   doc.text(`Salary Month: ${s.month}`, 14, y); y+=8;
-  const earnedSalary = s.earnedDays * s.perDayRate;
+  const earnedSalary = t.earnedDays * t.perDayRate;
   doc.autoTable({
     startY:y,
     head:[['Description','Amount']],
     body:[
-      ['Days Worked (Present + Leave)', ''+fmt(s.earnedDays)],
-      ['Per-Day Rate', cur+' '+fmt(s.perDayRate)],
+      ['Days Worked (Present + Leave)', ''+fmt(t.earnedDays)],
+      ['Per-Day Rate', cur+' '+fmt(t.perDayRate)],
       ['Salary (Days × Rate)', cur+' '+fmt(earnedSalary)],
       ['Bonus', '+ '+cur+' '+fmt((s.bonus||0)+(s.overtime||0))],
       ['Advance Deducted', '- '+cur+' '+fmt(s.advance||0)],
-      ['Net Payable', cur+' '+fmt(s.presentBasedNetSalary)]
+      ['Net Payable', cur+' '+fmt(t.presentBasedNetSalary)]
     ],
     styles:{fontSize:10}, headStyles:{fillColor:[20,20,40]},
     didParseCell: function(data){ if(data.row.index===5){ data.cell.styles.fontStyle='bold'; data.cell.styles.fontSize=12; } }
