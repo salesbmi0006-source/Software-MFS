@@ -11975,7 +11975,24 @@ async function saveEmployee(){
     username, password,
     picBase64, attendance: empTempAttendance, money: empTempMoney, documents: empTempDocs
   };
-  if(editingEmpIdx!==null){ employees[editingEmpIdx] = {...employees[editingEmpIdx], ...emp}; logAudit('edit','Employee',`Employee ${emp.name} updated`, undefined, emp); toast('Employee updated!','success'); }
+  if(editingEmpIdx!==null){
+    const oldName = employees[editingEmpIdx].name;
+    employees[editingEmpIdx] = {...employees[editingEmpIdx], ...emp};
+    if(oldName && oldName!==emp.name){
+      // Propagate the rename to every historical salary slip so the name
+      // is consistent everywhere instead of leaving old records under the
+      // previous name.
+      let renamed = 0;
+      (typeof salarySlips!=='undefined' ? salarySlips : []).forEach(s=>{
+        if((s.empId && s.empId===emp.id) || (!s.empId && s.empName===oldName)){
+          s.empId = emp.id; s.empName = emp.name; renamed++;
+        }
+      });
+      if(renamed>0 && typeof saveSalarySlips==='function') saveSalarySlips();
+      if(typeof renderSalarySlipsTable==='function') renderSalarySlipsTable();
+    }
+    logAudit('edit','Employee',`Employee ${emp.name} updated`, undefined, emp); toast('Employee updated!','success');
+  }
   else { employees.push(emp); logAudit('create','Employee',`Employee ${emp.name} added`, undefined, emp); toast('Employee added!','success'); }
   saveEmployees(); renderEmployees(); closeModal('addEmployeeModal');
 }
@@ -12303,6 +12320,23 @@ let salarySlips = [];
 function loadSalarySlips(){
   const d = localStorage.getItem('sau_salary_slips');
   salarySlips = d ? JSON.parse(d) : [];
+  // Migrate slips saved before the dual-formula update (they only have the
+  // old single "netSalary" field, no fullMonthNetSalary/presentBasedNetSalary)
+  let migrated = false;
+  salarySlips.forEach(s=>{
+    if(s.fullMonthNetSalary===undefined || s.presentBasedNetSalary===undefined){
+      const perDayRate = s.perDayRate || ((s.baseSalary||0)/30);
+      const earnedDays = (s.earnedDays!==undefined) ? s.earnedDays : ((s.present||0) + (s.leave||0) + ((s.halfday||0)*0.5));
+      const bonus = s.bonus||0, overtime = s.overtime||0, advance = s.advance||0, statutoryDeductions = s.statutoryDeductions||0;
+      s.earnedDays = earnedDays;
+      // old netSalary field WAS the full-month formula, so preserve it as-is
+      s.fullMonthNetSalary = (s.netSalary!==undefined) ? s.netSalary : ((s.baseSalary||0) - (s.deduction||0) + bonus + overtime - advance - statutoryDeductions);
+      s.presentBasedNetSalary = (earnedDays * perDayRate) + bonus + overtime - advance - statutoryDeductions;
+      s.netSalary = s.presentBasedNetSalary;
+      migrated = true;
+    }
+  });
+  if(migrated) saveSalarySlips();
 }
 function saveSalarySlips(){
   safeSetItem('sau_salary_slips', JSON.stringify(salarySlips));
@@ -12349,9 +12383,14 @@ function generateMonthlySalarySlips(){
     // Skip employees who had already exited before this month started
     if((emp.status==='resigned' || emp.status==='terminated') && emp.exitDate && emp.exitDate.slice(0,7) < month) return;
     const calc = computeEmployeeSalaryForMonth(emp, month);
-    const existingIdx = salarySlips.findIndex(s=>s.empName===emp.name && s.month===month);
+    // Match by the employee's permanent id first (correct behaviour, survives
+    // name changes). Fall back to matching by name only for older slips that
+    // were saved before ids were tracked, so they get linked/upgraded here.
+    let existingIdx = salarySlips.findIndex(s=>s.empId && s.empId===emp.id && s.month===month);
+    if(existingIdx<0) existingIdx = salarySlips.findIndex(s=>!s.empId && s.empName===emp.name && s.month===month);
     const slip = {
       id: existingIdx>=0 ? salarySlips[existingIdx].id : 'SS'+Date.now()+Math.random().toString(36).slice(2,5),
+      empId: emp.id,
       empName: emp.name, designation: emp.designation||'', phone: emp.phone||'', email: emp.email||'',
       bankName: emp.bankName||'', bankTitle: emp.bankTitle||'', bankAccount: emp.bankAccount||'',
       month, ...calc,
@@ -12378,7 +12417,7 @@ function renderSalarySlipsTable(){
     <td>${cur} ${fmt(s.statutoryDeductions||0)}</td>
     <td style="color:var(--text3);" title="Full base salary minus only Absent deduction">${cur} ${fmt(s.fullMonthNetSalary)}</td>
     <td style="font-weight:700;color:var(--neon);" title="Present days × per-day rate (final payable)">${cur} ${fmt(s.presentBasedNetSalary)}</td>
-    <td><button class="btn btn-neon btn-xs" onclick="downloadSalarySlipPDF('${s.id}')">📄 Slip</button></td>
+    <td><button class="btn btn-neon btn-xs" onclick="downloadSalarySlipPDF('${s.id}')">📄 Full Slip</button> <button class="btn btn-xs" onclick="downloadQuickSalarySlipPDF('${s.id}')">📃 Quick Slip</button> <button class="btn btn-xs" style="background:var(--danger);color:#fff;" onclick="deleteSalarySlip('${s.id}')" title="Remove this record">🗑️</button></td>
     <td><button class="btn btn-xs" style="background:#25D366;color:#fff;" onclick="shareSalarySlipWhatsApp('${s.id}')" title="Share via WhatsApp">💬</button> <button class="btn btn-xs btn-neon" onclick="shareSalarySlipEmail('${s.id}')" title="Share via Email">✉️</button></td>
   </tr>`).join('');
 }
@@ -12475,6 +12514,60 @@ function downloadAllSalarySlipsPDF(){
   doc.save(`Salary_Slips_${month}.pdf`);
   logAudit('download','Salary Slips',`All salary slips downloaded for ${month} (${list.length} employee(s))`, undefined, undefined);
   toast('PDF generated','success');
+}
+// ---- Quick/Simple Slip: just Days × Per-Day Rate + Bonus - Advance = Net ----
+function buildQuickSalarySlipPage(doc, s, startY){
+  const cur = settings.currency||'PKR';
+  let y = startY;
+  if(startY===undefined) y = pdfHeader(doc, 'Salary Slip (Quick)');
+  doc.setFontSize(11); doc.setFont(undefined,'bold');
+  doc.text(`Employee: ${s.empName}`, 14, y); y+=6;
+  doc.setFont(undefined,'normal'); doc.setFontSize(10);
+  doc.text(`Salary Month: ${s.month}`, 14, y); y+=8;
+  const earnedSalary = s.earnedDays * s.perDayRate;
+  doc.autoTable({
+    startY:y,
+    head:[['Description','Amount']],
+    body:[
+      ['Days Worked (Present + Leave)', ''+fmt(s.earnedDays)],
+      ['Per-Day Rate', cur+' '+fmt(s.perDayRate)],
+      ['Salary (Days × Rate)', cur+' '+fmt(earnedSalary)],
+      ['Bonus', '+ '+cur+' '+fmt((s.bonus||0)+(s.overtime||0))],
+      ['Advance Deducted', '- '+cur+' '+fmt(s.advance||0)],
+      ['Net Payable', cur+' '+fmt(s.presentBasedNetSalary)]
+    ],
+    styles:{fontSize:10}, headStyles:{fillColor:[20,20,40]},
+    didParseCell: function(data){ if(data.row.index===5){ data.cell.styles.fontStyle='bold'; data.cell.styles.fontSize=12; } }
+  });
+  y = doc.lastAutoTable.finalY + 20;
+  doc.setFontSize(9);
+  doc.text('_______________________', 14, y);
+  doc.text('_______________________', 130, y);
+  y+=5;
+  doc.text('Employee Signature', 14, y);
+  doc.text('Authorized Signature', 130, y);
+  return y;
+}
+function downloadQuickSalarySlipPDF(slipId){
+  const s = salarySlips.find(x=>x.id===slipId);
+  if(!s){ toast('Slip not found','error'); return; }
+  const doc = new jspdf.jsPDF();
+  buildQuickSalarySlipPage(doc, s);
+  stampBrandLogoOnAllPages(doc);
+  doc.save(`Salary_Slip_Quick_${s.empName.replace(/[^a-zA-Z0-9]/g,'_')}_${s.month}.pdf`);
+  logAudit('download','Salary Slips',`Quick salary slip downloaded: ${s.empName} — ${s.month}`, undefined, undefined);
+  toast('PDF generated','success');
+}
+function deleteSalarySlip(slipId){
+  const idx = salarySlips.findIndex(x=>x.id===slipId);
+  if(idx<0){ toast('Slip not found','error'); return; }
+  const s = salarySlips[idx];
+  if(!confirm(`Delete salary slip record for ${s.empName} (${s.month})? This cannot be undone.`)) return;
+  salarySlips.splice(idx,1);
+  saveSalarySlips();
+  renderSalarySlipsTable();
+  logAudit('delete','Salary Slips',`Salary slip deleted: ${s.empName} — ${s.month}`, s, undefined);
+  toast('Salary slip record removed','success');
 }
 
 // ==================== MODULE 3: REMINDER SYSTEM ====================
