@@ -591,6 +591,12 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       <button class="btn btn-neon btn-sm" onclick="clearLedgerFilters()">✕ Clear</button>
       <button class="btn btn-purple btn-sm" onclick="exportLedgerPDF()">📄 PDF</button>
     </div>
+    <div class="flex-gap mb-8" style="flex-wrap:wrap;align-items:center;background:var(--bg2);padding:8px 10px;border-radius:8px;">
+      <span style="font-size:12px;color:var(--text2);">📌 Previous Balance (opening balance before ledger entries start):</span>
+      <input type="number" step="0.01" id="ledgerOpeningBalance" placeholder="0.00" style="width:150px;">
+      <input type="date" id="ledgerOpeningDate" style="width:145px;" title="As of date (optional, used only for sorting)">
+      <button class="btn btn-green btn-xs" onclick="saveLedgerOpeningBalance()">💾 Save</button>
+    </div>
     <div id="ledger-summary" class="ledger-summary"></div>
     <div class="tbl-wrap">
       <table><thead><tr>
@@ -3415,6 +3421,15 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div class="form-group"><label>Date</label><input type="date" id="cheque-date"></div>
     <div class="form-group"><label>Total Amount</label><input type="number" id="cheque-amount" placeholder="0.00"></div>
     <div class="form-group"><label>Deduction</label><input type="number" id="cheque-deduction" placeholder="0.00"></div>
+    <div class="form-group"><label>Payment Mode</label>
+      <select id="cheque-paymode">
+        <option value="cheque">🏦 Cheque</option>
+        <option value="cash">💵 Cash</option>
+        <option value="bank_transfer">🏧 Bank Transfer</option>
+        <option value="online">📲 Online / Easypaisa / JazzCash</option>
+        <option value="other">✏️ Other</option>
+      </select>
+    </div>
     <div class="form-group"><label>Party</label><input type="text" id="cheque-party" list="party-list2" placeholder="Party name"><datalist id="party-list2"></datalist></div>
     <div class="form-group"><label>Linked Invoice Nos (comma separated)</label><input type="text" id="cheque-invoices" placeholder="e.g. 501,502,503"></div>
     <div class="form-group"><label>Notes</label><input type="text" id="cheque-notes" placeholder="Optional notes..."></div>
@@ -3602,6 +3617,7 @@ let db = [];
 let cheques = [];
 let ledgerData = [];
 let fbrParties = [];
+let partyOpeningBalances = {}; // { partyName: {amount: number, date: 'YYYY-MM-DD'} } — shown at top of Party Ledger as "Previous Balance"
 let descMaster = []; // [{desc, hscode, uom, ts, addedFrom}] — master list of all item descriptions used across DCs/Quotations
 let settings = {};
 let selectedIds = new Set();
@@ -3695,6 +3711,11 @@ function saveSettings(e){
   settings.strn = document.getElementById('set-strn').value||settings.strn;
   settings.address = document.getElementById('set-address').value||settings.address;
   settings.pdfFullDetails = document.getElementById('set-pdf-full-details').checked;
+  settings.showNtn = document.getElementById('set-pdf-ntn') ? document.getElementById('set-pdf-ntn').checked : true;
+  settings.showStrn = document.getElementById('set-pdf-strn') ? document.getElementById('set-pdf-strn').checked : true;
+  settings.showPhone = document.getElementById('set-pdf-phone') ? document.getElementById('set-pdf-phone').checked : true;
+  settings.showEmail = document.getElementById('set-pdf-email') ? document.getElementById('set-pdf-email').checked : true;
+  settings.showAddress = document.getElementById('set-pdf-address') ? document.getElementById('set-pdf-address').checked : true;
   settings.phone = document.getElementById('set-phone').value||settings.phone;
   settings.email = document.getElementById('set-email').value||settings.email;
   settings.autoBackup = document.getElementById('set-autobackup').checked ? 'on':'off';
@@ -3746,6 +3767,11 @@ function applySettings(){
   const ab = document.getElementById('set-autobackup');
   const pfd = document.getElementById('set-pdf-full-details');
   if(pfd) pfd.checked = settings.pdfFullDetails!==false;
+  const pdfFieldToggles = {'set-pdf-ntn':'showNtn','set-pdf-strn':'showStrn','set-pdf-phone':'showPhone','set-pdf-email':'showEmail','set-pdf-address':'showAddress'};
+  for(const [id,key] of Object.entries(pdfFieldToggles)){
+    const el = document.getElementById(id);
+    if(el) el.checked = settings[key]!==false;
+  }
   const pro = document.getElementById('set-pdf-report-order');
   if(pro) pro.value = settings.pdfReportOrder||'invoice';
   if(ab) ab.checked = settings.autoBackup==='on';
@@ -3805,6 +3831,8 @@ function loadData(){
   if(c) cheques = JSON.parse(c); else cheques = [];
   if(l) ledgerData = JSON.parse(l); else ledgerData = [];
   if(p) fbrParties = JSON.parse(p); else fbrParties = EMBEDDED_BACKUP.fbrParties||[];
+  const ob = localStorage.getItem('sau_opening_balances');
+  partyOpeningBalances = ob ? JSON.parse(ob) : {};
   const emp = localStorage.getItem('sau_employees');
   employees = emp ? JSON.parse(emp) : [];
   let empIdsBackfilled = false;
@@ -3845,6 +3873,7 @@ function saveData(){
     safeSetItem('sau_ledger', JSON.stringify(ledgerData));
     safeSetItem('fbr_parties', JSON.stringify(fbrParties));
     safeSetItem('sau_desc_master', JSON.stringify(descMaster));
+    safeSetItem('sau_opening_balances', JSON.stringify(partyOpeningBalances));
     document.getElementById('autosave-dot').style.background = 'var(--success)';
   } catch(err) {
     console.error('saveData error:', err);
@@ -3882,7 +3911,7 @@ async function buildFullBackupData(){
     docsWithBlob.push({...doc, data});
   }
   return {
-    db, cheques, ledgerData:ledgerData, fbrParties, descMaster, settings,
+    db, cheques, ledgerData:ledgerData, fbrParties, descMaster, settings, partyOpeningBalances,
     digitalInvoices: diWithPdf,
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
     savedQuotations, quotSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
@@ -4070,7 +4099,7 @@ function desanitizeFromFirebase(value){
 
 function buildCloudSyncData(){
   return {
-    db, cheques, ledgerData, fbrParties, descMaster, settings,
+    db, cheques, ledgerData, fbrParties, descMaster, settings, partyOpeningBalances,
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
     savedQuotations, quotSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
     stockItems, stockMovements, salesReturns, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
@@ -4687,6 +4716,7 @@ async function applyRestoredBackupData(data){
   if(data.ledgerData) ledgerData = data.ledgerData;
   else if(data.ledger) ledgerData = data.ledger;
   if(data.fbrParties) fbrParties = data.fbrParties;
+  if(data.partyOpeningBalances) partyOpeningBalances = data.partyOpeningBalances;
   if(data.descMaster) descMaster = data.descMaster;
   if(data.settings) { settings = {...DEFAULT_SETTINGS,...data.settings}; applySettings(); }
   if(data.partyContacts) partyContacts = data.partyContacts;
@@ -5740,7 +5770,6 @@ function renderRecords(){
       <td style="white-space:nowrap;">
         <button class="btn btn-neon btn-xs" onclick="quickView(${idx})">🔍</button>
         <button class="btn btn-yellow btn-xs" onclick="editDC(${idx})">✏️</button>
-        <button class="btn btn-green btn-xs" onclick="openPayment(${idx})" title="Payment">${hasPay?'💰':'💳'}</button>
         <button class="btn btn-sm btn-xs" style="background:var(--bg3);color:var(--text2);" onclick="openNoteModal(${idx})" title="Note">${rec.note?'📝':'📋'}</button>
         ${rec.dispatch&&rec.dispatch.method?`<span title="${rec.dispatch.method==='leopards'?'Leopards: ':'Bilty: '}${rec.dispatch.trackingNo||''}" style="cursor:pointer;" onclick="quickView(${idx})">${rec.dispatch.method==='leopards'?'🐆':'🚛'}</span>`:''}
         <button class="btn btn-neon btn-xs" onclick="openDCPrint(${idx})" title="Print DC">🖨️</button>
@@ -6906,17 +6935,35 @@ function showAmountCards(){
   alert(`AMOUNT SUMMARY\n\nTotal Invoiced: ${cur} ${fmt(inv.reduce((s,r)=>s+getDCTotal(r),0))}\nPaid: ${cur} ${fmt(paid.reduce((s,r)=>s+getDCTotal(r),0))}\nOutstanding: ${cur} ${fmt(unpaid.reduce((s,r)=>s+getDCTotal(r),0))}\nCancelled: ${db.filter(r=>r.cancelled).length} records`);
 }
 
+function saveLedgerOpeningBalance(){
+  const party = document.getElementById('ledgerPartySelect').value;
+  if(!party){ toast('Select a party first','warning'); return; }
+  const amt = parseFloat(document.getElementById('ledgerOpeningBalance').value)||0;
+  const dt = document.getElementById('ledgerOpeningDate').value||'';
+  if(amt===0 && !dt){ delete partyOpeningBalances[party]; }
+  else { partyOpeningBalances[party] = { amount: amt, date: dt }; }
+  saveData();
+  toast('Previous balance saved','success');
+  renderLedger();
+}
 // ==================== LEDGER ====================
 function renderLedgerPartyList(){
   populatePartyList();
 }
 function renderLedger(){
   const party = document.getElementById('ledgerPartySelect').value;
+  const obInput = document.getElementById('ledgerOpeningBalance');
+  const obDateInput = document.getElementById('ledgerOpeningDate');
   if(!party){
     document.getElementById('ledgerTbody').innerHTML='<tr><td colspan="10" class="text-center" style="padding:20px;color:var(--text3);">Select a party to view ledger</td></tr>';
     document.getElementById('ledger-summary').innerHTML='';
+    if(obInput) obInput.value='';
+    if(obDateInput) obDateInput.value='';
     return;
   }
+  const ob = partyOpeningBalances[party] || {amount:0, date:''};
+  if(obInput) obInput.value = ob.amount || '';
+  if(obDateInput) obDateInput.value = ob.date || '';
   const from = document.getElementById('ledgerFrom').value;
   const to = document.getElementById('ledgerTo').value;
   const search = document.getElementById('ledgerSearch').value.toLowerCase();
@@ -6925,8 +6972,17 @@ function renderLedger(){
   if(to) entries=entries.filter(e=>e.date<=to);
   if(search) entries=entries.filter(e=>(e.refNo||'').toLowerCase().includes(search)||(e.invNo||'').toLowerCase().includes(search)||(e.dcNo||'').toLowerCase().includes(search));
   entries.sort((a,b)=> (a.date||'').localeCompare(b.date||'') || (a.id||'').localeCompare(b.id||''));
-  let balance=0, totalBills=0, totalPaid=0, totalDed=0;
+  let balance=(ob.amount||0), totalBills=0, totalPaid=0, totalDed=0;
   const cur=settings.currency||'PKR';
+  // "Previous Balance" always shows first, above every other row, regardless of date/search filters
+  const openingRow = (ob.amount) ? `<tr style="background:var(--bg3);font-style:italic;">
+      <td>${ob.date?fmtDate(ob.date):'-'}</td>
+      <td colspan="3">Previous Balance</td>
+      <td>Opening balance carried forward</td>
+      <td></td><td></td><td></td>
+      <td style="text-align:right;font-weight:700;color:${balance<0?'var(--neon4)':'var(--neon3)'};">${fmt(Math.abs(balance))} ${balance<0?'CR':'DR'}</td>
+      <td></td>
+    </tr>` : '';
   const rows = entries.map(e=>{
     const isDebit = e.type==='bill'||e.type==='debit_note';
     const debit = isDebit?e.amount:0;
@@ -6954,8 +7010,8 @@ function renderLedger(){
       </td>
     </tr>`;
   });
-  document.getElementById('ledgerTbody').innerHTML = rows.length ? rows.join('') : '<tr><td colspan="10" class="text-center" style="padding:20px;color:var(--text3);">No ledger entries found</td></tr>';
-  const outstanding = totalBills-totalPaid-totalDed;
+  document.getElementById('ledgerTbody').innerHTML = (openingRow + rows.join('')) || '<tr><td colspan="10" class="text-center" style="padding:20px;color:var(--text3);">No ledger entries found</td></tr>';
+  const outstanding = (ob.amount||0)+totalBills-totalPaid-totalDed;
   const detailMode = (document.getElementById('ledger-mode')||{}).value==='with_details';
   // "Without Details" = pure table only, NO summary cards. "With All Details" = summary cards + item breakdown.
   if(detailMode){
@@ -7112,7 +7168,8 @@ function deleteLedgerEntry(id){
 function exportLedgerPDF(){
   const party=document.getElementById('ledgerPartySelect').value;
   if(!party){toast('Select a party first','warning');return;}
-  generateLedgerPDF(party);
+  const detailMode = (document.getElementById('ledger-mode')||{}).value==='with_details';
+  generateLedgerPDF(party, detailMode);
 }
 
 // ==================== PARTIES ====================
@@ -7133,8 +7190,9 @@ function syncPartiesFromDB(){
 // Outstanding balance = total invoiced - total paid (via ledger), for a given party.
 function getPartyOutstandingBalance(partyName){
   const totalInv = db.filter(r=>r.partyName===partyName && r.invNo && !r.cancelled).reduce((s,r)=>s+getDCTotal(r),0);
-  const totalPaid = ledgerData.filter(l=>l.partyName===partyName && l.type==='payment').reduce((s,l)=>s+(l.amount||0)+(l.deduction||0),0);
-  return totalInv - totalPaid;
+  const totalPaid = ledgerData.filter(l=>l.partyName===partyName && l.type==='payment').reduce((s,l)=>s+(l.amount||0)-(l.deduction||0),0);
+  const opening = (partyOpeningBalances[partyName] && partyOpeningBalances[partyName].amount) || 0;
+  return opening + totalInv - totalPaid;
 }
 // Auto-calculates a Green/Yellow/Red risk score for a party based on:
 //  - payment history (average delay between invoice date and matching payment date)
@@ -7418,6 +7476,7 @@ function editCheque(idx){
   document.getElementById('cheque-party').value=c.party||'';
   document.getElementById('cheque-invoices').value=(c.invoices||[]).join(',');
   document.getElementById('cheque-notes').value=c.notes||'';
+  if(document.getElementById('cheque-paymode')) document.getElementById('cheque-paymode').value=c.paymode||'cheque';
   openModal('addChequeModal');
 }
 function saveCheque(){
@@ -7429,12 +7488,12 @@ function saveCheque(){
     deduction:parseFloat(document.getElementById('cheque-deduction').value)||0,
     party:document.getElementById('cheque-party').value,
     invoices:document.getElementById('cheque-invoices').value.split(',').map(s=>s.trim()).filter(Boolean),
-    notes:document.getElementById('cheque-notes').value
+    notes:document.getElementById('cheque-notes').value,
+    paymode:document.getElementById('cheque-paymode')?document.getElementById('cheque-paymode').value:'cheque'
   };
   if(!obj.chequeNo){toast('Cheque number required','warning');return;}
   // AUTO-LINK: if party given and invoices listed, auto-add ledger payment entry
   if(obj.party && obj.invoices.length>0){
-    const net = (obj.amount||0)-(obj.deduction||0);
     const existingLed = ledgerData.find(l=>l.refNo===obj.chequeNo && l.type==='payment' && l.partyName===obj.party);
     if(!existingLed){
       ledgerData.push({
@@ -7446,10 +7505,20 @@ function saveCheque(){
         invNo:obj.invoices.join(','),
         dcNo:'',
         desc:'Payment via '+obj.chequeNo+(obj.notes?' - '+obj.notes:''),
-        amount:net,
+        amount:obj.amount||0,
         deduction:obj.deduction||0,
-        narration:obj.notes||''
+        narration:obj.notes||'',
+        paymode:obj.paymode||'cheque'
       });
+    } else {
+      // Keep the linked ledger entry in sync when the cheque is edited later
+      existingLed.date = obj.date||existingLed.date;
+      existingLed.amount = obj.amount||0;
+      existingLed.deduction = obj.deduction||0;
+      existingLed.invNo = obj.invoices.join(',');
+      existingLed.desc = 'Payment via '+obj.chequeNo+(obj.notes?' - '+obj.notes:'');
+      existingLed.narration = obj.notes||'';
+      existingLed.paymode = obj.paymode||existingLed.paymode||'cheque';
     }
   }
   if(!isNaN(idx)&&idx>=0){ logAudit('edit','Cheque',`Cheque ${obj.chequeNo} updated`, cheques[idx], obj); cheques[idx]=obj; } else { cheques.push(obj); initApprovalForEntity('cheque', obj); logAudit('create','Cheque',`Cheque ${obj.chequeNo} added — amount ${obj.amount}`, undefined, obj); }
@@ -7464,7 +7533,7 @@ function showPartyChequeLedger(partyName){
   const partyLedger = ledgerData.filter(l=>l.partyName===partyName);
   const cur=settings.currency||'PKR';
   let totalBill=0, totalPaid=0;
-  partyLedger.forEach(l=>{ if(l.type==='bill') totalBill+=l.amount||0; else if(l.type==='payment') totalPaid+=(l.amount||0); });
+  partyLedger.forEach(l=>{ if(l.type==='bill') totalBill+=l.amount||0; else if(l.type==='payment') totalPaid+=(l.amount||0)-(l.deduction||0); });
   const balance = totalBill - totalPaid;
   let html = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">
     <div class="ledger-sum-card lsc1"><div style="font-weight:700;font-size:16px;">${cur} ${fmt(totalBill)}</div><div style="font-size:11px;color:var(--text2);">Total Billed</div></div>
@@ -7478,7 +7547,7 @@ function showPartyChequeLedger(partyName){
   allEntries.forEach(l=>{
     const isB=l.type==='bill', isPay=l.type==='payment';
     if(isB) runBal+=(l.amount||0);
-    else if(isPay) runBal-=(l.amount||0);
+    else if(isPay) runBal-=((l.amount||0)-(l.deduction||0));
     html+=`<tr>
       <td>${fmtDate(l.date)}</td>
       <td><span class="badge ${isB?'badge-pending':'badge-paid'}">${l.type}</span></td>
@@ -7963,14 +8032,19 @@ function generateHSCodePDF(){
   closeModal('hsReportPdfModal');
   toast('HS Code Report PDF generated','success');
 }
-function generateLedgerPDF(party){
+function generateLedgerPDF(party, detailMode){
   const entries=ledgerData.filter(e=>e.partyName===party).sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.id||'').localeCompare(b.id||''));
   if(!entries.length){toast('No ledger entries for this party','warning');return;}
   const doc=new jspdf.jsPDF();
   let y=pdfHeader(doc,`Party Ledger - ${party}`);
-  let balance=0, totalBills=0, totalPaid=0, totalDed=0;
+  const ob = partyOpeningBalances[party] || {amount:0, date:''};
+  let balance=(ob.amount||0), totalBills=0, totalPaid=0, totalDed=0;
   const cur=settings.currency||'PKR';
-  const body=entries.map(e=>{
+  const body=[];
+  if(ob.amount){
+    body.push([ob.date?fmtDate(ob.date):'-','Previous Balance','-','-','Opening balance carried forward','','','',fmt(Math.abs(balance))+(balance<0?' CR':' DR')]);
+  }
+  entries.forEach(e=>{
     const isDebit=e.type==='bill'||e.type==='debit_note';
     const debit=isDebit?e.amount:0;
     const credit=!isDebit?(e.amount-(e.deduction||0)):0;
@@ -7979,20 +8053,20 @@ function generateLedgerPDF(party){
     let desc = e.desc||e.narration||'';
     if(e.type==='bill' && e.dcNo) desc = `DC:${e.dcNo}${e.poNo?' PO:'+e.poNo:''}`;
     const typeLabel={bill:'Bill',payment:'Payment',debit_note:'Debit Note'}[e.type]||e.type;
-    return [fmtDate(e.date),typeLabel,e.refNo||'-',e.invNo||'-',desc,debit?fmt(debit):'',credit?fmt(credit):'',(e.deduction&&!isDebit)?fmt(e.deduction):'',fmt(Math.abs(balance))+(balance<0?' CR':' DR')];
+    body.push([fmtDate(e.date),typeLabel,e.refNo||'-',e.invNo||'-',desc,debit?fmt(debit):'',credit?fmt(credit):'',(e.deduction&&!isDebit)?fmt(e.deduction):'',fmt(Math.abs(balance))+(balance<0?' CR':' DR')]);
   });
   doc.autoTable({
     startY:y, head:[['Date','Type','Ref/Cheque','Invoice','Description','Debit','Credit','Deduction','Balance']],
     body, styles:{fontSize:8}, headStyles:{fillColor:[20,20,40]}
   });
   let fy = doc.lastAutoTable.finalY+8;
-  const outstanding = totalBills-totalPaid-totalDed;
+  const outstanding = (ob.amount||0)+totalBills-totalPaid-totalDed;
   doc.setFontSize(10); doc.setFont(undefined,'bold');
   doc.text(`Total Bills: ${cur} ${fmt(totalBills)}   Total Paid: ${cur} ${fmt(totalPaid)}   Deductions: ${cur} ${fmt(totalDed)}   Outstanding: ${cur} ${fmt(outstanding)}`,14,fy);
   fy += 10;
 
-  // Detailed Invoice Breakdown (per bill entry with item-level details)
-  const billEntries = entries.filter(e=>e.type==='bill' && e.items && e.items.length);
+  // Detailed Invoice Breakdown (per bill entry with item-level details) — only for "With All Details" mode
+  const billEntries = detailMode ? entries.filter(e=>e.type==='bill' && e.items && e.items.length) : [];
   if(billEntries.length){
     doc.setFontSize(12); doc.setFont(undefined,'bold');
     if(fy>250){ doc.addPage(); fy=15; }
@@ -8021,7 +8095,7 @@ function generateLedgerPDF(party){
   }
   stampBrandLogoOnAllPages(doc);
   doc.save(`Ledger_${party.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
-  toast('Ledger PDF generated with full invoice details','success');
+  toast(detailMode ? 'Ledger PDF generated with full invoice details' : 'Ledger summary PDF generated','success');
 }
 function openPdfMenu(){
   showTab('reports');
@@ -8579,9 +8653,15 @@ function pdfHeader(doc, title){
   let y = 22;
   if(settings.pdfFullDetails!==false){
     doc.setFontSize(9); doc.setFont(undefined,'normal');
-    doc.text(`NTN: ${settings.ntn||''}  STRN: ${settings.strn||''}`, 14, y); y+=5;
-    doc.text(`${(settings.address||'').replace(/\n/g,' ')}`, 14, y); y+=5;
-    doc.text(`Phone: ${settings.phone||''}  Email: ${settings.email||''}`, 14, y); y+=5;
+    const ntnStrnParts=[];
+    if(settings.showNtn!==false) ntnStrnParts.push(`NTN: ${settings.ntn||''}`);
+    if(settings.showStrn!==false) ntnStrnParts.push(`STRN: ${settings.strn||''}`);
+    if(ntnStrnParts.length){ doc.text(ntnStrnParts.join('  '), 14, y); y+=5; }
+    if(settings.showAddress!==false && settings.address){ doc.text(`${(settings.address||'').replace(/\n/g,' ')}`, 14, y); y+=5; }
+    const contactParts=[];
+    if(settings.showPhone!==false) contactParts.push(`Phone: ${settings.phone||''}`);
+    if(settings.showEmail!==false) contactParts.push(`Email: ${settings.email||''}`);
+    if(contactParts.length){ doc.text(contactParts.join('  '), 14, y); y+=5; }
   }
   y+=4;
   doc.setFontSize(12); doc.setFont(undefined,'bold');
@@ -12941,14 +13021,14 @@ function generateWaPreview(){
     else msg = `Dear ${party},\n\nNo recent invoice found. Please contact us for details.\n\nRegards,\n${settings.companyName||''}`;
   } else if(type==='ledger'){
     const totalInv = partyRecs.filter(r=>r.invNo).reduce((s,r)=>s+getDCTotal(r),0);
-    const totalPaid = ledgerData.filter(l=>l.partyName===party && l.type==='payment').reduce((s,l)=>s+(l.amount||0),0);
+    const totalPaid = ledgerData.filter(l=>l.partyName===party && l.type==='payment').reduce((s,l)=>s+(l.amount||0)-(l.deduction||0),0);
     const balance = totalInv - totalPaid;
     msg = `Dear ${party},\n\nYour current ledger summary:\nTotal Invoiced: ${cur} ${fmt(totalInv)}\nTotal Paid: ${cur} ${fmt(totalPaid)}\nOutstanding Balance: ${cur} ${fmt(balance)}\n\nRegards,\n${settings.companyName||''}`;
   } else if(type==='quotation'){
     msg = `Dear ${party},\n\nPlease find our quotation as discussed. Kindly review and confirm the order at your earliest convenience.\n\nRegards,\n${settings.companyName||''}`;
   } else if(type==='reminder'){
     const totalInv = partyRecs.filter(r=>r.invNo).reduce((s,r)=>s+getDCTotal(r),0);
-    const totalPaid = ledgerData.filter(l=>l.partyName===party && l.type==='payment').reduce((s,l)=>s+(l.amount||0),0);
+    const totalPaid = ledgerData.filter(l=>l.partyName===party && l.type==='payment').reduce((s,l)=>s+(l.amount||0)-(l.deduction||0),0);
     const balance = totalInv - totalPaid;
     msg = `Dear ${party},\n\nThis is a gentle reminder that your outstanding balance is ${cur} ${fmt(balance)}. Kindly arrange payment at your earliest convenience.\n\nRegards,\n${settings.companyName||''}`;
   } else if(type==='bilty'){
@@ -15462,7 +15542,7 @@ function runAiSearch(){
     const allParties = [...new Set(db.map(r=>r.partyName))].filter(Boolean);
     let balances = allParties.map(pt=>{
       const totalInv = db.filter(r=>r.partyName===pt && r.invNo && !r.cancelled).reduce((s,r)=>s+getDCTotal(r),0);
-      const totalPaid = ledgerData.filter(l=>l.partyName===pt && l.type==='payment').reduce((s,l)=>s+(l.amount||0),0);
+      const totalPaid = ledgerData.filter(l=>l.partyName===pt && l.type==='payment').reduce((s,l)=>s+(l.amount||0)-(l.deduction||0),0);
       return {party:pt, balance: totalInv-totalPaid};
     });
     balances = p.wantUnpaid ? balances.filter(b=>b.balance>1) : balances.filter(b=>b.balance<=1);
@@ -15535,7 +15615,7 @@ function renderAnalyticsTab(){
   const pendingTotal = pendingRecs.reduce((s,r)=>s+getDCTotal(r),0);
   const overdueParties = {};
   active.filter(r=>r.invNo).forEach(r=>{
-    const paid = ledgerData.filter(l=>l.type==='payment' && l.partyName===r.partyName).reduce((s,l)=>s+(l.amount||0),0);
+    const paid = ledgerData.filter(l=>l.type==='payment' && l.partyName===r.partyName).reduce((s,l)=>s+(l.amount||0)-(l.deduction||0),0);
     const billed = active.filter(x=>x.partyName===r.partyName && x.invNo).reduce((s,x)=>s+getDCTotal(x),0);
     overdueParties[r.partyName] = billed - paid;
   });
