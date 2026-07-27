@@ -3830,6 +3830,7 @@ function loadData(){
   if(d) db = JSON.parse(d); else restoreEmbedded(true);
   if(c) cheques = JSON.parse(c); else cheques = [];
   if(l) ledgerData = JSON.parse(l); else ledgerData = [];
+  dedupeDuplicateLedgerPaymentEntries();
   if(p) fbrParties = JSON.parse(p); else fbrParties = EMBEDDED_BACKUP.fbrParties||[];
   const ob = localStorage.getItem('sau_opening_balances');
   partyOpeningBalances = ob ? JSON.parse(ob) : {};
@@ -4795,7 +4796,7 @@ async function applyRestoredBackupData(data){
       if(pdfData){ try{ await storePdfBlob(di.id, pdfData); }catch(err){console.error('PDF restore failed for',di.fileName,err);} }
     }
   }
-  syncLedgerFromDB();
+  syncLedgerFromDB(); dedupeDuplicateLedgerPaymentEntries();
   saveData();
   saveDigitalInvoices();
   savePartyContacts();
@@ -4920,7 +4921,7 @@ function restoreEmbedded(silent=false){
   cheques = JSON.parse(JSON.stringify(EMBEDDED_BACKUP.cheques||[]));
   ledgerData = JSON.parse(JSON.stringify(EMBEDDED_BACKUP.ledgerData||[]));
   fbrParties = JSON.parse(JSON.stringify(EMBEDDED_BACKUP.fbrParties||[]));
-  syncLedgerFromDB();
+  syncLedgerFromDB(); dedupeDuplicateLedgerPaymentEntries();
   saveData();
   renderAll();
   toast('Embedded (OLD) backup restored on THIS DEVICE ONLY — this was NOT pushed to the cloud. Do not refresh/sync from here unless you mean to overwrite the cloud too.','warning');
@@ -6303,6 +6304,35 @@ function addAutoLedger(rec, idx){
   };
   ledgerData.push(entry);
 }
+// ONE-TIME CLEANUP (added when the duplicate-payment bug was fixed): the old
+// syncLedgerFromDB() used to compare a single invoice number against a
+// payment entry's combined "471,472" invNo string, which never matched — so
+// it kept creating a brand-new FULL-amount duplicate ledger 'payment' row
+// per linked invoice every time it ran, silently inflating "Total Paid" and
+// double/triple-counting the same payment. This finds and removes those
+// leftover duplicates: a single-invoice payment entry that shares the same
+// ref/cheque no, party, and amount as another payment entry whose invoice
+// list already contains that invoice number.
+function dedupeDuplicateLedgerPaymentEntries(){
+  const toRemove = new Set();
+  const payments = ledgerData.filter(l=>l.type==='payment');
+  payments.forEach(p=>{
+    const pInvs = (p.invNo||'').split(',').map(s=>s.trim()).filter(Boolean);
+    if(pInvs.length<2) return; // only a combined multi-invoice entry can have leftover duplicates
+    payments.forEach(q=>{
+      if(q===p || toRemove.has(q.id)) return;
+      const qInvs = (q.invNo||'').split(',').map(s=>s.trim()).filter(Boolean);
+      if(qInvs.length===1 && pInvs.includes(qInvs[0]) && q.refNo===p.refNo && q.partyName===p.partyName && Math.abs((q.amount||0)-(p.amount||0))<0.01){
+        toRemove.add(q.id);
+      }
+    });
+  });
+  if(toRemove.size){
+    ledgerData = ledgerData.filter(l=>!toRemove.has(l.id));
+    saveData();
+  }
+  return toRemove.size;
+}
 function syncLedgerFromDB(){
   // Ensure every invoiced (non-cancelled) DC has a corresponding 'bill' ledger entry
   let added=0;
@@ -6311,23 +6341,6 @@ function syncLedgerFromDB(){
       const exists = ledgerData.some(l=>l.invNo===rec.invNo && l.dcNo===rec.dcNo && l.type==='bill');
       if(!exists){ addAutoLedger(rec, idx); added++; }
     }
-  });
-  // Also sync payment entries from cheques (for any cheque->invoice link missing a payment ledger row)
-  cheques.forEach(c=>{
-    (c.invoices||[]).forEach(invNo=>{
-      const rec = db.find(r=>r.invNo===invNo && !r.cancelled);
-      if(!rec) return;
-      const exists = ledgerData.some(l=>l.refNo===c.chequeNo && l.invNo===invNo && l.type==='payment');
-      if(!exists){
-        ledgerData.push({
-          id:'L'+uid(), partyName:rec.partyName, date:c.date||rec.invDate&&(rec.invDate+'-01')||rec.date,
-          type:'payment', refNo:c.chequeNo, invNo:invNo, dcNo:rec.dcNo,
-          desc:c.notes||`Payment for Invoice ${invNo}`,
-          amount:c.invAmount||c.amount||0, deduction:c.deduction||0, narration:c.notes||''
-        });
-        added++;
-      }
-    });
   });
   if(added>0) saveData();
   return added;
@@ -6974,6 +6987,12 @@ function renderLedger(){
   entries.sort((a,b)=> (a.date||'').localeCompare(b.date||'') || (a.id||'').localeCompare(b.id||''));
   let balance=(ob.amount||0), totalBills=0, totalPaid=0, totalDed=0;
   const cur=settings.currency||'PKR';
+  // Which invoice numbers already have a payment entry linked to them (for the green "Paid" tick below) —
+  // uses ALL ledger entries for this party (not just the date/search-filtered ones) so the tick stays correct.
+  const paidInvoiceSet = new Set();
+  ledgerData.filter(l=>l.partyName===party && l.type==='payment').forEach(l=>{
+    (l.invNo||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(no=>paidInvoiceSet.add(no));
+  });
   // "Previous Balance" always shows first, above every other row, regardless of date/search filters
   const openingRow = (ob.amount) ? `<tr style="background:var(--bg3);font-style:italic;">
       <td>${ob.date?fmtDate(ob.date):'-'}</td>
@@ -6994,11 +7013,14 @@ function renderLedger(){
     const typeMap={bill:'<span class="badge badge-invoiced">Bill</span>',payment:'<span class="badge badge-paid">Payment</span>',debit_note:'<span class="badge badge-pending">Debit</span>',credit_note:'<span class="badge badge-paid">Credit Note</span>'};
     let descCell = e.desc||e.narration||'';
     if(e.type==='bill' && e.dcNo) descCell = `<strong>DC:${e.dcNo}</strong>${e.poNo?' | PO:'+e.poNo:''}`;
+    const invCell = (e.type==='bill' && e.invNo && paidInvoiceSet.has(String(e.invNo).trim()))
+      ? `${e.invNo} <span style="color:#1fbf75;font-weight:800;" title="Payment linked to this invoice">✅ Paid</span>`
+      : (e.invNo||'-');
     return `<tr>
       <td>${fmtDate(e.date)}</td>
       <td>${typeMap[e.type]||e.type}</td>
       <td>${e.refNo||'-'}</td>
-      <td>${e.invNo||'-'}</td>
+      <td>${invCell}</td>
       <td style="max-width:220px;">${descCell}</td>
       <td style="text-align:right;">${debit>0?fmt(debit):''}</td>
       <td style="text-align:right;color:var(--neon4);">${credit>0?fmt(credit):''}</td>
@@ -8270,7 +8292,7 @@ function init(){
   // is the real live sync now; Google Drive is only a manual/optional extra backup.
   // The "Connect" button in Settings → Cloud Backup Connections still works if needed.
   // setTimeout(()=>attemptSilentGDriveReconnect(), 1200);
-  syncLedgerFromDB();
+  syncLedgerFromDB(); dedupeDuplicateLedgerPaymentEntries();
   syncPartiesFromDB();
   populatePartyList(); populateMonthFilter();
   populateEmployeeList();
