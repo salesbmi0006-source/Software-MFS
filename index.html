@@ -7501,6 +7501,46 @@ function editCheque(idx){
   if(document.getElementById('cheque-paymode')) document.getElementById('cheque-paymode').value=c.paymode||'cheque';
   openModal('addChequeModal');
 }
+// Small edit-distance helper used by resolvePartyName() below to catch
+// typos like "Hayat Kimiya" vs the real party "Hayat Kimya Pakistan PVT Limited".
+function levenshtein(a,b){
+  a=(a||'').toLowerCase(); b=(b||'').toLowerCase();
+  const m=a.length, n=b.length;
+  if(!m) return n; if(!n) return m;
+  const dp=Array.from({length:m+1},()=>new Array(n+1).fill(0));
+  for(let i=0;i<=m;i++) dp[i][0]=i;
+  for(let j=0;j<=n;j++) dp[0][j]=j;
+  for(let i=1;i<=m;i++){
+    for(let j=1;j<=n;j++){
+      dp[i][j]=Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
+    }
+  }
+  return dp[m][n];
+}
+// The Cheque form's "Party" field is a free-typed input (with a datalist for
+// suggestions, not a strict dropdown), so a small typo or extra space creates
+// a brand-new party name. Since the ledger view filters by an EXACT partyName
+// match, that cheque's auto-linked payment silently lands under a name that
+// never shows up in that party's ledger (this was the "cheque entries for
+// Hayat Kimya not showing in the ledger" bug). This snaps the typed name to
+// an existing party automatically (exact match ignoring case/spacing, or a
+// very close spelling match) so new cheques always link to the right ledger.
+function resolvePartyName(input){
+  const raw=(input||'').trim();
+  if(!raw) return raw;
+  const known=[...new Set([...(db||[]).map(r=>r.partyName),...(fbrParties||[]).map(p=>p.partyName),...(ledgerData||[]).map(l=>l.partyName)])].filter(Boolean);
+  const exact=known.find(k=>k.trim().toLowerCase()===raw.toLowerCase());
+  if(exact) return exact;
+  let best=null, bestDist=Infinity;
+  known.forEach(k=>{ const d=levenshtein(raw,k); if(d<bestDist){ bestDist=d; best=k; } });
+  if(best && bestDist<=2 && bestDist < raw.length*0.3){
+    if(best.toLowerCase()!==raw.toLowerCase() && typeof toast==='function'){
+      toast(`Party name auto-corrected: "${raw}" → "${best}"`,'info');
+    }
+    return best;
+  }
+  return raw;
+}
 function saveCheque(){
   const idx=parseInt(document.getElementById('cheque-edit-idx').value);
   const obj={
@@ -7508,14 +7548,19 @@ function saveCheque(){
     date:document.getElementById('cheque-date').value,
     amount:parseFloat(document.getElementById('cheque-amount').value)||0,
     deduction:parseFloat(document.getElementById('cheque-deduction').value)||0,
-    party:document.getElementById('cheque-party').value,
+    party:resolvePartyName(document.getElementById('cheque-party').value),
     invoices:document.getElementById('cheque-invoices').value.split(',').map(s=>s.trim()).filter(Boolean),
     notes:document.getElementById('cheque-notes').value,
     paymode:document.getElementById('cheque-paymode')?document.getElementById('cheque-paymode').value:'cheque'
   };
   if(!obj.chequeNo){toast('Cheque number required','warning');return;}
-  // AUTO-LINK: if party given and invoices listed, auto-add ledger payment entry
-  if(obj.party && obj.invoices.length>0){
+  // AUTO-LINK: any cheque with a party gets a matching ledger payment entry —
+  // this used to also require "Linked Invoice Nos" to be filled in, so a
+  // cheque saved without invoice numbers (very common — that field is
+  // optional-looking on the form) never created a ledger entry at all and
+  // silently never showed up in that party's ledger. This was the real cause
+  // of "many Hayat Kimya cheque entries not showing in the ledger".
+  if(obj.party){
     const existingLed = ledgerData.find(l=>l.refNo===obj.chequeNo && l.type==='payment' && l.partyName===obj.party);
     if(!existingLed){
       ledgerData.push({
@@ -8405,11 +8450,16 @@ function executeMerge(){
   const radioVal = document.querySelector('input[name="merge-final-name"]:checked')?.value;
   const finalName = customName || radioVal;
   if(!finalName){toast('Choose or type a final name','warning');return;}
-  if(!confirm(`Merge these ${names.length} names into:\n"${finalName}"\n\n${names.join('\n')}\n\nThis updates all DC records, ledger entries, and contacts. Continue?`)) return;
+  if(!confirm(`Merge these ${names.length} names into:\n"${finalName}"\n\n${names.join('\n')}\n\nThis updates all DC records, ledger entries, cheques, and contacts. Continue?`)) return;
   let cnt=0;
   const othersToRemove = names.filter(n=>n!==finalName);
   db.forEach(r=>{ if(othersToRemove.includes(r.partyName)){ r.partyName=finalName; cnt++; } });
   ledgerData.forEach(e=>{ if(othersToRemove.includes(e.partyName)){ e.partyName=finalName; cnt++; } });
+  // Cheques were previously left untouched by merge, so a cheque saved under a
+  // misspelled/old party name kept pointing at the wrong ledger even after
+  // merging — this is what caused cheque-linked entries to "disappear" from
+  // the party's ledger. Now cheques.party gets updated too.
+  if(typeof cheques!=='undefined') cheques.forEach(c=>{ if(othersToRemove.includes(c.party)){ c.party=finalName; cnt++; } });
   if(typeof partyContacts!=='undefined'){
     othersToRemove.forEach(n=>{
       if(partyContacts[n]){
