@@ -5090,6 +5090,11 @@ function applyDzModuleVisibility(){
     const tabEl = document.getElementById('tab-'+m.key);
     if(tabEl) tabEl.style.display = disabled.includes(m.key) ? 'none' : '';
   });
+  // Cheques was merged into Ledger — keep this tab permanently hidden regardless
+  // of the Danger Zone disabled-modules list, since the two systems are always
+  // in sync now and showing it separately just re-creates the old confusion.
+  const chqTab = document.getElementById('tab-cheques');
+  if(chqTab) chqTab.style.display = 'none';
 }
 function renderDzModuleList(){
   const el = document.getElementById('dz-module-list');
