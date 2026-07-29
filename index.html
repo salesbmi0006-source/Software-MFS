@@ -425,7 +425,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div class="tab" onclick="showTab('hscodes')" id="tab-hscodes">🏷️ HS Codes</div>
 
     <div class="tab-group-label">Finance</div>
-    <div class="tab" onclick="showTab('cheques')" id="tab-cheques">🏦 Cheques</div>
+    <div class="tab" onclick="showTab('cheques')" id="tab-cheques" style="display:none;">🏦 Cheques</div>
     <div class="tab" onclick="showTab('salesreturns')" id="tab-salesreturns">🔄 Sales Returns</div>
     <div class="tab" onclick="showTab('bank')" id="tab-bank">🏛️ Bank</div>
     <div class="tab" onclick="showTab('expenses')" id="tab-expenses">💸 Expenses</div>
@@ -572,7 +572,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
   <div class="card">
     <div class="card-header"><div class="card-title">📒 Party Ledger</div>
       <div class="flex-gap">
-        <button class="btn btn-green btn-sm" onclick="openModal('addLedgerModal')">➕ Add Entry</button>
+        <button class="btn btn-green btn-sm" onclick="openNewLedgerEntry()">➕ Add Entry</button>
         <button class="btn btn-purple btn-sm" onclick="exportLedgerPDF()">📄 PDF</button>
       </div>
     </div>
@@ -3350,8 +3350,9 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
 <!-- ADD LEDGER ENTRY MODAL -->
 <div class="modal-overlay" id="addLedgerModal">
 <div class="modal modal-md">
-  <div class="modal-header"><h3>📒 Add Ledger Entry</h3><button class="close-btn" onclick="closeModal('addLedgerModal')">✕</button></div>
+  <div class="modal-header"><h3 id="ledgerModalTitle">📒 Add Ledger Entry</h3><button class="close-btn" onclick="closeModal('addLedgerModal')">✕</button></div>
   <div class="modal-body">
+    <input type="hidden" id="led-edit-idx">
     <div class="form-row">
       <div class="form-group"><label>Party</label><select id="led-party"><option value="">Select...</option></select></div>
       <div class="form-group"><label>Date</label><input type="date" id="led-date"></div>
@@ -3378,13 +3379,13 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       </div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Invoice Ref</label><input type="text" id="led-inv" placeholder="Invoice no (optional)"></div>
-      <div class="form-group"><label>Amount</label><input type="number" id="led-amount" placeholder="0.00"></div>
+      <div class="form-group"><label>Linked Invoice Nos (optional, comma separated)</label><input type="text" id="led-inv" placeholder="e.g. 501,502,503 (optional)"></div>
+      <div class="form-group"><label>Total Amount</label><input type="number" id="led-amount" placeholder="0.00"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Deduction</label><input type="number" id="led-deduction" placeholder="0.00"></div>
     </div>
-    <div class="form-group"><label>Description / Narration</label><input type="text" id="led-narration" placeholder="Description..."></div>
+    <div class="form-group"><label>Description / Notes</label><input type="text" id="led-narration" placeholder="Description / notes..."></div>
   </div>
   <div class="modal-footer">
     <button class="btn btn-green" onclick="saveLedgerEntry()">💾 Save</button>
@@ -7028,7 +7029,7 @@ function renderLedger(){
       <td style="text-align:right;font-weight:700;color:${balance<0?'var(--neon4)':'var(--neon3)'};">${fmt(Math.abs(balance))} ${balance<0?'CR':'DR'}</td>
       <td style="white-space:nowrap;">
         ${e.type==='bill'?`<button class="btn btn-neon btn-xs" onclick="viewLedgerInvoice('${e.id}')" title="View Invoice Details">🔍</button>`:''}
-        ${e.type!=='bill'?`<button class="btn btn-red btn-xs" onclick="deleteLedgerEntry('${e.id}')">🗑️</button>`:''}
+        ${e.type!=='bill'?`<button class="btn btn-yellow btn-xs" onclick="editLedgerEntry('${e.id}')" title="Edit">✏️</button><button class="btn btn-red btn-xs" onclick="deleteLedgerEntry('${e.id}')">🗑️</button>`:''}
       </td>
     </tr>`;
   });
@@ -7136,7 +7137,44 @@ function clearLedgerFilters(){
   ['ledgerFrom','ledgerTo','ledgerSearch'].forEach(id=>document.getElementById(id).value='');
   renderLedger();
 }
+// Opens the Add Ledger Entry modal in "fresh add" mode — clears any leftover
+// edit-id from a previous edit session so Save always creates a new entry.
+function openNewLedgerEntry(){
+  document.getElementById('led-edit-idx').value='';
+  document.getElementById('ledgerModalTitle').textContent='📒 Add Ledger Entry';
+  ['led-ref','led-inv','led-amount','led-deduction','led-narration'].forEach(id=>document.getElementById(id).value='');
+  const pd=document.getElementById('led-paymode'); if(pd) pd.value='cash';
+  const tp=document.getElementById('led-type'); if(tp) tp.value='payment';
+  togglePaymodeField();
+  const partySel=document.getElementById('led-party');
+  const currentParty=document.getElementById('ledgerPartySelect').value;
+  if(partySel && currentParty) partySel.value=currentParty;
+  const dateInput=document.getElementById('led-date');
+  if(dateInput) dateInput.value=new Date().toISOString().slice(0,10);
+  openModal('addLedgerModal');
+}
+// Populates the modal from an existing entry and switches Save into update mode.
+// Bill-type entries (auto-created from DC records) are not editable here — same as before.
+function editLedgerEntry(id){
+  const e = ledgerData.find(l=>l.id===id);
+  if(!e){toast('Entry not found','error');return;}
+  if(e.type==='bill'){toast('Bill entries are generated from DC records and can\'t be edited here','warning');return;}
+  document.getElementById('led-edit-idx').value=e.id;
+  document.getElementById('ledgerModalTitle').textContent='✏️ Edit Ledger Entry';
+  document.getElementById('led-party').value=e.partyName||'';
+  document.getElementById('led-date').value=e.date||'';
+  document.getElementById('led-type').value=e.type||'payment';
+  document.getElementById('led-ref').value=e.refNo||'';
+  document.getElementById('led-inv').value=e.invNo||'';
+  document.getElementById('led-amount').value=e.amount||'';
+  document.getElementById('led-deduction').value=e.deduction||0;
+  document.getElementById('led-narration').value=e.narration||e.desc||'';
+  if(document.getElementById('led-paymode')) document.getElementById('led-paymode').value=e.paymode||'cash';
+  togglePaymodeField();
+  openModal('addLedgerModal');
+}
 function saveLedgerEntry(){
+  const editId=document.getElementById('led-edit-idx').value;
   const party=document.getElementById('led-party').value;
   const date=document.getElementById('led-date').value;
   const type=document.getElementById('led-type').value;
@@ -7146,29 +7184,50 @@ function saveLedgerEntry(){
   const narration=document.getElementById('led-narration').value;
   const inv=document.getElementById('led-inv').value;
   const paymode=document.getElementById('led-paymode')?document.getElementById('led-paymode').value:'';
-  if(!party||!date||!amount){toast('Party, date, and amount required','warning');return;}
-  const entry = {id:'L'+uid(),partyName:party,date,type,refNo:ref,invNo:inv,dcNo:'',desc:narration,amount,deduction,narration,paymode};
-  ledgerData.push(entry);
-  logAudit('create','Ledger',`${type} entry for ${party} — amount ${amount}`, undefined, entry);
-  // AUTO-SYNC: any "Payment" entry made directly in the Ledger should also show up in
-  // 🏦 Cheque / Payment Manager (previously only DC-button payments and manually-added
-  // cheques appeared there), and it auto-links to whichever invoice(s) were typed in
-  // the Invoice Ref field so the payment is connected to that bill everywhere.
+  if(!party||!date||!amount){toast('Party, date, and amount required — entry NOT saved','warning');return;}
+
+  let entry, isEdit=false;
+  if(editId){
+    entry = ledgerData.find(l=>l.id===editId);
+    if(!entry){toast('Entry not found — creating a new one instead','warning');}
+  }
+  if(entry){
+    isEdit=true;
+    const before = {...entry};
+    entry.partyName=party; entry.date=date; entry.type=type; entry.refNo=ref;
+    entry.invNo=inv; entry.desc=narration; entry.amount=amount; entry.deduction=deduction;
+    entry.narration=narration; entry.paymode=paymode;
+    logAudit('edit','Ledger',`${type} entry for ${party} — amount ${amount} updated`, before, entry);
+  } else {
+    entry = {id:'L'+uid(),partyName:party,date,type,refNo:ref,invNo:inv,dcNo:'',desc:narration,amount,deduction,narration,paymode};
+    ledgerData.push(entry);
+    logAudit('create','Ledger',`${type} entry for ${party} — amount ${amount}`, undefined, entry);
+  }
+
+  // AUTO-SYNC: any "Payment" entry made directly in the Ledger also keeps a matching
+  // record in the internal cheques[] array (used by reports/approvals/alerts), and
+  // auto-links to whichever invoice(s) were typed in the Linked Invoice Nos field —
+  // this is what powers the ✅ Paid tick shown next to bills in the ledger table.
   if(type==='payment'){
     const invoicesArr = inv ? inv.split(',').map(s=>s.trim()).filter(Boolean) : [];
     const chequeRef = ref || ('LED-'+entry.id);
-    let ch = cheques.find(c=>c.chequeNo===chequeRef && c.party===party);
+    let ch = isEdit
+      ? cheques.find(c=>c.chequeNo===(entry._syncedChequeRef||chequeRef) && c.party===party)
+      : cheques.find(c=>c.chequeNo===chequeRef && c.party===party);
     if(!ch){
       ch = {chequeNo:chequeRef, date, amount, deduction, party, invoices:invoicesArr, notes:narration, paymode, source:'ledger'};
       cheques.push(ch);
       if(typeof initApprovalForEntity==='function') initApprovalForEntity('cheque', ch);
     } else {
-      ch.date=date; ch.amount=amount; ch.deduction=deduction; ch.notes=narration||ch.notes; ch.paymode=paymode||ch.paymode;
-      invoicesArr.forEach(no=>{ if(!ch.invoices.includes(no)) ch.invoices.push(no); });
+      ch.chequeNo=chequeRef; ch.date=date; ch.amount=amount; ch.deduction=deduction;
+      ch.notes=narration||ch.notes; ch.paymode=paymode||ch.paymode; ch.invoices=invoicesArr;
     }
+    entry._syncedChequeRef = chequeRef;
   }
+
+  document.getElementById('led-edit-idx').value='';
   saveData(); closeModal('addLedgerModal'); renderLedger();
-  toast('Ledger entry added — also linked in Cheque/Payment Manager','success');
+  toast(isEdit?'Ledger entry updated ✓':'Ledger entry saved ✓','success');
   renderCheques();
 }
 function deleteLedgerEntry(id){
