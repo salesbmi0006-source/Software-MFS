@@ -584,6 +584,23 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       <span style="color:var(--text2)">to</span>
       <input type="date" id="ledgerTo" onchange="renderLedger()" style="width:145px;">
       <input type="text" id="ledgerSearch" placeholder="Cheque/Ref/Invoice..." oninput="renderLedger()" style="width:150px;">
+      <select id="ledgerTypeFilter" onchange="renderLedger()" style="width:130px;">
+        <option value="">All Types</option>
+        <option value="bill">Bill</option>
+        <option value="payment">Payment</option>
+        <option value="debit_note">Debit Note</option>
+        <option value="credit_note">Credit Note</option>
+      </select>
+      <select id="ledgerPaymodeFilter" onchange="renderLedger()" style="width:150px;">
+        <option value="">All Payment Modes</option>
+        <option value="cash">💵 Cash</option>
+        <option value="cheque">🏦 Cheque</option>
+        <option value="bank_transfer">🏧 Bank Transfer</option>
+        <option value="online">📲 Online</option>
+        <option value="other">✏️ Other</option>
+      </select>
+      <input type="number" id="ledgerAmountMin" placeholder="Amount ≥" oninput="renderLedger()" style="width:100px;">
+      <input type="number" id="ledgerAmountMax" placeholder="Amount ≤" oninput="renderLedger()" style="width:100px;">
       <select id="ledger-mode" onchange="renderLedger()" style="width:170px;">
         <option value="summary">Without Details (Summary)</option>
         <option value="with_details">With All Details</option>
@@ -1114,6 +1131,10 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div class="toggle-wrap" style="margin-bottom:8px;">
       <label class="toggle"><input type="checkbox" id="ap-chq-enabled" onchange="toggleModuleApproval('cheque','ap-chq-enabled')"><span class="toggle-slider"></span></label>
       <label style="margin:0;">Enable multi-stage approval for Cheques</label>
+    </div>
+    <div class="toggle-wrap" style="margin-bottom:8px;">
+      <label class="toggle"><input type="checkbox" id="ap-led-enabled" onchange="toggleModuleApproval('ledger','ap-led-enabled')"><span class="toggle-slider"></span></label>
+      <label style="margin:0;">Enable multi-stage approval for Ledger Payments/Debit/Credit entries (Bills are auto-generated and don't need approval)</label>
     </div>
     <div style="font-size:12px;color:var(--text2);">When enabled, new records in that module require sequential approval (Staff → Manager → Accounts → Director) before being usable/ready. A Purchase Order can't be received until fully approved. Assign each user's approval role from Security → Manage Users.</div>
   </div>
@@ -3369,7 +3390,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       <div class="form-group"><label>Cheque/Ref No</label><div style="display:flex;gap:6px;"><input type="text" id="led-ref" placeholder="Reference number" style="flex:1;"><button type="button" class="btn btn-neon btn-xs" title="Auto-generate Receipt/Payment Voucher No" onclick="autoFillNumber(document.getElementById('led-type').value==='payment'?'receipt':'payment','led-ref')">🔢</button></div></div>
       <div class="form-group" id="led-paymode-wrap">
         <label>Payment Mode</label>
-        <select id="led-paymode">
+        <select id="led-paymode" onchange="togglePaymodeField()">
           <option value="cash">💵 Cash</option>
           <option value="cheque">🏦 Cheque</option>
           <option value="bank_transfer">🏧 Bank Transfer</option>
@@ -3377,15 +3398,37 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
           <option value="other">✏️ Other</option>
         </select>
       </div>
+      <div class="form-group" id="led-status-wrap">
+        <label>Status</label>
+        <select id="led-status">
+          <option value="cleared">✅ Cleared</option>
+          <option value="pending">⏳ Pending</option>
+          <option value="bounced">❌ Bounced</option>
+        </select>
+      </div>
+      <div class="form-group" id="led-bank-wrap">
+        <label>Bank Name</label>
+        <input type="text" id="led-bank" placeholder="e.g. Meezan Bank (optional)">
+      </div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Linked Invoice Nos (optional, comma separated)</label><input type="text" id="led-inv" placeholder="e.g. 501,502,503 (optional)"></div>
-      <div class="form-group"><label>Total Amount</label><input type="number" id="led-amount" placeholder="0.00"></div>
+      <div class="form-group"><label>Linked Invoice Nos (optional, comma separated)</label><input type="text" id="led-inv" placeholder="e.g. 501,502,503 (optional)" oninput="renderInvoiceAllocation()" onblur="renderInvoiceAllocation()"></div>
+      <div class="form-group"><label>Total Amount</label><input type="number" id="led-amount" placeholder="0.00" oninput="renderInvoiceAllocation()"></div>
+    </div>
+    <div id="led-alloc-wrap" style="display:none;background:var(--bg3);border-radius:8px;padding:10px;margin-bottom:10px;">
+      <label style="display:block;margin-bottom:6px;">Split this amount across invoices:</label>
+      <div id="led-alloc-rows"></div>
+      <div id="led-alloc-total" style="font-size:12px;margin-top:6px;"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Deduction</label><input type="number" id="led-deduction" placeholder="0.00"></div>
     </div>
     <div class="form-group"><label>Description / Notes</label><input type="text" id="led-narration" placeholder="Description / notes..."></div>
+    <div class="form-group">
+      <label>Attachment — Receipt / Cheque Photo (optional, max 500KB)</label>
+      <input type="file" id="led-attach-file" accept="image/*,.pdf" onchange="handleLedgerAttachment(this)">
+      <div id="led-attach-preview" style="font-size:12px;margin-top:6px;color:var(--text3);"></div>
+    </div>
   </div>
   <div class="modal-footer">
     <button class="btn btn-green" onclick="saveLedgerEntry()">💾 Save</button>
@@ -5432,7 +5475,7 @@ function renderTabContent(id){
   if(id==='parties'){ syncPartiesFromDB(); renderParties(); }
   if(id==='cheques') { renderCheques(); renderAllPayments(); }
   if(id==='hscodes'){ renderHSCodes(); renderHsStockComparison(); }
-  if(id==='settings') { applySettings(); renderAutoNumberConfig(); const abf=document.getElementById('ab-frequency'); if(abf) abf.value = advancedBackupSettings.frequency; renderBackupVersionsList(); const ape=document.getElementById('ap-enabled'); if(ape) ape.checked = !!settings.approvalWorkflowEnabled; const apPo=document.getElementById('ap-po-enabled'); if(apPo) apPo.checked = !!settings.poApprovalWorkflowEnabled; const apExp=document.getElementById('ap-exp-enabled'); if(apExp) apExp.checked = !!settings.expApprovalWorkflowEnabled; const apChq=document.getElementById('ap-chq-enabled'); if(apChq) apChq.checked = !!settings.chqApprovalWorkflowEnabled; refreshGDriveSettingsUI(); if(typeof refreshDzOwnerPanel==='function') refreshDzOwnerPanel(); }
+  if(id==='settings') { applySettings(); renderAutoNumberConfig(); const abf=document.getElementById('ab-frequency'); if(abf) abf.value = advancedBackupSettings.frequency; renderBackupVersionsList(); const ape=document.getElementById('ap-enabled'); if(ape) ape.checked = !!settings.approvalWorkflowEnabled; const apPo=document.getElementById('ap-po-enabled'); if(apPo) apPo.checked = !!settings.poApprovalWorkflowEnabled; const apExp=document.getElementById('ap-exp-enabled'); if(apExp) apExp.checked = !!settings.expApprovalWorkflowEnabled; const apChq=document.getElementById('ap-chq-enabled'); if(apChq) apChq.checked = !!settings.chqApprovalWorkflowEnabled; const apLed=document.getElementById('ap-led-enabled'); if(apLed) apLed.checked = !!settings.ledgerApprovalWorkflowEnabled; refreshGDriveSettingsUI(); if(typeof refreshDzOwnerPanel==='function') refreshDzOwnerPanel(); }
   if(id==='digitalinvoices'){ renderDigitalInvoices(); updateDiCount(); }
   if(id==='security') renderSecuritySettings();
   if(id==='quotation'){
@@ -6986,18 +7029,34 @@ function renderLedger(){
   const from = document.getElementById('ledgerFrom').value;
   const to = document.getElementById('ledgerTo').value;
   const search = document.getElementById('ledgerSearch').value.toLowerCase();
+  const typeFilter = document.getElementById('ledgerTypeFilter') ? document.getElementById('ledgerTypeFilter').value : '';
+  const paymodeFilter = document.getElementById('ledgerPaymodeFilter') ? document.getElementById('ledgerPaymodeFilter').value : '';
+  const amtMin = document.getElementById('ledgerAmountMin') ? parseFloat(document.getElementById('ledgerAmountMin').value) : NaN;
+  const amtMax = document.getElementById('ledgerAmountMax') ? parseFloat(document.getElementById('ledgerAmountMax').value) : NaN;
   let entries = ledgerData.filter(e=>e.partyName===party);
   if(from) entries=entries.filter(e=>e.date>=from);
   if(to) entries=entries.filter(e=>e.date<=to);
   if(search) entries=entries.filter(e=>(e.refNo||'').toLowerCase().includes(search)||(e.invNo||'').toLowerCase().includes(search)||(e.dcNo||'').toLowerCase().includes(search));
+  if(typeFilter) entries=entries.filter(e=>e.type===typeFilter);
+  if(paymodeFilter) entries=entries.filter(e=>e.paymode===paymodeFilter);
+  if(!isNaN(amtMin)) entries=entries.filter(e=>e.amount>=amtMin);
+  if(!isNaN(amtMax)) entries=entries.filter(e=>e.amount<=amtMax);
   entries.sort((a,b)=> (a.date||'').localeCompare(b.date||'') || (a.id||'').localeCompare(b.id||''));
   let balance=(ob.amount||0), totalBills=0, totalPaid=0, totalDed=0;
   const cur=settings.currency||'PKR';
   // Which invoice numbers already have a payment entry linked to them (for the green "Paid" tick below) —
   // uses ALL ledger entries for this party (not just the date/search-filtered ones) so the tick stays correct.
-  const paidInvoiceSet = new Set();
+  const paidAmountMap = {};
   ledgerData.filter(l=>l.partyName===party && l.type==='payment').forEach(l=>{
-    (l.invNo||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(no=>paidInvoiceSet.add(no));
+    const invoicesOfL = (l.invNo||'').split(',').map(s=>s.trim()).filter(Boolean);
+    if(!invoicesOfL.length) return;
+    if(l.allocations && l.allocations.length){
+      l.allocations.forEach(a=>{ paidAmountMap[a.invNo] = (paidAmountMap[a.invNo]||0) + (a.amount||0); });
+    } else {
+      const net = (l.amount||0) - (l.deduction||0);
+      const share = net / invoicesOfL.length;
+      invoicesOfL.forEach(no=>{ paidAmountMap[no] = (paidAmountMap[no]||0) + share; });
+    }
   });
   // "Previous Balance" always shows first, above every other row, regardless of date/search filters
   const openingRow = (ob.amount) ? `<tr style="background:var(--bg3);font-style:italic;">
@@ -7019,13 +7078,19 @@ function renderLedger(){
     const typeMap={bill:'<span class="badge badge-invoiced">Bill</span>',payment:'<span class="badge badge-paid">Payment</span>',debit_note:'<span class="badge badge-pending">Debit</span>',credit_note:'<span class="badge badge-paid">Credit Note</span>'};
     let descCell = e.desc||e.narration||'';
     if(e.type==='bill' && e.dcNo) descCell = `<strong>DC:${e.dcNo}</strong>${e.poNo?' | PO:'+e.poNo:''}`;
-    const invCell = (e.type==='bill' && e.invNo && paidInvoiceSet.has(String(e.invNo).trim()))
-      ? `${e.invNo} <span style="color:#1fbf75;font-weight:800;" title="Payment linked to this invoice">✅ Paid</span>`
-      : (e.invNo||'-');
+    if(e.type==='payment' && e.bankName) descCell += `<div style="font-size:10px;color:var(--text3);">🏦 ${e.bankName}</div>`;
+    const paidAmt = (e.type==='bill' && e.invNo) ? (paidAmountMap[String(e.invNo).trim()]||0) : 0;
+    let invCell = e.invNo||'-';
+    if(e.type==='bill' && e.invNo){
+      if(paidAmt >= e.amount - 0.5) invCell = `${e.invNo} <span style="color:#1fbf75;font-weight:800;" title="Fully paid">✅ Paid</span>`;
+      else if(paidAmt > 0.5) invCell = `${e.invNo} <span style="color:#f5a623;font-weight:800;" title="Partially paid: ${fmt(paidAmt)} of ${fmt(e.amount)}">🟡 Partial (${fmt(paidAmt)}/${fmt(e.amount)})</span>`;
+    }
+    const statusBadgeMap={cleared:'<span class="badge badge-paid" title="Cleared" style="margin-left:4px;">✅</span>',pending:'<span class="badge badge-pending" title="Pending" style="margin-left:4px;">⏳</span>',bounced:'<span class="badge" style="background:#c0392b;color:#fff;margin-left:4px;" title="Bounced">❌</span>'};
+    const statusBadge = (e.type==='payment' && e.status) ? (statusBadgeMap[e.status]||'') : '';
     return `<tr>
       <td>${fmtDate(e.date)}</td>
       <td>${typeMap[e.type]||e.type}</td>
-      <td>${e.refNo||'-'}</td>
+      <td>${e.refNo||'-'}${statusBadge}${e.type!=='bill'?ledgerApprovalBadge(e.id):''}</td>
       <td>${invCell}</td>
       <td style="max-width:220px;">${descCell}</td>
       <td style="text-align:right;">${debit>0?fmt(debit):''}</td>
@@ -7034,20 +7099,40 @@ function renderLedger(){
       <td style="text-align:right;font-weight:700;color:${balance<0?'var(--neon4)':'var(--neon3)'};">${fmt(Math.abs(balance))} ${balance<0?'CR':'DR'}</td>
       <td style="white-space:nowrap;">
         ${e.type==='bill'?`<button class="btn btn-neon btn-xs" onclick="viewLedgerInvoice('${e.id}')" title="View Invoice Details">🔍</button>`:''}
-        ${e.type!=='bill'?`<button class="btn btn-yellow btn-xs" onclick="editLedgerEntry('${e.id}')" title="Edit">✏️</button><button class="btn btn-red btn-xs" onclick="deleteLedgerEntry('${e.id}')">🗑️</button>`:''}
+        ${e.attachment?`<button class="btn btn-purple btn-xs" onclick="viewLedgerAttachment('${e.id}')" title="View Attachment">📎</button>`:''}
+        ${e.type!=='bill'?`<button class="btn btn-neon btn-xs" onclick="viewLedgerEntryHistory('${e.id}')" title="View Edit History">🕘</button><button class="btn btn-yellow btn-xs" onclick="editLedgerEntry('${e.id}')" title="Edit">✏️</button><button class="btn btn-red btn-xs" onclick="deleteLedgerEntry('${e.id}')">🗑️</button>`:''}
       </td>
     </tr>`;
   });
   document.getElementById('ledgerTbody').innerHTML = (openingRow + rows.join('')) || '<tr><td colspan="10" class="text-center" style="padding:20px;color:var(--text3);">No ledger entries found</td></tr>';
+  const filtersActive = typeFilter || paymodeFilter || !isNaN(amtMin) || !isNaN(amtMax);
+  let filterWarnEl = document.getElementById('ledgerFilterWarn');
+  if(!filterWarnEl){
+    filterWarnEl = document.createElement('div');
+    filterWarnEl.id='ledgerFilterWarn';
+    filterWarnEl.style.cssText='font-size:11px;color:#f5a623;margin:-4px 0 8px;';
+    document.getElementById('ledgerTbody').closest('table').parentElement.insertBefore(filterWarnEl, document.getElementById('ledgerTbody').closest('table'));
+  }
+  filterWarnEl.textContent = filtersActive ? '⚠️ Type/Payment Mode/Amount filter active — running Balance column reflects only the filtered rows, not the full account.' : '';
   const outstanding = (ob.amount||0)+totalBills-totalPaid-totalDed;
   const detailMode = (document.getElementById('ledger-mode')||{}).value==='with_details';
   // "Without Details" = pure table only, NO summary cards. "With All Details" = summary cards + item breakdown.
   if(detailMode){
+    const modeMap={};
+    entries.filter(e=>e.type==='payment').forEach(e=>{
+      const m=e.paymode||'cash';
+      modeMap[m]=(modeMap[m]||0)+e.amount;
+    });
+    const modeIcons={cash:'💵 Cash',cheque:'🏦 Cheque',bank_transfer:'🏧 Bank Transfer',online:'📲 Online',other:'✏️ Other'};
+    const modeCardsHtml = Object.keys(modeMap).length ? `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;width:100%;">
+      ${Object.entries(modeMap).map(([m,amt])=>`<div class="ledger-sum-card" style="flex:1;min-width:130px;"><div style="font-size:15px;font-weight:800;">${cur} ${fmt(amt)}</div><div style="font-size:11px;color:var(--text2);">${modeIcons[m]||m}</div></div>`).join('')}
+    </div>` : '';
     document.getElementById('ledger-summary').innerHTML = `
     <div class="ledger-sum-card lsc1"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(totalBills)}</div><div style="font-size:11px;color:var(--text2);">Total Bills (${entries.filter(e=>e.type==='bill').length})</div></div>
     <div class="ledger-sum-card lsc2"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(totalPaid)}</div><div style="font-size:11px;color:var(--text2);">Total Paid</div></div>
     <div class="ledger-sum-card lsc3"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(totalDed)}</div><div style="font-size:11px;color:var(--text2);">Deductions</div></div>
-    <div class="ledger-sum-card lsc4"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(outstanding)}</div><div style="font-size:11px;color:var(--text2);">Outstanding</div></div>`;
+    <div class="ledger-sum-card lsc4"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(outstanding)}</div><div style="font-size:11px;color:var(--text2);">Outstanding</div></div>
+    ${modeCardsHtml}`;
   } else {
     document.getElementById('ledger-summary').innerHTML = '';
   }
@@ -7101,6 +7186,49 @@ function renderLedger(){
     }
   }
 }
+// Shows the full change history (create + every edit) of a ledger entry, pulled from
+// the app's existing Audit Log (module 'Ledger'), which already captures a before/after
+// snapshot on every save via logAudit().
+function viewLedgerEntryHistory(id){
+  const events = auditLog.filter(a=>a.module==='Ledger' && (
+    (a.newValue && a.newValue.includes(`"id":"${id}"`)) ||
+    (a.oldValue && a.oldValue.includes(`"id":"${id}"`))
+  )).sort((a,b)=>(a.ts||'').localeCompare(b.ts||''));
+  if(!events.length){
+    toast('No history found for this entry yet (older entries created before this feature won\'t have one)','warning');
+    return;
+  }
+  const fieldLabels = {partyName:'Party',date:'Date',type:'Type',refNo:'Ref/Cheque',invNo:'Invoice(s)',amount:'Amount',deduction:'Deduction',narration:'Description',paymode:'Payment Mode',status:'Status',bankName:'Bank Name'};
+  let html = '<div class="tbl-wrap"><table><thead><tr><th>When</th><th>User</th><th>Action</th><th>What Changed</th></tr></thead><tbody>';
+  events.forEach(ev=>{
+    let changesHtml = '';
+    if(ev.action==='edit' && ev.oldValue && ev.newValue){
+      try{
+        const before = JSON.parse(ev.oldValue), after = JSON.parse(ev.newValue);
+        const diffs = [];
+        Object.keys(fieldLabels).forEach(f=>{
+          const bv = before[f]===undefined?'':before[f], av = after[f]===undefined?'':after[f];
+          if(String(bv)!==String(av)) diffs.push(`<div><strong>${fieldLabels[f]}:</strong> ${bv||'—'} → <strong>${av||'—'}</strong></div>`);
+        });
+        changesHtml = diffs.length ? diffs.join('') : '<em>No field-level differences detected</em>';
+      }catch(e){ changesHtml = '<em>Could not parse change details</em>'; }
+    } else if(ev.action==='create'){
+      changesHtml = '<em>Entry created</em>';
+    } else {
+      changesHtml = ev.summary||'';
+    }
+    html += `<tr>
+      <td style="white-space:nowrap;">${new Date(ev.ts).toLocaleString()}</td>
+      <td>${ev.user||'-'}</td>
+      <td>${ev.action==='create'?'🆕 Created':'✏️ Edited'}</td>
+      <td style="font-size:12px;">${changesHtml}</td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  document.getElementById('qv-title').textContent = '🕘 Entry Edit History';
+  document.getElementById('qv-body').innerHTML = html;
+  openModal('quickViewModal');
+}
 function viewLedgerInvoice(ledgerId){
   const e = ledgerData.find(l=>l.id===ledgerId);
   if(!e){toast('Entry not found','error');return;}
@@ -7139,7 +7267,8 @@ function viewLedgerInvoice(ledgerId){
   }
 }
 function clearLedgerFilters(){
-  ['ledgerFrom','ledgerTo','ledgerSearch'].forEach(id=>document.getElementById(id).value='');
+  ['ledgerFrom','ledgerTo','ledgerSearch','ledgerAmountMin','ledgerAmountMax'].forEach(id=>document.getElementById(id).value='');
+  ['ledgerTypeFilter','ledgerPaymodeFilter'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   renderLedger();
 }
 // Opens the Add Ledger Entry modal in "fresh add" mode — clears any leftover
@@ -7147,10 +7276,16 @@ function clearLedgerFilters(){
 function openNewLedgerEntry(){
   document.getElementById('led-edit-idx').value='';
   document.getElementById('ledgerModalTitle').textContent='📒 Add Ledger Entry';
-  ['led-ref','led-inv','led-amount','led-deduction','led-narration'].forEach(id=>document.getElementById(id).value='');
+  ['led-ref','led-inv','led-amount','led-deduction','led-narration','led-bank'].forEach(id=>document.getElementById(id).value='');
   const pd=document.getElementById('led-paymode'); if(pd) pd.value='cash';
+  const st=document.getElementById('led-status'); if(st) st.value='cleared';
   const tp=document.getElementById('led-type'); if(tp) tp.value='payment';
   togglePaymodeField();
+  document.getElementById('led-alloc-wrap').style.display='none';
+  document.getElementById('led-alloc-rows').innerHTML='';
+  _ledgerAttachment = null;
+  document.getElementById('led-attach-file').value='';
+  renderLedgerAttachPreview();
   const partySel=document.getElementById('led-party');
   const currentParty=document.getElementById('ledgerPartySelect').value;
   if(partySel && currentParty) partySel.value=currentParty;
@@ -7175,7 +7310,13 @@ function editLedgerEntry(id){
   document.getElementById('led-deduction').value=e.deduction||0;
   document.getElementById('led-narration').value=e.narration||e.desc||'';
   if(document.getElementById('led-paymode')) document.getElementById('led-paymode').value=e.paymode||'cash';
+  if(document.getElementById('led-status')) document.getElementById('led-status').value=e.status||'cleared';
+  if(document.getElementById('led-bank')) document.getElementById('led-bank').value=e.bankName||'';
   togglePaymodeField();
+  renderInvoiceAllocation(e.allocations||[]);
+  _ledgerAttachment = e.attachment || null;
+  document.getElementById('led-attach-file').value='';
+  renderLedgerAttachPreview();
   openModal('addLedgerModal');
 }
 function saveLedgerEntry(){
@@ -7189,7 +7330,18 @@ function saveLedgerEntry(){
   const narration=document.getElementById('led-narration').value;
   const inv=document.getElementById('led-inv').value;
   const paymode=document.getElementById('led-paymode')?document.getElementById('led-paymode').value:'';
+  const status=(type==='payment'&&document.getElementById('led-status'))?document.getElementById('led-status').value:'';
+  const bankName=document.getElementById('led-bank')?document.getElementById('led-bank').value.trim():'';
   if(!party||!date||!amount){toast('Party, date, and amount required — entry NOT saved','warning');return;}
+  const invoicesList = inv ? inv.split(',').map(s=>s.trim()).filter(Boolean) : [];
+  let allocations = [];
+  if(invoicesList.length>=2){
+    allocations = getInvoiceAllocations();
+    const sum = allocations.reduce((a,b)=>a+b.amount,0);
+    if(Math.abs(sum-amount) > 0.5){
+      if(!confirm(`Split amounts add up to ${fmt(sum)} but Total Amount is ${fmt(amount)}. Save anyway?`)) return;
+    }
+  }
 
   let entry, isEdit=false;
   if(editId){
@@ -7201,11 +7353,14 @@ function saveLedgerEntry(){
     const before = {...entry};
     entry.partyName=party; entry.date=date; entry.type=type; entry.refNo=ref;
     entry.invNo=inv; entry.desc=narration; entry.amount=amount; entry.deduction=deduction;
-    entry.narration=narration; entry.paymode=paymode;
+    entry.narration=narration; entry.paymode=paymode; entry.status=status; entry.bankName=bankName;
+    entry.allocations=allocations;
+    entry.attachment=_ledgerAttachment;
     logAudit('edit','Ledger',`${type} entry for ${party} — amount ${amount} updated`, before, entry);
   } else {
-    entry = {id:'L'+uid(),partyName:party,date,type,refNo:ref,invNo:inv,dcNo:'',desc:narration,amount,deduction,narration,paymode};
+    entry = {id:'L'+uid(),partyName:party,date,type,refNo:ref,invNo:inv,dcNo:'',desc:narration,amount,deduction,narration,paymode,status,bankName,allocations,attachment:_ledgerAttachment};
     ledgerData.push(entry);
+    initApprovalForEntity('ledger', entry);
     logAudit('create','Ledger',`${type} entry for ${party} — amount ${amount}`, undefined, entry);
   }
 
@@ -7214,18 +7369,17 @@ function saveLedgerEntry(){
   // auto-links to whichever invoice(s) were typed in the Linked Invoice Nos field —
   // this is what powers the ✅ Paid tick shown next to bills in the ledger table.
   if(type==='payment'){
-    const invoicesArr = inv ? inv.split(',').map(s=>s.trim()).filter(Boolean) : [];
     const chequeRef = ref || ('LED-'+entry.id);
     let ch = isEdit
       ? cheques.find(c=>c.chequeNo===(entry._syncedChequeRef||chequeRef) && c.party===party)
       : cheques.find(c=>c.chequeNo===chequeRef && c.party===party);
     if(!ch){
-      ch = {chequeNo:chequeRef, date, amount, deduction, party, invoices:invoicesArr, notes:narration, paymode, source:'ledger'};
+      ch = {chequeNo:chequeRef, date, amount, deduction, party, invoices:invoicesList, allocations, notes:narration, paymode, status, bankName, source:'ledger'};
       cheques.push(ch);
       if(typeof initApprovalForEntity==='function') initApprovalForEntity('cheque', ch);
     } else {
       ch.chequeNo=chequeRef; ch.date=date; ch.amount=amount; ch.deduction=deduction;
-      ch.notes=narration||ch.notes; ch.paymode=paymode||ch.paymode; ch.invoices=invoicesArr;
+      ch.notes=narration||ch.notes; ch.paymode=paymode||ch.paymode; ch.invoices=invoicesList; ch.allocations=allocations; ch.status=status; ch.bankName=bankName;
     }
     entry._syncedChequeRef = chequeRef;
   }
@@ -7274,6 +7428,25 @@ function syncPartiesFromDB(){
 }
 // ==================== PHASE 8: PARTY CREDIT LIMIT + RISK SCORE ====================
 // Outstanding balance = total invoiced - total paid (via ledger), for a given party.
+// How much of a specific invoice has actually been paid so far (respects per-invoice
+// split allocations from partial payments — a payment linked to several invoices
+// without an explicit split is divided evenly across them as a best estimate).
+function getInvoicePaidAmount(partyName, invNo){
+  invNo = String(invNo).trim();
+  let paid = 0;
+  ledgerData.filter(l=>l.type==='payment' && l.partyName===partyName).forEach(l=>{
+    const invoicesOfL = (l.invNo||'').split(',').map(s=>s.trim()).filter(Boolean);
+    if(!invoicesOfL.includes(invNo)) return;
+    if(l.allocations && l.allocations.length){
+      const a = l.allocations.find(x=>x.invNo===invNo);
+      if(a) paid += a.amount||0;
+    } else {
+      const net = (l.amount||0)-(l.deduction||0);
+      paid += net/invoicesOfL.length;
+    }
+  });
+  return paid;
+}
 function getPartyOutstandingBalance(partyName){
   const totalInv = db.filter(r=>r.partyName===partyName && r.invNo && !r.cancelled).reduce((s,r)=>s+getDCTotal(r),0);
   const totalPaid = ledgerData.filter(l=>l.partyName===partyName && l.type==='payment').reduce((s,l)=>s+(l.amount||0)-(l.deduction||0),0);
@@ -8175,6 +8348,18 @@ function generateLedgerPDF(party, detailMode){
   if(ob.amount){
     body.push([ob.date?fmtDate(ob.date):'-','Previous Balance','-','-','Opening balance carried forward','','','',fmt(Math.abs(balance))+(balance<0?' CR':' DR')]);
   }
+  const paidAmountMap = {};
+  entries.filter(l=>l.type==='payment').forEach(l=>{
+    const invoicesOfL = (l.invNo||'').split(',').map(s=>s.trim()).filter(Boolean);
+    if(!invoicesOfL.length) return;
+    if(l.allocations && l.allocations.length){
+      l.allocations.forEach(a=>{ paidAmountMap[a.invNo]=(paidAmountMap[a.invNo]||0)+(a.amount||0); });
+    } else {
+      const net=(l.amount||0)-(l.deduction||0), share=net/invoicesOfL.length;
+      invoicesOfL.forEach(no=>{ paidAmountMap[no]=(paidAmountMap[no]||0)+share; });
+    }
+  });
+  const statusLabel={cleared:'Cleared',pending:'Pending',bounced:'BOUNCED'};
   entries.forEach(e=>{
     const isDebit=e.type==='bill'||e.type==='debit_note';
     const debit=isDebit?e.amount:0;
@@ -8183,8 +8368,18 @@ function generateLedgerPDF(party, detailMode){
     if(isDebit) totalBills+=e.amount; else { totalPaid+=e.amount; totalDed+=(e.deduction||0); }
     let desc = e.desc||e.narration||'';
     if(e.type==='bill' && e.dcNo) desc = `DC:${e.dcNo}${e.poNo?' PO:'+e.poNo:''}`;
+    if(e.type==='payment'){
+      if(e.bankName) desc += (desc?' | ':'')+'Bank: '+e.bankName;
+      if(e.status) desc += (desc?' | ':'')+'Status: '+(statusLabel[e.status]||e.status);
+    }
+    let invCell = e.invNo||'-';
+    if(e.type==='bill' && e.invNo){
+      const paidAmt = paidAmountMap[String(e.invNo).trim()]||0;
+      if(paidAmt >= e.amount-0.5) invCell += ' (Paid)';
+      else if(paidAmt>0.5) invCell += ` (Partial ${fmt(paidAmt)}/${fmt(e.amount)})`;
+    }
     const typeLabel={bill:'Bill',payment:'Payment',debit_note:'Debit Note'}[e.type]||e.type;
-    body.push([fmtDate(e.date),typeLabel,e.refNo||'-',e.invNo||'-',desc,debit?fmt(debit):'',credit?fmt(credit):'',(e.deduction&&!isDebit)?fmt(e.deduction):'',fmt(Math.abs(balance))+(balance<0?' CR':' DR')]);
+    body.push([fmtDate(e.date),typeLabel,e.refNo||'-',invCell,desc,debit?fmt(debit):'',credit?fmt(credit):'',(e.deduction&&!isDebit)?fmt(e.deduction):'',fmt(Math.abs(balance))+(balance<0?' CR':' DR')]);
   });
   doc.autoTable({
     startY:y, head:[['Date','Type','Ref/Cheque','Invoice','Description','Debit','Credit','Deduction','Balance']],
@@ -12827,23 +13022,25 @@ function computeReminders(){
   const chqTomorrow = cheques.filter(c=>c.date===fmtDate(tomorrow));
   if(chqTomorrow.length) alerts.push({type:'Cheque Tomorrow', icon:'🏦', count:chqTomorrow.length, detail:`${chqTomorrow.length} cheque(s) due tomorrow (${chqTomorrow.map(c=>c.chequeNo).join(', ')})`, severity:'danger', tab:'cheques'});
 
-  // 4. Payment Due (invoiced DCs older than 30 days with no matching ledger payment)
+  // 4. Payment Due (invoiced DCs older than 30 days with no matching ledger payment, or not fully paid)
   const cutoff = new Date(today); cutoff.setDate(today.getDate()-30);
   const overdueInv = active.filter(r=>r.invNo && r.date && new Date(r.date) < cutoff);
   const overdueUnpaidCount = overdueInv.filter(r=>{
-    const paid = ledgerData.filter(l=>l.type==='payment' && l.partyName===r.partyName && (l.invNo||'').includes(r.invNo)).length;
-    return !paid;
+    return getInvoicePaidAmount(r.partyName, r.invNo) < getDCTotal(r)-0.5;
   }).length;
-  if(overdueUnpaidCount) alerts.push({type:'Payment Due', icon:'💰', count:overdueUnpaidCount, detail:`${overdueUnpaidCount} invoice(s) overdue 30+ days with no payment logged`, severity:'danger', tab:'ledger'});
+  if(overdueUnpaidCount) alerts.push({type:'Payment Due', icon:'💰', count:overdueUnpaidCount, detail:`${overdueUnpaidCount} invoice(s) overdue 30+ days with no/partial payment logged`, severity:'danger', tab:'ledger'});
 
-  // 4b. PHASE 6: Payment Pending 15+ days (invoiced DCs 15-29 days old, no ledger payment yet)
+  // 4b. PHASE 6: Payment Pending 15+ days (invoiced DCs 15-29 days old, not fully paid yet)
   const cutoff15 = new Date(today); cutoff15.setDate(today.getDate()-15);
   const pending15 = active.filter(r=>r.invNo && r.date && new Date(r.date) < cutoff15 && new Date(r.date) >= cutoff);
   const pending15Count = pending15.filter(r=>{
-    const paid = ledgerData.filter(l=>l.type==='payment' && l.partyName===r.partyName && (l.invNo||'').includes(r.invNo)).length;
-    return !paid;
+    return getInvoicePaidAmount(r.partyName, r.invNo) < getDCTotal(r)-0.5;
   }).length;
-  if(pending15Count) alerts.push({type:'Payment Pending 15+ Days', icon:'⏰', count:pending15Count, detail:`${pending15Count} invoice(s) unpaid for 15+ days - follow up before they become overdue`, severity:'warning', tab:'ledger'});
+  if(pending15Count) alerts.push({type:'Payment Pending 15+ Days', icon:'⏰', count:pending15Count, detail:`${pending15Count} invoice(s) unpaid/partial for 15+ days - follow up before they become overdue`, severity:'warning', tab:'ledger'});
+
+  // 4d. Bounced Payments — needs immediate follow-up
+  const bouncedPayments = ledgerData.filter(l=>l.type==='payment' && l.status==='bounced');
+  if(bouncedPayments.length) alerts.push({type:'Bounced Payment', icon:'❌', count:bouncedPayments.length, detail:`${bouncedPayments.length} payment(s) marked as Bounced — needs follow-up (${bouncedPayments.slice(0,5).map(l=>l.partyName).join(', ')})`, severity:'danger', tab:'ledger'});
 
   // 4c. PHASE 6: Weekly Data Integrity Check result (auto-run once/week)
   try{
@@ -13610,10 +13807,102 @@ function deleteEmailTemplate(idx){
 
 // ==================== ALL PAYMENT ENTRIES (every mode) — shown inside Cheques tab ====================
 const PAYMODE_LABELS = {cash:'💵 Cash', cheque:'🏦 Cheque', bank_transfer:'🏧 Bank Transfer', online:'📲 Online', other:'✏️ Other', '':'—'};
+function _allocKey(invNo){ return String(invNo).trim().replace(/[^a-zA-Z0-9]/g,'_'); }
+// Only shown when 2+ invoice numbers are typed — a single invoice gets 100% of the amount automatically.
+function renderInvoiceAllocation(preset){
+  const invRaw = document.getElementById('led-inv').value;
+  const invoices = invRaw.split(',').map(s=>s.trim()).filter(Boolean);
+  const wrap = document.getElementById('led-alloc-wrap');
+  const rowsEl = document.getElementById('led-alloc-rows');
+  const totalEl = document.getElementById('led-alloc-total');
+  if(invoices.length < 2){ wrap.style.display='none'; return; }
+  wrap.style.display='';
+  const total = parseFloat(document.getElementById('led-amount').value)||0;
+  const existing = {};
+  rowsEl.querySelectorAll('input[data-inv]').forEach(inp=>{ existing[inp.getAttribute('data-inv')] = inp.value; });
+  const presetMap = {}; (preset||[]).forEach(a=>{ presetMap[a.invNo]=a.amount; });
+  const even = invoices.length ? (total/invoices.length) : 0;
+  rowsEl.innerHTML = invoices.map(no=>{
+    const key=_allocKey(no);
+    const val = presetMap.hasOwnProperty(no) ? presetMap[no] : (existing[key]!==undefined ? existing[key] : (even?even.toFixed(2):''));
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+      <span style="min-width:80px;font-size:12px;">Inv #${no}</span>
+      <input type="number" data-inv="${key}" data-invno="${no.replace(/"/g,'&quot;')}" value="${val}" oninput="updateAllocTotal()" style="flex:1;">
+    </div>`;
+  }).join('');
+  updateAllocTotal();
+}
+function updateAllocTotal(){
+  const total = parseFloat(document.getElementById('led-amount').value)||0;
+  let sum=0;
+  document.querySelectorAll('#led-alloc-rows input[data-inv]').forEach(inp=>{ sum+=parseFloat(inp.value)||0; });
+  const diff = total-sum;
+  const totalEl = document.getElementById('led-alloc-total');
+  if(Math.abs(diff)<0.5){ totalEl.innerHTML = `<span style="color:#1fbf75;">✅ Allocated ${fmt(sum)} of ${fmt(total)}</span>`; }
+  else { totalEl.innerHTML = `<span style="color:#f5a623;">⚠️ Allocated ${fmt(sum)} of ${fmt(total)} — ${fmt(Math.abs(diff))} ${diff>0?'unallocated':'over-allocated'}</span>`; }
+}
+function getInvoiceAllocations(){
+  const rows = document.querySelectorAll('#led-alloc-rows input[data-inv]');
+  if(!rows.length) return [];
+  return Array.from(rows).map(inp=>({invNo:inp.getAttribute('data-invno'), amount:parseFloat(inp.value)||0}));
+}
+// Holds the base64 attachment for the entry currently being added/edited.
+// Cleared on modal open/close so a stale attachment from a previous entry never leaks in.
+let _ledgerAttachment = null;
+const LEDGER_ATTACH_MAX_BYTES = 500*1024; // 500KB — localStorage has a small total quota, keep receipts light
+function handleLedgerAttachment(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  if(file.size > LEDGER_ATTACH_MAX_BYTES){
+    toast('⚠️ File too large ('+(file.size/1024).toFixed(0)+'KB). Max 500KB — please compress/resize and try again.','warning');
+    input.value='';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = function(e){
+    _ledgerAttachment = {name:file.name, type:file.type, data:e.target.result, size:file.size};
+    renderLedgerAttachPreview();
+  };
+  reader.onerror = function(){ toast('Could not read file','error'); };
+  reader.readAsDataURL(file);
+}
+function removeLedgerAttachment(){
+  _ledgerAttachment = null;
+  document.getElementById('led-attach-file').value='';
+  renderLedgerAttachPreview();
+}
+function renderLedgerAttachPreview(){
+  const el = document.getElementById('led-attach-preview');
+  if(!el) return;
+  if(_ledgerAttachment){
+    el.innerHTML = `📎 ${_ledgerAttachment.name} (${(_ledgerAttachment.size/1024).toFixed(0)}KB) <button type="button" class="btn btn-red btn-xs" onclick="removeLedgerAttachment()">✕ Remove</button>`;
+  } else {
+    el.innerHTML = '';
+  }
+}
+// Opens a saved attachment in a new tab for viewing/printing/downloading.
+function viewLedgerAttachment(id){
+  const e = ledgerData.find(l=>l.id===id);
+  if(!e || !e.attachment){ toast('No attachment found','warning'); return; }
+  const w = window.open('');
+  if(!w){ toast('Popup blocked — please allow popups to view the attachment','warning'); return; }
+  if(e.attachment.type && e.attachment.type.startsWith('image/')){
+    w.document.write(`<title>${e.attachment.name}</title><body style="margin:0;background:#222;"><img src="${e.attachment.data}" style="max-width:100%;display:block;margin:auto;"></body>`);
+  } else {
+    w.location = e.attachment.data;
+  }
+}
 function togglePaymodeField(){
   const type = document.getElementById('led-type').value;
   const wrap = document.getElementById('led-paymode-wrap');
   if(wrap) wrap.style.display = (type==='payment') ? '' : 'none';
+  const statusWrap = document.getElementById('led-status-wrap');
+  if(statusWrap) statusWrap.style.display = (type==='payment') ? '' : 'none';
+  const bankWrap = document.getElementById('led-bank-wrap');
+  if(bankWrap){
+    const pm = document.getElementById('led-paymode') ? document.getElementById('led-paymode').value : '';
+    bankWrap.style.display = (type==='payment' && ['cheque','bank_transfer','online'].includes(pm)) ? '' : 'none';
+  }
 }
 function renderAllPayments(){
   const tbody = document.getElementById('allPaymentsTbody');
@@ -16580,7 +16869,8 @@ function approvalWorkflowHtml(idx){
 const APPROVAL_MODULES = {
   po: { getArray:()=>purchaseOrders, settingKey:'poApprovalWorkflowEnabled', idLabel:r=>`PO ${r.poNo}`, save:()=>savePurchaseOrders(), render:()=>renderPOTab() },
   expense: { getArray:()=>expenses, settingKey:'expApprovalWorkflowEnabled', idLabel:r=>`Expense (${r.category}, ${r.amount})`, save:()=>saveExpenses(), render:()=>renderExpensesTab() },
-  cheque: { getArray:()=>cheques, settingKey:'chqApprovalWorkflowEnabled', idLabel:r=>`Cheque ${r.chequeNo}`, save:()=>saveData(), render:()=>renderCheques() }
+  cheque: { getArray:()=>cheques, settingKey:'chqApprovalWorkflowEnabled', idLabel:r=>`Cheque ${r.chequeNo}`, save:()=>saveData(), render:()=>renderCheques() },
+  ledger: { getArray:()=>ledgerData, settingKey:'ledgerApprovalWorkflowEnabled', idLabel:r=>`Ledger ${r.type} — ${r.partyName} (${fmt(r.amount)})`, save:()=>saveData(), render:()=>renderLedger() }
 };
 function toggleModuleApproval(moduleKey, checkboxId){
   const mod = APPROVAL_MODULES[moduleKey];
@@ -16648,6 +16938,55 @@ function otherApprovalBadge(moduleKey, idx){
     buttons = `<button class="btn btn-green btn-xs" onclick="approveOtherEntity('${moduleKey}',${idx})" title="Approve (${APPROVAL_NEXT_ROLE[status]})">✅</button> <button class="btn btn-red btn-xs" onclick="rejectOtherEntity('${moduleKey}',${idx})" title="Reject">❌</button>`;
   }
   return `<div style="display:flex;flex-direction:column;gap:2px;align-items:flex-start;"><span class="badge" style="font-size:10px;white-space:nowrap;">${APPROVAL_LABELS[status]||status}</span><span>${buttons}</span></div>`;
+}
+// Ledger entries are looked up by their unique string id (not array index like the other
+// approval modules above), since ledgerData rows can be filtered/sorted/reordered on screen.
+function approveLedgerEntry(id){
+  const rec = ledgerData.find(l=>l.id===id);
+  if(!rec || !rec.approvalStatus || rec.approvalStatus==='approved') return;
+  const stageOrder = ['pending_manager','pending_accounts','pending_director'];
+  const curIdx = stageOrder.indexOf(rec.approvalStatus);
+  const nextStatus = curIdx<stageOrder.length-1 ? stageOrder[curIdx+1] : 'approved';
+  rec.approvalStatus = nextStatus;
+  rec.approvalHistory = rec.approvalHistory||[];
+  rec.approvalHistory.push({stage:APPROVAL_NEXT_ROLE[stageOrder[curIdx]], by:securityData.currentUser?securityData.currentUser.username:'Unknown', date:new Date().toISOString(), action:'approved'});
+  logAudit('edit','Approval Workflow',`${APPROVAL_MODULES.ledger.idLabel(rec)} approved by ${APPROVAL_NEXT_ROLE[stageOrder[curIdx]]} — now ${APPROVAL_LABELS[nextStatus]}`, undefined, undefined);
+  saveData(); renderLedger();
+  toast(`Approved! Status: ${APPROVAL_LABELS[nextStatus]}`,'success');
+}
+function rejectLedgerEntry(id){
+  const reason = prompt('Reason for rejection:');
+  if(reason===null) return;
+  const rec = ledgerData.find(l=>l.id===id);
+  if(!rec) return;
+  rec.approvalStatus = 'rejected';
+  rec.approvalHistory = rec.approvalHistory||[];
+  rec.approvalHistory.push({stage:getCurrentApprovalRole()||'Admin', by:securityData.currentUser?securityData.currentUser.username:'Unknown', date:new Date().toISOString(), action:'rejected', reason});
+  logAudit('edit','Approval Workflow',`${APPROVAL_MODULES.ledger.idLabel(rec)} rejected — ${reason}`, undefined, undefined);
+  saveData(); renderLedger();
+  toast('Rejected','warning');
+}
+function resubmitLedgerEntry(id){
+  const rec = ledgerData.find(l=>l.id===id);
+  if(!rec) return;
+  rec.approvalStatus = 'pending_manager';
+  rec.approvalHistory = rec.approvalHistory||[];
+  rec.approvalHistory.push({stage:'Staff', by:securityData.currentUser?securityData.currentUser.username:'Unknown', date:new Date().toISOString(), action:'resubmitted'});
+  saveData(); renderLedger();
+  toast('Resubmitted for approval','success');
+}
+function ledgerApprovalBadge(id){
+  if(!settings.ledgerApprovalWorkflowEnabled) return '';
+  const rec = ledgerData.find(l=>l.id===id);
+  if(!rec || !rec.approvalStatus) return '';
+  const status = rec.approvalStatus;
+  let buttons = '';
+  if(status==='rejected'){
+    buttons = `<button class="btn btn-neon btn-xs" onclick="resubmitLedgerEntry('${id}')" title="Resubmit">🔄</button>`;
+  } else if(status!=='approved' && canApproveStage(status)){
+    buttons = `<button class="btn btn-green btn-xs" onclick="approveLedgerEntry('${id}')" title="Approve (${APPROVAL_NEXT_ROLE[status]})">✅</button> <button class="btn btn-red btn-xs" onclick="rejectLedgerEntry('${id}')" title="Reject">❌</button>`;
+  }
+  return `<div style="margin-top:2px;"><span class="badge" style="font-size:9px;white-space:nowrap;">${APPROVAL_LABELS[status]||status}</span> ${buttons}</div>`;
 }
 
 // ==================== MODULE 24: NOTIFICATION CENTER ====================
