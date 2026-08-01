@@ -150,6 +150,7 @@ tr.cancelled td{opacity:.5;text-decoration:line-through;}
 .badge-ready{background:rgba(0,245,255,.15);color:var(--neon);border:1px solid rgba(0,245,255,.3);}
 .badge-invoiced{background:rgba(0,255,157,.15);color:var(--neon4);border:1px solid rgba(0,255,157,.3);}
 .badge-cancelled{background:rgba(255,45,120,.1);color:var(--neon3);border:1px solid rgba(255,45,120,.3);}
+.badge-void{background:rgba(150,150,160,.15);color:#9a9aa5;border:1px solid rgba(150,150,160,.35);}
 .badge-paid{background:rgba(0,255,157,.2);color:var(--neon4);border:1px solid rgba(0,255,157,.4);}
 .badge-unpaid{background:rgba(255,45,120,.1);color:var(--neon3);border:1px solid rgba(255,45,120,.2);}
 /* INPUTS */
@@ -483,6 +484,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
         <option value="ready">Ready</option>
         <option value="invoiced">Invoiced</option>
         <option value="cancelled">Cancelled</option>
+        <option value="void">🔒 Void</option>
       </select>
       <select id="partyFilter" onchange="renderRecords()" style="width:180px;">
         <option value="">All Parties</option>
@@ -3199,6 +3201,9 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       <div class="form-group">
         <div class="toggle-wrap"><label class="toggle"><input type="checkbox" id="dc-cancelled"><span class="toggle-slider"></span></label><label style="margin:0;">Cancelled</label></div>
       </div>
+      <div class="form-group">
+        <div class="toggle-wrap"><label class="toggle"><input type="checkbox" id="dc-void" onchange="if(this.checked){document.getElementById('dc-cancelled').checked=true;document.getElementById('dc-ready').checked=false;}"><span class="toggle-slider"></span></label><label style="margin:0;" title="Reserves this serial number only. Excluded from Pending, Ready, Bill Ledger and FBR/Tax Report — same as Cancelled, just tagged separately so you can tell them apart in the DC list.">🔒 Void (Serial Only)</label></div>
+      </div>
     </div>
     <div class="divider"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
@@ -5239,14 +5244,16 @@ function getDCBasic(rec){
   return (rec.items||[]).reduce((s,it)=>s+parseFloat(it.qty||0)*parseFloat(it.rate||0),0);
 }
 function getStatus(rec){
+  if(rec.voidOnly) return 'void';
   if(rec.cancelled) return 'cancelled';
   if(rec.invNo) return 'invoiced';
   if(rec.readyForInv) return 'ready';
   return 'pending';
 }
 function statusBadge(st){
-  const map={pending:'badge-pending',ready:'badge-ready',invoiced:'badge-invoiced',cancelled:'badge-cancelled'};
-  return `<span class="badge ${map[st]||''}">${st}</span>`;
+  const map={pending:'badge-pending',ready:'badge-ready',invoiced:'badge-invoiced',cancelled:'badge-cancelled',void:'badge-void'};
+  const label={void:'🔒 void'}[st]||st;
+  return `<span class="badge ${map[st]||''}">${label}</span>`;
 }
 function getUniqueParties(){ return [...new Set(db.map(r=>r.partyName).filter(Boolean))].sort(); }
 function getUniqueMonths(){
@@ -5985,6 +5992,7 @@ function openModal_addDc(){
   document.getElementById('dc-party').value='';
   document.getElementById('dc-ready').checked=false;
   document.getElementById('dc-cancelled').checked=false;
+  document.getElementById('dc-void').checked=false;
   document.getElementById('dc-dup-warn').style.display='none';
   document.getElementById('itemsTableBody').innerHTML='';
   clearDispatchFields();
@@ -6008,6 +6016,7 @@ function _editDCOpen(idx){
   document.getElementById('dc-note').value=rec.note||'';
   document.getElementById('dc-ready').checked=!!rec.readyForInv;
   document.getElementById('dc-cancelled').checked=!!rec.cancelled;
+  document.getElementById('dc-void').checked=!!rec.voidOnly;
   document.getElementById('dc-dup-warn').style.display='none';
   loadDispatchIntoModal(rec);
   // Load items
@@ -6317,7 +6326,8 @@ async function saveDC(){
     invDate:document.getElementById('dc-invdate').value,
     partyName:party, unitName:document.getElementById('dc-unit').value.trim(),
     poNo:document.getElementById('dc-pono').value.trim(),
-    items, cancelled:document.getElementById('dc-cancelled').checked,
+    items, cancelled:document.getElementById('dc-cancelled').checked||document.getElementById('dc-void').checked,
+    voidOnly:document.getElementById('dc-void').checked,
     readyForInv:document.getElementById('dc-ready').checked,
     note:document.getElementById('dc-note').value.trim(),
     dispatch: dispatchInfo
