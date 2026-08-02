@@ -7188,15 +7188,36 @@ function renderLedger(){
   // Which invoice numbers already have a payment entry linked to them (for the green "Paid" tick below) —
   // uses ALL ledger entries for this party (not just the date/search-filtered ones) so the tick stays correct.
   const paidAmountMap = {};
+  // Bill amount per invoice number for this party — used below to split an
+  // unallocated multi-invoice payment (comma separated invNo, e.g. "500,501")
+  // in proportion to what each invoice actually billed, instead of a flat
+  // average. An average split was showing the wrong "paid so far" amount next
+  // to each invoice (e.g. an even ₹X/2 next to a ₹50,000 bill and a ₹5,000 bill
+  // that were paid together).
+  const billAmountByInv = {};
+  ledgerData.filter(l=>l.partyName===party && l.type==='bill' && l.invNo).forEach(l=>{
+    const key = String(l.invNo).trim();
+    billAmountByInv[key] = (billAmountByInv[key]||0) + (l.amount||0);
+  });
   ledgerData.filter(l=>l.partyName===party && l.type==='payment').forEach(l=>{
     const invoicesOfL = (l.invNo||'').split(',').map(s=>s.trim()).filter(Boolean);
     if(!invoicesOfL.length) return;
+    const net = (l.amount||0) - (l.deduction||0);
     if(l.allocations && l.allocations.length){
       l.allocations.forEach(a=>{ paidAmountMap[a.invNo] = (paidAmountMap[a.invNo]||0) + (a.amount||0); });
+    } else if(invoicesOfL.length>1){
+      const totalDue = invoicesOfL.reduce((s,no)=> s+(billAmountByInv[no]||0), 0);
+      if(totalDue>0){
+        invoicesOfL.forEach(no=>{
+          const weight = (billAmountByInv[no]||0)/totalDue;
+          paidAmountMap[no] = (paidAmountMap[no]||0) + net*weight;
+        });
+      } else {
+        const share = net / invoicesOfL.length;
+        invoicesOfL.forEach(no=>{ paidAmountMap[no] = (paidAmountMap[no]||0) + share; });
+      }
     } else {
-      const net = (l.amount||0) - (l.deduction||0);
-      const share = net / invoicesOfL.length;
-      invoicesOfL.forEach(no=>{ paidAmountMap[no] = (paidAmountMap[no]||0) + share; });
+      paidAmountMap[invoicesOfL[0]] = (paidAmountMap[invoicesOfL[0]]||0) + net;
     }
   });
   // "Previous Balance" always shows first, above every other row, regardless of date/search filters
