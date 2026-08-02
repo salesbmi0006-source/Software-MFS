@@ -6506,15 +6506,33 @@ function dedupeDuplicateLedgerPaymentEntries(){
   return toRemove.size;
 }
 function syncLedgerFromDB(){
-  // Ensure every invoiced (non-cancelled) DC has a corresponding 'bill' ledger entry
-  let added=0;
+  // Ensure every invoiced (non-cancelled) DC has a corresponding 'bill' ledger entry,
+  // AND reconcile existing bill entries so a DC edited after its ledger entry was
+  // first created (amount/rate/qty/items changed later) doesn't leave the Ledger
+  // showing a stale/old amount. Previously this only added MISSING entries and
+  // silently skipped ones that already existed, which is why records like DC 1907
+  // that were edited after their invoice was first raised kept showing the old
+  // amount in the Ledger even though the DC itself displayed the new amount.
+  let added=0, fixed=0;
   db.forEach((rec,idx)=>{
     if(rec.invNo && rec.partyName && !rec.cancelled){
-      const exists = ledgerData.some(l=>l.invNo===rec.invNo && l.dcNo===rec.dcNo && l.type==='bill');
-      if(!exists){ addAutoLedger(rec, idx); added++; }
+      const existing = ledgerData.find(l=>l.invNo===rec.invNo && l.dcNo===rec.dcNo && l.type==='bill');
+      if(!existing){ addAutoLedger(rec, idx); added++; }
+      else{
+        const correctAmount = getDCTotal(rec);
+        const amountMismatch = Math.abs((existing.amount||0) - correctAmount) > 0.01;
+        const itemsMismatch = JSON.stringify(existing.items||[]) !== JSON.stringify(rec.items||[]);
+        if(amountMismatch || itemsMismatch){
+          existing.amount = correctAmount;
+          existing.items = rec.items||[];
+          existing.partyName = rec.partyName;
+          existing.poNo = rec.poNo||'';
+          fixed++;
+        }
+      }
     }
   });
-  if(added>0) saveData();
+  if(added>0 || fixed>0) saveData();
   return added;
 }
 
