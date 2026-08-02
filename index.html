@@ -6422,6 +6422,7 @@ async function saveDC(){
   }
   else { db.push(rec); if(settings.approvalWorkflowEnabled){ rec.approvalStatus='pending_manager'; rec.approvalHistory=[{stage:'Staff', by:securityData.currentUser?securityData.currentUser.username:'Unknown', date:new Date().toISOString(), action:'created'}]; rec.readyForInv=false; } logAudit('create','DC/Invoice',`DC #${rec.dcNo} (${rec.partyName}) created`, undefined, rec); toast('DC added!','success'); }
   if(rec.invNo && editingDcIdx===null){ addAutoLedger(rec, db.length-1); }
+  else if(rec.invNo && editingDcIdx!==null){ syncAutoLedgerFromDC(rec); }
   syncPartiesFromDB();
   saveData(); renderRecords(); closeDcModal();
   // A DC's dispatch info is also shown on the separate Dispatch tab/table.
@@ -6444,6 +6445,36 @@ function addAutoLedger(rec, idx){
     items: rec.items||[], invDate: rec.invDate||'', poNo: rec.poNo||''
   };
   ledgerData.push(entry);
+}
+// FIX: pehle jab kisi existing DC ko edit karke amount/rate/qty change kiya jata
+// tha (jis ka invoice already ban chuka ho), to us DC ki auto-generated Ledger
+// entry (addAutoLedger se bani hui) purani amount par hi "freeze" reh jati thi,
+// kyunke edit ke waqt koi bhi function ledgerData ko dobara nahi chhoo raha tha.
+// Ye function DC edit hone par uski matching ledger 'bill' entry dhoondh kar
+// (dcNo + invNo se) amount, items, date, desc waghera ko taaza kar deta hai —
+// agar match na mile (purani entries jin mein dcNo save nahi hua) to fallback
+// ke tor par sirf invNo se bhi dhoondta hai. Agar phir bhi na mile aur DC
+// abhi bhi readyForInv hai, to naya entry bana deta hai (jaise pehli dafa banta).
+function syncAutoLedgerFromDC(rec){
+  if(!rec.invNo || !rec.partyName) return;
+  let entry = ledgerData.find(l=>l.type==='bill' && l.dcNo===rec.dcNo && l.invNo===rec.invNo);
+  if(!entry){
+    entry = ledgerData.find(l=>l.type==='bill' && l.invNo===rec.invNo && l.partyName===rec.partyName && l.narration==='Auto from DC record');
+  }
+  if(entry){
+    entry.amount = getDCTotal(rec);
+    entry.items = rec.items||[];
+    entry.date = rec.invDate?(rec.invDate+'-01'):rec.date;
+    entry.invDate = rec.invDate||'';
+    entry.poNo = rec.poNo||'';
+    entry.partyName = rec.partyName;
+    entry.dcNo = rec.dcNo;
+    entry.desc = `Invoice ${rec.invNo} - DC ${rec.dcNo}`;
+  } else {
+    // Koi purani auto-ledger entry na mili — nayi bana do taake amount lost na ho.
+    const idx = db.indexOf(rec);
+    addAutoLedger(rec, idx);
+  }
 }
 // ONE-TIME CLEANUP (added when the duplicate-payment bug was fixed): the old
 // syncLedgerFromDB() used to compare a single invoice number against a
