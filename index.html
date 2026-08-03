@@ -2825,6 +2825,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <button type="button" class="btn btn-neon" id="fb-nav-samples" onclick="fbShowSection('samples')">🧪 Samples</button>
     <button type="button" class="btn btn-neon" id="fb-nav-ledger" onclick="fbShowSection('ledger')">📒 Ledger</button>
     <button type="button" class="btn btn-neon" id="fb-nav-customers" onclick="fbShowSection('customers')">👥 Customers</button>
+    <button type="button" class="btn btn-neon" id="fb-nav-descriptions" onclick="fbShowSection('descriptions')">📝 Descriptions</button>
   </div>
 
   <!-- New Bill -->
@@ -2837,16 +2838,20 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       <div class="form-group"><label>Bill No</label><input type="text" id="fb-billno"></div>
       <div class="form-group"><label>Date</label><input type="date" id="fb-date"></div>
       <div class="form-group" style="align-self:flex-end;">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-          <input type="checkbox" id="fb-is-sample" style="width:18px;height:18px;"> 🧪 This is a Sample (not a sale)
-        </label>
+        <label>Bill Status</label>
+        <select id="fb-bill-status" onchange="fbOnStatusChange()">
+          <option value="unpaid">💳 Unpaid</option>
+          <option value="paid">✅ Paid</option>
+          <option value="sample">🧪 Sample (Not a Sale)</option>
+        </select>
       </div>
     </div>
     <div class="form-row">
+      <div class="form-group"><label>Shop Name</label><input type="text" id="fb-cust-shop" list="fb-shop-list" oninput="fbOnShopNameInput()" placeholder="Type shop name..."><datalist id="fb-shop-list"></datalist></div>
       <div class="form-group"><label>Customer Name</label><input type="text" id="fb-cust-name" list="fb-party-list" oninput="fbOnCustomerNameInput()" placeholder="Type customer name..."><datalist id="fb-party-list"></datalist></div>
-      <div class="form-group"><label>Shop Name</label><input type="text" id="fb-cust-shop" placeholder="Shop name"></div>
       <div class="form-group"><label>Phone</label><input type="text" id="fb-cust-phone" placeholder="Phone number"></div>
     </div>
+    <datalist id="fb-desc-list"></datalist>
     <div class="divider"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
       <strong style="color:var(--neon);">📦 Items</strong>
@@ -2889,6 +2894,14 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div id="fb-ledger-balance" style="font-size:14px;margin:8px 0;"></div>
     <div id="fb-ledger-table"></div>
     <div class="divider"></div>
+    <strong style="color:var(--neon);">📄 Download Ledger PDF</strong>
+    <div class="form-row" style="margin-top:8px;align-items:flex-end;">
+      <div class="form-group"><button type="button" class="btn btn-neon btn-sm" onclick="fbExportLedgerPDF()">📄 Full Ledger (all entries)</button></div>
+      <div class="form-group"><label>From</label><input type="date" id="fb-ledger-pdf-from"></div>
+      <div class="form-group"><label>To</label><input type="date" id="fb-ledger-pdf-to"></div>
+      <div class="form-group"><button type="button" class="btn btn-neon btn-sm" onclick="fbExportLedgerPDFRange()">📄 Ledger for Date Range</button></div>
+    </div>
+    <div class="divider"></div>
     <strong style="color:var(--neon);">➕ Add Lump Sum Payment (not tied to a specific bill)</strong>
     <div class="form-row" style="margin-top:8px;">
       <div class="form-group"><label>Date</label><input type="date" id="fb-lump-date"></div>
@@ -2903,6 +2916,13 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Fix any customer's name/shop/phone here, or reorder the list. Once corrected, it applies everywhere — new bills, autofill, and ledger.</div>
     <div id="fb-customers-list"></div>
     <button type="button" class="btn btn-green btn-sm" style="margin-top:10px;" onclick="fbAddCustomerRow()">➕ Add Customer</button>
+  </div>
+
+  <!-- Descriptions -->
+  <div id="fb-sec-descriptions" class="settings-section" style="display:none;">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Item descriptions you type get saved here automatically along with their rate, so next time you can pick them from the dropdown on the New Bill form and the rate fills in by itself (still editable). Fix, reorder, or delete them here.</div>
+    <div id="fb-descriptions-list"></div>
+    <button type="button" class="btn btn-green btn-sm" style="margin-top:10px;" onclick="fbAddDescriptionRow()">➕ Add Description</button>
   </div>
 </div>
 
@@ -18047,7 +18067,8 @@ const FB_SHOP_PHONE = '041-2633395';
 
 let fbCustomers = [];   // {id, name, shopName, phone}
 let fbBills = [];       // {id, billNo, date, customerId, customerName, shopName, phone, items:[{desc,qty,rate}], total, paidAmount}
-let fbLedger = [];      // {id, customerId, date, type:'bill'|'payment', amount, billNo, note}
+let fbLedger = [];      // {id, customerId, date, time, type:'bill'|'payment'|'sample', sampleEvent:'out'|'return'|'converted', amount, billNo, note}
+let fbDescriptions = []; // {id, desc, rate, shopRates:{shopName:rate}}
 let fbSettings = { nextBillNo: 1 };
 let fbCurrentItems = [];
 let fbLastSavedBillId = '';
@@ -18060,6 +18081,7 @@ function loadFastBilling(){
   try{ fbBills = JSON.parse(localStorage.getItem('fb_bills')||'[]'); }catch(e){ fbBills=[]; }
   try{ fbLedger = JSON.parse(localStorage.getItem('fb_ledger')||'[]'); }catch(e){ fbLedger=[]; }
   try{ fbSettings = JSON.parse(localStorage.getItem('fb_settings')||'null') || {nextBillNo:1}; }catch(e){ fbSettings={nextBillNo:1}; }
+  try{ fbDescriptions = JSON.parse(localStorage.getItem('fb_descriptions')||'[]'); }catch(e){ fbDescriptions=[]; }
   if(!fbSettings.nextBillNo) fbSettings.nextBillNo = 1;
   const logoImg = document.getElementById('fb-logo-img');
   if(logoImg && !logoImg.src) logoImg.src = FB_LOGO;
@@ -18068,22 +18090,28 @@ function saveFbCustomers(){ (typeof safeSetItem==='function'?safeSetItem:( (k,v)
 function saveFbBills(){ (typeof safeSetItem==='function'?safeSetItem:( (k,v)=>localStorage.setItem(k,v) ))('fb_bills', JSON.stringify(fbBills)); }
 function saveFbLedger(){ (typeof safeSetItem==='function'?safeSetItem:( (k,v)=>localStorage.setItem(k,v) ))('fb_ledger', JSON.stringify(fbLedger)); }
 function saveFbSettings(){ (typeof safeSetItem==='function'?safeSetItem:( (k,v)=>localStorage.setItem(k,v) ))('fb_settings', JSON.stringify(fbSettings)); }
+function saveFbDescriptions(){ (typeof safeSetItem==='function'?safeSetItem:( (k,v)=>localStorage.setItem(k,v) ))('fb_descriptions', JSON.stringify(fbDescriptions)); }
+function fbNowTime(){ return new Date().toTimeString().slice(0,5); }
+function fbNowDateTime(){ const d=new Date(); return d.toISOString().slice(0,10)+' '+d.toTimeString().slice(0,5); }
 
 // ---- Tab entry point ----
 function renderFastBillingTab(){
   loadFastBilling();
   fbShowSection(fbActiveSection||'newbill');
+  fbPopulateShopDatalist();
   fbPopulatePartyDatalist();
+  fbPopulateDescDatalist();
   fbRenderNewBillForm();
   fbPopulateLedgerCustomerSelect();
   fbRenderLedger();
   fbRenderCustomersSettings();
+  fbRenderDescriptionsSettings();
   fbRenderAllBills();
   fbRenderSamples();
 }
 function fbShowSection(sec){
   fbActiveSection = sec;
-  ['newbill','allbills','samples','ledger','customers'].forEach(s=>{
+  ['newbill','allbills','samples','ledger','customers','descriptions'].forEach(s=>{
     const el = document.getElementById('fb-sec-'+s);
     if(el) el.style.display = (s===sec)?'':'none';
     const btn = document.getElementById('fb-nav-'+s);
@@ -18091,15 +18119,32 @@ function fbShowSection(sec){
   });
   if(sec==='ledger'){ fbPopulateLedgerCustomerSelect(); fbRenderLedger(); }
   if(sec==='customers') fbRenderCustomersSettings();
+  if(sec==='descriptions') fbRenderDescriptionsSettings();
   if(sec==='allbills') fbRenderAllBills();
   if(sec==='samples') fbRenderSamples();
 }
 
 // ---- New Bill ----
+function fbPopulateShopDatalist(){
+  const dl = document.getElementById('fb-shop-list');
+  if(!dl) return;
+  const shops = [...new Set(fbCustomers.map(c=>(c.shopName||'').trim()).filter(Boolean))];
+  dl.innerHTML = shops.map(s=>`<option value="${s.replace(/"/g,'&quot;')}">`).join('');
+}
 function fbPopulatePartyDatalist(){
   const dl = document.getElementById('fb-party-list');
   if(!dl) return;
-  dl.innerHTML = fbCustomers.map(c=>`<option value="${(c.name||'').replace(/"/g,'&quot;')}">`).join('');
+  const shopEl = document.getElementById('fb-cust-shop');
+  const shopVal = shopEl ? (shopEl.value||'').trim().toLowerCase() : '';
+  // If a shop is already typed/selected, only show customers belonging to that shop
+  // so picking a name automatically means it's the right person for this shop.
+  const list = shopVal ? fbCustomers.filter(c=>(c.shopName||'').trim().toLowerCase()===shopVal) : fbCustomers;
+  dl.innerHTML = list.map(c=>`<option value="${(c.name||'').replace(/"/g,'&quot;')}">`).join('');
+}
+function fbOnShopNameInput(){
+  // Re-filter the Customer Name dropdown down to just this shop's people,
+  // and if the shop itself is already known, nothing else to guess yet.
+  fbPopulatePartyDatalist();
 }
 function fbNewBillReset(){
   fbEditingBillId = null;
@@ -18111,7 +18156,8 @@ function fbNewBillReset(){
   const nameEl = document.getElementById('fb-cust-name'); if(nameEl) nameEl.value = '';
   const shopEl = document.getElementById('fb-cust-shop'); if(shopEl) shopEl.value = '';
   const phoneEl = document.getElementById('fb-cust-phone'); if(phoneEl) phoneEl.value = '';
-  const sampleEl = document.getElementById('fb-is-sample'); if(sampleEl) sampleEl.checked = false;
+  const statusEl = document.getElementById('fb-bill-status'); if(statusEl) statusEl.value = 'unpaid';
+  fbPopulatePartyDatalist();
   fbRenderItemsTable();
   const printBox = document.getElementById('fb-print-actions'); if(printBox) printBox.style.display='none';
 }
@@ -18125,14 +18171,20 @@ function fbRenderNewBillForm(){
   const dateEl = document.getElementById('fb-date'); if(dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0,10);
   fbRenderItemsTable();
 }
+function fbOnStatusChange(){ /* status just read at save time; hook kept for future use */ }
 function fbOnCustomerNameInput(){
   const nameEl = document.getElementById('fb-cust-name');
   const val = (nameEl.value||'').trim();
   if(!val) return;
-  const match = fbCustomers.find(c=>(c.name||'').toLowerCase()===val.toLowerCase()) ||
-                fbCustomers.find(c=>(c.name||'').toLowerCase().startsWith(val.toLowerCase()));
+  const shopEl = document.getElementById('fb-cust-shop');
+  const shopVal = (shopEl.value||'').trim().toLowerCase();
+  // Prefer a match within the already-picked shop; fall back to any customer by that name.
+  const pool = shopVal ? fbCustomers.filter(c=>(c.shopName||'').trim().toLowerCase()===shopVal) : fbCustomers;
+  const match = pool.find(c=>(c.name||'').toLowerCase()===val.toLowerCase()) ||
+                pool.find(c=>(c.name||'').toLowerCase().startsWith(val.toLowerCase())) ||
+                fbCustomers.find(c=>(c.name||'').toLowerCase()===val.toLowerCase());
   if(match){
-    document.getElementById('fb-cust-shop').value = match.shopName||'';
+    if(!shopEl.value) shopEl.value = match.shopName||'';
     document.getElementById('fb-cust-phone').value = match.phone||'';
   }
 }
@@ -18145,7 +18197,22 @@ function fbRemoveItemRow(idx){
 function fbUpdateItemField(idx, field, val){
   if(!fbCurrentItems[idx]) return;
   fbCurrentItems[idx][field] = (field==='desc') ? val : (parseFloat(val)||0);
-  if(field!=='desc') fbRenderItemsTable();
+  if(field==='desc') fbAutofillRateForItem(idx);
+  fbRenderItemsTable();
+}
+// When a description matching a saved one is picked, fill the rate box automatically
+// (shop-specific rate first, then the description's general rate). Still editable after.
+function fbAutofillRateForItem(idx){
+  const it = fbCurrentItems[idx];
+  if(!it) return;
+  const desc = (it.desc||'').trim();
+  if(!desc) return;
+  const match = fbDescriptions.find(d=>(d.desc||'').toLowerCase()===desc.toLowerCase());
+  if(!match) return;
+  const shopEl = document.getElementById('fb-cust-shop');
+  const shopVal = shopEl ? (shopEl.value||'').trim() : '';
+  const shopRate = shopVal && match.shopRates ? match.shopRates[shopVal] : undefined;
+  it.rate = (shopRate!==undefined && shopRate!==null) ? shopRate : (match.rate||0);
 }
 function fbCalcBillTotal(){
   return fbCurrentItems.reduce((s,it)=>s+(parseFloat(it.qty)||0)*(parseFloat(it.rate)||0),0);
@@ -18155,7 +18222,7 @@ function fbRenderItemsTable(){
   if(!wrap) return;
   wrap.innerHTML = `<table class="items-table"><thead><tr><th>Description</th><th style="width:70px;">Qty</th><th style="width:100px;">Rate</th><th style="width:110px;">Amount</th><th style="width:36px;"></th></tr></thead><tbody>
     ${fbCurrentItems.map((it,i)=>`<tr>
-      <td><input type="text" value="${(it.desc||'').replace(/"/g,'&quot;')}" onchange="fbUpdateItemField(${i},'desc',this.value)" placeholder="Item description" style="width:100%;"></td>
+      <td><input type="text" list="fb-desc-list" value="${(it.desc||'').replace(/"/g,'&quot;')}" onchange="fbUpdateItemField(${i},'desc',this.value)" placeholder="Item description" style="width:100%;"></td>
       <td><input type="number" value="${it.qty}" onchange="fbUpdateItemField(${i},'qty',this.value)" style="width:100%;"></td>
       <td><input type="number" value="${it.rate}" onchange="fbUpdateItemField(${i},'rate',this.value)" style="width:100%;"></td>
       <td style="text-align:right;">${fmt((parseFloat(it.qty)||0)*(parseFloat(it.rate)||0))}</td>
@@ -18164,13 +18231,33 @@ function fbRenderItemsTable(){
   </tbody></table>
   <div style="text-align:right;font-weight:700;margin-top:8px;font-size:16px;">Total: <span style="color:var(--neon);">${fmt(fbCalcBillTotal())}</span></div>`;
 }
+function fbPopulateDescDatalist(){
+  const dl = document.getElementById('fb-desc-list');
+  if(!dl) return;
+  dl.innerHTML = fbDescriptions.map(d=>`<option value="${(d.desc||'').replace(/"/g,'&quot;')}">`).join('');
+}
+// Remembers each description's rate (globally, and per shop) so it can auto-fill next time.
+function fbRememberDescription(desc, rate, shopName){
+  desc = (desc||'').trim();
+  if(!desc) return;
+  let d = fbDescriptions.find(x=>(x.desc||'').toLowerCase()===desc.toLowerCase());
+  if(!d){ d = {id: fbUid(), desc, rate: rate||0, shopRates:{}}; fbDescriptions.push(d); }
+  else { d.rate = rate||d.rate||0; }
+  if(shopName && rate){ d.shopRates = d.shopRates||{}; d.shopRates[shopName] = rate; }
+  saveFbDescriptions();
+  fbPopulateDescDatalist();
+}
 function fbSaveBill(){
   const billNo = document.getElementById('fb-billno').value || fbSettings.nextBillNo;
   const date = document.getElementById('fb-date').value || new Date().toISOString().slice(0,10);
-  const name = (document.getElementById('fb-cust-name').value||'').trim();
+  const time = fbNowTime();
   const shopName = (document.getElementById('fb-cust-shop').value||'').trim();
+  const name = (document.getElementById('fb-cust-name').value||'').trim();
   const phone = (document.getElementById('fb-cust-phone').value||'').trim();
-  const isSample = !!(document.getElementById('fb-is-sample') && document.getElementById('fb-is-sample').checked);
+  const statusEl = document.getElementById('fb-bill-status');
+  const status = statusEl ? statusEl.value : 'unpaid'; // 'unpaid' | 'paid' | 'sample'
+  const isSample = status === 'sample';
+  const markPaidNow = status === 'paid';
   if(!name){ toast('Customer name required','warning'); return; }
   const items = fbCurrentItems.filter(it=>(it.desc||'').trim() || (parseFloat(it.qty)||0) || (parseFloat(it.rate)||0));
   if(!items.length){ toast('Add at least one item','warning'); return; }
@@ -18181,59 +18268,76 @@ function fbSaveBill(){
   else { if(shopName && !cust.shopName) cust.shopName = shopName; if(phone && !cust.phone) cust.phone = phone; }
   saveFbCustomers();
 
+  // remember each item's description + rate (globally and against this shop) for next time
+  items.forEach(it=>fbRememberDescription(it.desc, it.rate, shopName||cust.shopName));
+
   const itemSummary = items.map(it=>it.desc).filter(Boolean).slice(0,3).join(', ') + (items.length>3?` +${items.length-3} more`:'');
 
   if(fbEditingBillId){
     // ---- UPDATE existing bill ----
     const bill = fbBills.find(b=>b.id===fbEditingBillId);
     if(!bill){ toast('Bill not found — cannot update','error'); fbNewBillReset(); return; }
-    bill.billNo = billNo; bill.date = date; bill.customerId = cust.id; bill.customerName = cust.name;
+    bill.billNo = billNo; bill.date = date; bill.time = bill.time||time; bill.customerId = cust.id; bill.customerName = cust.name;
     bill.shopName = shopName||cust.shopName||''; bill.phone = phone||cust.phone||'';
     bill.items = items; bill.total = total; bill.isSample = isSample;
     if(isSample && !bill.sampleStatus) bill.sampleStatus = 'pending';
     if(!isSample) delete bill.sampleStatus;
+    if(markPaidNow) bill.paidAmount = total;
     saveFbBills();
     // keep the linked ledger entry (bill or sample) in sync
     let entry = bill.ledgerEntryId ? fbLedger.find(l=>l.id===bill.ledgerEntryId) : null;
     if(!entry) entry = fbLedger.find(l=>l.billNo===billNo && l.customerId===bill.customerId && (l.type==='bill'||l.type==='sample'));
     if(entry){
-      entry.date = date; entry.billNo = billNo; entry.customerId = cust.id;
+      entry.date = date; entry.time = entry.time||time; entry.billNo = billNo; entry.customerId = cust.id;
       entry.type = isSample ? 'sample' : 'bill';
+      entry.sampleEvent = isSample ? (entry.sampleEvent||'out') : undefined;
       entry.amount = isSample ? 0 : total;
       entry.note = itemSummary || `Bill #${billNo}`;
       saveFbLedger();
     } else if(!isSample){
-      const e = { id: fbUid(), customerId: cust.id, date, type:'bill', amount: total, billNo, note: itemSummary||`Bill #${billNo}` };
+      const e = { id: fbUid(), customerId: cust.id, date, time, type:'bill', amount: total, billNo, note: itemSummary||`Bill #${billNo}` };
       fbLedger.push(e); bill.ledgerEntryId = e.id; saveFbLedger(); saveFbBills();
+    }
+    if(markPaidNow){
+      fbLedger.push({ id: fbUid(), customerId: cust.id, date, time, type:'payment', amount: total, billNo, note:`Paid in full at billing — Bill #${billNo}` });
+      saveFbLedger();
     }
     fbLastSavedBillId = bill.id;
     toast('✅ Bill #'+billNo+' updated','success');
   } else {
     // ---- CREATE new bill ----
-    const bill = { id: fbUid(), billNo, date, customerId: cust.id, customerName: cust.name,
-      shopName: shopName||cust.shopName||'', phone: phone||cust.phone||'', items, total, paidAmount: 0, isSample };
+    const bill = { id: fbUid(), billNo, date, time, customerId: cust.id, customerName: cust.name,
+      shopName: shopName||cust.shopName||'', phone: phone||cust.phone||'', items, total, paidAmount: markPaidNow?total:0, isSample };
     if(isSample) bill.sampleStatus = 'pending';
     fbBills.push(bill);
 
-    const entry = { id: fbUid(), customerId: cust.id, date, type: isSample?'sample':'bill', amount: isSample?0:total, billNo, note: itemSummary||`Bill #${billNo}` };
+    const entry = { id: fbUid(), customerId: cust.id, date, time, type: isSample?'sample':'bill', sampleEvent: isSample?'out':undefined, amount: isSample?0:total, billNo, note: itemSummary||`Bill #${billNo}` };
     fbLedger.push(entry);
     bill.ledgerEntryId = entry.id;
     saveFbBills();
     saveFbLedger();
 
+    if(markPaidNow){
+      fbLedger.push({ id: fbUid(), customerId: cust.id, date, time, type:'payment', amount: total, billNo, note:`Paid in full at billing — Bill #${billNo}` });
+      saveFbLedger();
+    }
+
     fbSettings.nextBillNo = (parseInt(billNo)||fbSettings.nextBillNo) + 1;
     saveFbSettings();
 
     fbLastSavedBillId = bill.id;
-    toast((isSample?'🧪 Sample bill saved: #':'✅ Bill saved: #')+billNo, 'success');
+    toast((isSample?'🧪 Sample bill saved: #':(markPaidNow?'✅ Paid bill saved: #':'✅ Bill saved: #'))+billNo, 'success');
   }
 
   const printBox = document.getElementById('fb-print-actions'); if(printBox) printBox.style.display='';
+  fbPopulateShopDatalist();
   fbPopulatePartyDatalist();
+  fbPopulateDescDatalist();
   const keepEditingId = fbEditingBillId;
   fbNewBillReset();
   fbRenderAllBills();
   fbRenderSamples();
+  fbRenderLedger();
   const box2 = document.getElementById('fb-print-actions'); if(box2){ box2.style.display=''; }
 }
 function fbPrintLastThermal(){ if(fbLastSavedBillId) fbPrintThermal(fbLastSavedBillId); }
@@ -18291,7 +18395,9 @@ function fbEditBill(billId){
   const nameEl = document.getElementById('fb-cust-name'); if(nameEl) nameEl.value = bill.customerName || '';
   const shopEl = document.getElementById('fb-cust-shop'); if(shopEl) shopEl.value = bill.shopName || '';
   const phoneEl = document.getElementById('fb-cust-phone'); if(phoneEl) phoneEl.value = bill.phone || '';
-  const sampleEl = document.getElementById('fb-is-sample'); if(sampleEl) sampleEl.checked = !!bill.isSample;
+  const statusEl = document.getElementById('fb-bill-status');
+  if(statusEl) statusEl.value = bill.isSample ? 'sample' : (((bill.paidAmount||0) >= bill.total && bill.total>0) ? 'paid' : 'unpaid');
+  fbPopulatePartyDatalist();
   fbRenderItemsTable();
   const banner = document.getElementById('fb-edit-banner'); if(banner) banner.style.display='';
   const label = document.getElementById('fb-edit-billno-label'); if(label) label.textContent = bill.billNo;
@@ -18335,6 +18441,7 @@ function fbRenderSamples(){
         ${returned
           ? `<button type="button" class="btn btn-xs" onclick="fbMarkSampleReturned('${b.id}', false)" title="Undo return">↩️ Undo</button>`
           : `<button type="button" class="btn btn-xs btn-green" onclick="fbMarkSampleReturned('${b.id}', true)" title="Mark sample returned">✅ Sample Returned</button>`}
+        ${!returned ? `<button type="button" class="btn btn-xs btn-purple" onclick="fbConvertSampleToSale('${b.id}')" title="Customer decided to keep/buy it">🛒 Convert to Sale (Paid)</button>` : ''}
         <button type="button" class="btn btn-xs btn-neon" onclick="fbEditBill('${b.id}')" title="Edit">✏️</button>
         <button type="button" class="btn btn-xs btn-neon" onclick="fbPrintThermal('${b.id}')" title="Thermal print">🖨️</button>
         <button type="button" class="btn btn-xs btn-red" onclick="fbDeleteBill('${b.id}')" title="Delete">🗑️</button>
@@ -18346,15 +18453,58 @@ function fbRenderSamples(){
 function fbMarkSampleReturned(billId, returned){
   const bill = fbBills.find(b=>b.id===billId);
   if(!bill) return;
+  const now = new Date();
+  const nowDate = now.toISOString().slice(0,10);
+  const nowTime = fbNowTime();
   bill.sampleStatus = returned ? 'returned' : 'pending';
-  bill.sampleReturnDate = returned ? new Date().toISOString().slice(0,10) : '';
+  bill.sampleReturnDate = returned ? nowDate : '';
+  bill.sampleReturnTime = returned ? nowTime : '';
   saveFbBills();
   if(bill.ledgerEntryId){
     const entry = fbLedger.find(l=>l.id===bill.ledgerEntryId);
-    if(entry){ entry.note = (returned?'[Returned] ':'') + (bill.items||[]).map(it=>it.desc).filter(Boolean).slice(0,3).join(', '); saveFbLedger(); }
+    if(entry){ entry.note = (bill.items||[]).map(it=>it.desc).filter(Boolean).slice(0,3).join(', '); saveFbLedger(); }
   }
+  // log the return (or the undo of a return) as its own timestamped ledger line,
+  // so the ledger shows exactly when the sample went out AND when it came back.
+  if(returned){
+    fbLedger.push({ id: fbUid(), customerId: bill.customerId, date: nowDate, time: nowTime, type:'sample', sampleEvent:'return', amount:0, billNo: bill.billNo, note:`Sample #${bill.billNo} returned` });
+  } else {
+    fbLedger = fbLedger.filter(l=>!(l.customerId===bill.customerId && l.billNo===bill.billNo && l.type==='sample' && l.sampleEvent==='return'));
+  }
+  saveFbLedger();
   fbRenderSamples();
+  fbRenderLedger();
   toast(returned ? '✅ Sample marked as returned & cleared' : 'Sample marked as still with customer','success');
+}
+// Customer decided to keep the sample — turn it into a real, paid sale.
+function fbConvertSampleToSale(billId){
+  const bill = fbBills.find(b=>b.id===billId);
+  if(!bill || !bill.isSample) return;
+  if(!confirm(`Convert Sample #${bill.billNo} (${fmt(bill.total)}) into a Paid Sale? This will bill the customer for it.`)) return;
+  const now = new Date();
+  const nowDate = now.toISOString().slice(0,10);
+  const nowTime = fbNowTime();
+  bill.isSample = false;
+  bill.sampleStatus = 'converted';
+  bill.paidAmount = bill.total;
+  saveFbBills();
+  if(bill.ledgerEntryId){
+    const entry = fbLedger.find(l=>l.id===bill.ledgerEntryId);
+    if(entry){
+      entry.type = 'bill';
+      entry.sampleEvent = undefined;
+      entry.amount = bill.total;
+      entry.note = `[Sample → Sale] ` + (bill.items||[]).map(it=>it.desc).filter(Boolean).slice(0,3).join(', ');
+      saveFbLedger();
+    }
+  }
+  fbLedger.push({ id: fbUid(), customerId: bill.customerId, date: nowDate, time: nowTime, type:'sample', sampleEvent:'converted', amount:0, billNo: bill.billNo, note:`Sample #${bill.billNo} converted to a paid sale — customer kept it` });
+  fbLedger.push({ id: fbUid(), customerId: bill.customerId, date: nowDate, time: nowTime, type:'payment', amount: bill.total, billNo: bill.billNo, note:`Paid in full — converted from Sample #${bill.billNo}` });
+  saveFbLedger();
+  fbRenderSamples();
+  fbRenderAllBills();
+  fbRenderLedger();
+  toast('🛒 Sample converted to a paid sale','success');
 }
 
 // ---- Customers (own party master for this module, with reorder/edit to fix names) ----
@@ -18413,6 +18563,53 @@ function fbAddCustomerRow(){
   fbRenderCustomersSettings();
 }
 
+// ---- Descriptions (saved item descriptions + remembered rates, editable/deletable) ----
+function fbRenderDescriptionsSettings(){
+  const wrap = document.getElementById('fb-descriptions-list');
+  if(!wrap) return;
+  if(!fbDescriptions.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No saved descriptions yet — they get added automatically the first time you type an item description on a bill.</div>'; return; }
+  wrap.innerHTML = `<table class="items-table"><thead><tr><th>#</th><th>Description</th><th style="width:120px;">Default Rate</th><th style="width:110px;">Order</th><th></th></tr></thead><tbody>
+    ${fbDescriptions.map((d,i)=>`<tr>
+      <td style="color:var(--text3);">${i+1}</td>
+      <td><input type="text" value="${(d.desc||'').replace(/"/g,'&quot;')}" onchange="fbUpdateDescriptionField(${i},'desc',this.value)" style="width:100%;"></td>
+      <td><input type="number" value="${d.rate||0}" onchange="fbUpdateDescriptionField(${i},'rate',this.value)" style="width:100%;"></td>
+      <td>
+        <button type="button" class="btn btn-xs" onclick="fbMoveDescription(${i},-1)" ${i===0?'disabled':''}>⬆️</button>
+        <button type="button" class="btn btn-xs" onclick="fbMoveDescription(${i},1)" ${i===fbDescriptions.length-1?'disabled':''}>⬇️</button>
+      </td>
+      <td><button type="button" class="btn btn-xs btn-red" onclick="fbDeleteDescription(${i})">🗑️</button></td>
+    </tr>`).join('')}
+  </tbody></table>`;
+}
+function fbUpdateDescriptionField(idx, field, val){
+  if(!fbDescriptions[idx]) return;
+  fbDescriptions[idx][field] = (field==='desc') ? (val||'').trim() : (parseFloat(val)||0);
+  saveFbDescriptions();
+  fbPopulateDescDatalist();
+  toast('Saved','success');
+}
+function fbMoveDescription(idx, dir){
+  const j = idx+dir;
+  if(j<0 || j>=fbDescriptions.length) return;
+  const tmp = fbDescriptions[idx]; fbDescriptions[idx] = fbDescriptions[j]; fbDescriptions[j] = tmp;
+  saveFbDescriptions();
+  fbRenderDescriptionsSettings();
+}
+function fbDeleteDescription(idx){
+  const d = fbDescriptions[idx];
+  if(!d) return;
+  if(!confirm(`Delete saved description "${d.desc}"? Existing bills keep it, it just won't auto-suggest anymore.`)) return;
+  fbDescriptions.splice(idx,1);
+  saveFbDescriptions();
+  fbRenderDescriptionsSettings();
+  fbPopulateDescDatalist();
+}
+function fbAddDescriptionRow(){
+  fbDescriptions.push({id: fbUid(), desc:'New Item', rate:0, shopRates:{}});
+  saveFbDescriptions();
+  fbRenderDescriptionsSettings();
+}
+
 // ---- Ledger (per-party, in order, with Paid buttons + lump sum payments) ----
 function fbPopulateLedgerCustomerSelect(){
   const sel = document.getElementById('fb-ledger-customer');
@@ -18427,6 +18624,17 @@ function fbGetCustomerLedgerEntries(customerId){
 function fbGetCustomerBalance(customerId){
   return fbGetCustomerLedgerEntries(customerId).reduce((bal,l)=> bal + (l.type==='bill'? (l.amount||0) : -(l.amount||0)), 0);
 }
+// Human label + row styling for one ledger line (bills, payments, and every sample event).
+function fbLedgerRowMeta(l){
+  if(l.type==='bill') return { label:'Bill #'+l.billNo, color:'' };
+  if(l.type==='payment') return { label: l.billNo?('Payment — Bill #'+l.billNo):'Payment', color:'' };
+  if(l.type==='sample'){
+    if(l.sampleEvent==='return') return { label:'🧪 Sample #'+l.billNo+' — Returned', color:'color:var(--neon4);' };
+    if(l.sampleEvent==='converted') return { label:'🧪 Sample #'+l.billNo+' — Converted to Sale', color:'color:var(--neon2);' };
+    return { label:'🧪 Sample #'+l.billNo+' — Given Out', color:'color:var(--neon5);' };
+  }
+  return { label:l.type, color:'' };
+}
 function fbRenderLedger(){
   const sel = document.getElementById('fb-ledger-customer');
   const wrap = document.getElementById('fb-ledger-table');
@@ -18435,29 +18643,32 @@ function fbRenderLedger(){
   const custId = sel.value;
   if(!custId){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">Select a customer above to see their ledger.</div>'; if(balBox) balBox.textContent=''; return; }
   const entries = fbGetCustomerLedgerEntries(custId);
-  const financialEntries = entries.filter(l=>l.type!=='sample');
-  if(!financialEntries.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No billing entries yet for this customer (check the Samples tab if they only have sample items).</div>'; if(balBox) balBox.textContent=''; return; }
+  if(!entries.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No entries yet for this customer — bills, payments, and samples (out/returned) will all show up here as they happen.</div>'; if(balBox) balBox.textContent=''; return; }
   let running = 0;
-  const rows = financialEntries.map(l=>{
-    running += (l.type==='bill'? (l.amount||0) : -(l.amount||0));
+  const rows = entries.map(l=>{
+    const isMoney = l.type==='bill' || l.type==='payment';
+    if(isMoney) running += (l.type==='bill'? (l.amount||0) : -(l.amount||0));
     const bill = l.billNo ? fbBills.find(b=>String(b.billNo)===String(l.billNo) && b.customerId===custId) : null;
     const isFullyPaid = bill ? (bill.paidAmount||0) >= bill.total : false;
+    const meta = fbLedgerRowMeta(l);
     let actionBtns = '';
     if(l.type==='bill'){
       actionBtns += isFullyPaid ? `<span class="badge badge-invoiced">✅ Paid</span>` : `<button type="button" class="btn btn-xs btn-green" onclick="fbMarkBillPaid('${bill?bill.id:''}')">💰 Paid</button>`;
       if(bill) actionBtns += ` <button type="button" class="btn btn-xs btn-neon" onclick="fbPrintThermal('${bill.id}')" title="Thermal print">🖨️</button> <button type="button" class="btn btn-xs btn-neon" onclick="fbPrintA4('${bill.id}')" title="A4 print">📄</button>`;
+    } else if(l.type==='sample' && l.sampleEvent==='out' && bill && bill.isSample){
+      actionBtns += `<button type="button" class="btn btn-xs btn-green" onclick="fbMarkSampleReturned('${bill.id}', true)">✅ Mark Returned</button>`;
     }
     return `<tr>
-      <td>${fmtDate(l.date)}</td>
-      <td>${l.type==='bill'?('Bill #'+l.billNo):'Payment'}</td>
+      <td>${fmtDate(l.date)}<br><span style="font-size:10px;color:var(--text3);">${l.time||''}</span></td>
+      <td style="${meta.color}">${meta.label}</td>
       <td style="font-size:11px;color:var(--text3);">${l.note||''}</td>
       <td style="text-align:right;color:var(--neon5);">${l.type==='bill'?fmt(l.amount):''}</td>
       <td style="text-align:right;color:var(--neon4);">${l.type==='payment'?fmt(l.amount):''}</td>
-      <td style="text-align:right;font-weight:700;">${fmt(running)}</td>
+      <td style="text-align:right;font-weight:700;">${isMoney?fmt(running):''}</td>
       <td>${actionBtns}</td>
     </tr>`;
   }).join('');
-  wrap.innerHTML = `<table class="items-table"><thead><tr><th>Date</th><th>Type</th><th>Note / Items</th><th>Bill (Dr)</th><th>Payment (Cr)</th><th>Balance</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  wrap.innerHTML = `<table class="items-table"><thead><tr><th>Date / Time</th><th>Type</th><th>Note / Items</th><th>Bill (Dr)</th><th>Payment (Cr)</th><th>Balance</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
   if(balBox) balBox.innerHTML = `Outstanding Balance: <strong style="color:${running>0?'var(--neon3)':'var(--neon4)'};">${fmt(running)}</strong>`;
 }
 function fbMarkBillPaid(billId){
@@ -18490,6 +18701,66 @@ function fbAddLumpSumPayment(){
   toast('✅ Payment added to ledger','success');
 }
 
+// ---- Ledger PDF export (full history, or a chosen date range) — includes bills, payments AND every sample event ----
+function fbBuildLedgerPdfRows(custId, from, to){
+  let entries = fbGetCustomerLedgerEntries(custId);
+  if(from) entries = entries.filter(l=>(l.date||'') >= from);
+  if(to) entries = entries.filter(l=>(l.date||'') <= to);
+  let running = 0;
+  return entries.map(l=>{
+    const isMoney = l.type==='bill' || l.type==='payment';
+    if(isMoney) running += (l.type==='bill'? (l.amount||0) : -(l.amount||0));
+    const meta = fbLedgerRowMeta(l);
+    return [
+      `${fmtDate(l.date)} ${l.time||''}`,
+      meta.label,
+      l.note||'',
+      l.type==='bill' ? fmt(l.amount) : '',
+      l.type==='payment' ? fmt(l.amount) : '',
+      isMoney ? fmt(running) : ''
+    ];
+  });
+}
+function fbExportLedgerPDFCore(from, to){
+  const sel = document.getElementById('fb-ledger-customer');
+  const custId = sel ? sel.value : '';
+  if(!custId){ toast('Select a customer first','warning'); return; }
+  const cust = fbCustomers.find(c=>c.id===custId);
+  const rows = fbBuildLedgerPdfRows(custId, from, to);
+  if(!rows.length){ toast('No ledger entries for this range','warning'); return; }
+  const doc = new jspdf.jsPDF();
+  doc.setFontSize(16); doc.setFont(undefined,'bold'); doc.setTextColor(255,106,0);
+  doc.text(FB_SHOP_NAME, 14, 16);
+  doc.setFontSize(10); doc.setFont(undefined,'normal'); doc.setTextColor(80,80,80);
+  doc.text(FB_SHOP_ADDR+'  |  Ph: '+FB_SHOP_PHONE, 14, 22);
+  doc.setFontSize(13); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
+  doc.text(`Ledger — ${cust?cust.name:''}${cust&&cust.shopName?(' ('+cust.shopName+')'):''}`, 14, 32);
+  doc.setFontSize(9); doc.setFont(undefined,'normal');
+  doc.text(from||to ? `Date range: ${from||'start'} to ${to||'today'}` : 'Full ledger (all entries)', 14, 38);
+  doc.autoTable({
+    startY: 43,
+    head: [['Date / Time','Type','Note / Items','Bill (Dr)','Payment (Cr)','Balance']],
+    body: rows,
+    styles:{fontSize:8}, headStyles:{fillColor:[255,106,0]},
+    alternateRowStyles:{fillColor:[250,245,240]}
+  });
+  const y = doc.lastAutoTable.finalY + 10;
+  const bal = fbGetCustomerBalance(custId);
+  doc.setFontSize(11); doc.setFont(undefined,'bold');
+  doc.text(`Outstanding Balance: ${fmt(bal)}`, 14, y);
+  doc.setFontSize(8); doc.setFont(undefined,'normal'); doc.setTextColor(120,120,120);
+  doc.text(`Generated: ${new Date().toLocaleDateString()} ${formatTime12(new Date())}`, 14, y+8);
+  doc.save(`Ledger_${(cust?cust.name:'customer').replace(/[^a-zA-Z0-9]/g,'_')}${from||to?('_'+(from||'')+'_'+(to||'')):'_full'}.pdf`);
+  toast('📄 Ledger PDF generated','success');
+}
+function fbExportLedgerPDF(){ fbExportLedgerPDFCore('', ''); }
+function fbExportLedgerPDFRange(){
+  const from = (document.getElementById('fb-ledger-pdf-from')||{}).value || '';
+  const to = (document.getElementById('fb-ledger-pdf-to')||{}).value || '';
+  if(!from && !to){ toast('Pick at least a From or To date','warning'); return; }
+  fbExportLedgerPDFCore(from, to);
+}
+
 // ---- Print: Thermal + A4, both with shop address in the footer ----
 // Thermal receipt: same bold/clear layout & sizing as the Pantry receipt
 // (table-layout:fixed with explicit column widths so amounts never run off
@@ -18511,27 +18782,30 @@ function fbPrintThermal(billId){
     *{ box-sizing:border-box; }
     @page{ size: 5in auto; margin: 4mm; }
     html,body{ width:100%; margin:0; padding:0; }
-    body{ font-family:'Arial', sans-serif; color:#000; font-weight:800; padding:0 2mm; overflow-wrap:break-word; }
+    body{ font-family:'Arial', sans-serif; color:#000; font-weight:400; padding:0 2mm; overflow-wrap:break-word; }
     .center{ text-align:center; }
     .logo{ display:block; margin:0 auto 4px; max-height:56px; max-width:70%; }
+    /* Only the header (shop name/address/phone) and the footer stay bold — everything else is normal weight. */
     .header{ font-size:23px; font-weight:900; letter-spacing:1px; }
-    .sub{ font-size:13px; font-weight:800; margin-top:2px; }
+    .sub{ font-size:13px; font-weight:700; margin-top:2px; }
     .sample-flag{ font-size:15px; font-weight:900; color:#000; border:2px solid #000; display:inline-block; padding:2px 10px; margin-top:6px; }
     hr{ border:none; border-top:2px dashed #000; margin:6px 0; }
     table{ width:100%; table-layout:fixed; border-collapse:collapse; font-size:15px; }
     col.col-item{ width:37%; } col.col-qty{ width:15%; } col.col-rate{ width:23%; } col.col-amt{ width:25%; }
-    th{ text-align:left; border-bottom:2px solid #000; padding:3px 2px; font-size:14px; font-weight:900; }
-    td{ padding:4px 2px; font-size:16px; font-weight:800; word-break:break-word; }
-    .totalRow td{ font-size:19px; font-weight:900; border-top:2px solid #000; padding-top:6px; white-space:nowrap; }
-    .meta{ font-size:13px; font-weight:800; margin:2px 0; }
-    .footer{ font-size:12px; font-weight:800; margin-top:10px; text-align:center; }
+    th{ text-align:left; border-bottom:2px solid #000; padding:3px 2px; font-size:14px; font-weight:400; }
+    td{ padding:4px 2px; font-size:16px; font-weight:400; word-break:break-word; }
+    .totalRow td{ font-size:19px; font-weight:400; border-top:2px solid #000; padding-top:6px; white-space:nowrap; }
+    .meta{ font-size:13px; font-weight:400; margin:2px 0; }
+    .footer{ font-size:12px; font-weight:700; margin-top:10px; text-align:center; }
+    .footer.note{ font-size:11px; margin-top:6px; line-height:1.5; }
+    .footer.urdu{ direction:rtl; font-family:'Jameel Noori Nastaleeq','Arial',sans-serif; }
   </style></head>
   <body onload="window.print();">
     <img class="logo" src="${FB_LOGO}" alt="logo">
     <div class="center header">${FB_SHOP_NAME.toUpperCase()}</div>
     <div class="center sub">${FB_SHOP_ADDR}</div>
     <div class="center sub">Ph: ${FB_SHOP_PHONE}</div>
-    ${bill.isSample ? `<div class="center"><span class="sample-flag">🧪 SAMPLE — NOT FOR SALE</span></div>` : ''}
+    ${bill.isSample ? `<div class="center"><span class="sample-flag">🧪 SAMPLE</span></div>` : ''}
     <hr>
     <div class="meta">Bill #: ${bill.billNo} &nbsp; Date: ${fmtDate(bill.date)}</div>
     <div class="meta">Customer: ${bill.customerName||''}</div>
@@ -18545,7 +18819,10 @@ function fbPrintThermal(billId){
       <tfoot><tr class="totalRow"><td colspan="2">TOTAL</td><td colspan="2" style="text-align:right;">${fmt(bill.total)}</td></tr></tfoot>
     </table>
     <hr>
-    <div class="footer">${bill.isSample ? 'Sample — kindly return unused stock' : 'Thank you!'}</div>
+    <div class="footer">${bill.isSample ? 'SAMPLE' : 'Thank you!'}</div>
+    ${bill.isSample ? `
+    <div class="footer note">Sample must be returned within 3–4 days, otherwise you will have to pay the amount for this sample.</div>
+    <div class="footer note urdu">(نمونہ 3 سے 4 دن کے اندر واپس کرنا لازمی ہے، ورنہ اس نمونے کی رقم آپ کو ادا کرنی پڑے گی۔)</div>` : ''}
     <div class="footer">Printed: ${now.toLocaleDateString()} ${formatTime12(now)}</div>
   </body></html>`;
   const w = window.open('', 'FASTBILL_PRINT', 'width=480,height=640');
@@ -18565,17 +18842,21 @@ function fbPrintA4(billId){
   </tr>`).join('');
   w.document.write(`<html><head><title>Bill #${bill.billNo}</title><style>
     @page{ size:A4; margin:15mm; }
-    body{ font-family:Arial,sans-serif; color:#000; }
-    table{ width:100%; border-collapse:collapse; }
-    .hdr{ display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid #ff6a00; padding-bottom:12px; margin-bottom:16px; }
+    /* Only the header (shop block) and the footer are bold — everything else (customer/items/table) is normal weight. */
+    body{ font-family:Arial,sans-serif; color:#000; font-weight:400; }
+    table{ width:100%; border-collapse:collapse; font-weight:400; }
+    .hdr{ display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid #ff6a00; padding-bottom:12px; margin-bottom:16px; font-weight:700; }
     .hdr img{ height:70px; }
     .hdr .shopinfo{ text-align:right; }
-    .hdr .shopinfo h1{ margin:0;font-size:22px;color:#ff6a00; }
-    .hdr .shopinfo div{ font-size:12px;color:#333; }
-    .metarow{ display:flex; justify-content:space-between; margin-bottom:16px;font-size:13px; }
-    th{ border:1px solid #999;padding:6px;background:#f2f2f2;text-align:left; }
-    .totrow td{ font-weight:bold;font-size:15px; }
-    .footer{ margin-top:30px;border-top:1px solid #999;padding-top:10px;font-size:11px;text-align:center;color:#555; }
+    .hdr .shopinfo h1{ margin:0;font-size:22px;color:#ff6a00;font-weight:900; }
+    .hdr .shopinfo div{ font-size:12px;color:#333;font-weight:700; }
+    .metarow{ display:flex; justify-content:space-between; margin-bottom:16px;font-size:13px;font-weight:400; }
+    th{ border:1px solid #999;padding:6px;background:#f2f2f2;text-align:left;font-weight:400; }
+    td{ font-weight:400; }
+    .totrow td{ font-weight:400;font-size:15px; }
+    .footer{ margin-top:30px;border-top:1px solid #999;padding-top:10px;font-size:11px;text-align:center;color:#555;font-weight:700; }
+    .footer.note{ font-weight:400; font-size:12px; color:#000; line-height:1.6; }
+    .footer.urdu{ direction:rtl; }
   </style></head><body>
     <div class="hdr">
       <img src="${FB_LOGO}">
@@ -18589,11 +18870,14 @@ function fbPrintA4(billId){
       <div><strong>Bill #:</strong> ${bill.billNo}<br><strong>Date:</strong> ${fmtDate(bill.date)}</div>
       <div style="text-align:right;"><strong>Customer:</strong> ${bill.customerName}<br>${bill.shopName?('<strong>Shop:</strong> '+bill.shopName+'<br>'):''}${bill.phone?('<strong>Ph:</strong> '+bill.phone):''}</div>
     </div>
-    ${bill.isSample ? `<div style="text-align:center;font-size:16px;font-weight:800;border:2px solid #ff6a00;color:#ff6a00;padding:6px;margin-bottom:14px;">🧪 SAMPLE — NOT FOR SALE</div>` : ''}
+    ${bill.isSample ? `<div style="text-align:center;font-size:16px;font-weight:900;border:2px solid #ff6a00;color:#ff6a00;padding:6px;margin-bottom:14px;">🧪 SAMPLE</div>` : ''}
     <table><thead><tr><th>Sr#</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead>
     <tbody>${rows}
       <tr class="totrow"><td colspan="4" style="border:1px solid #999;padding:6px;text-align:right;">TOTAL</td><td style="border:1px solid #999;padding:6px;text-align:right;">${fmt(bill.total)}</td></tr>
     </tbody></table>
+    ${bill.isSample ? `
+    <div class="footer note">Sample must be returned within 3–4 days, otherwise you will have to pay the amount for this sample.</div>
+    <div class="footer note urdu">(نمونہ 3 سے 4 دن کے اندر واپس کرنا لازمی ہے، ورنہ اس نمونے کی رقم آپ کو ادا کرنی پڑے گی۔)</div>` : ''}
     <div class="footer">${FB_SHOP_ADDR} — Ph: ${FB_SHOP_PHONE}</div>
     <script>window.onload=function(){setTimeout(function(){window.print();},300);}<\/script>
   </body></html>`);
