@@ -28,6 +28,7 @@
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/JsBarcode/3.11.5/JsBarcode.all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -2876,7 +2877,13 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       <div class="form-group"><label>From</label><input type="date" id="fb-allbills-from" onchange="fbRenderAllBills()"></div>
       <div class="form-group"><label>To</label><input type="date" id="fb-allbills-to" onchange="fbRenderAllBills()"></div>
     </div>
-    <div id="fb-allbills-total" style="font-size:12px;color:var(--text3);margin:6px 0;"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:6px 0;">
+      <div id="fb-allbills-total" style="font-size:12px;color:var(--text3);"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="btn btn-neon btn-sm" id="fb-download-zip-btn" onclick="fbDownloadBillsZip(false)" title="Sirf neeche list mein nazar aa rahay (search/date filtered) bills download karein">📦 Download Filtered (ZIP)</button>
+        <button type="button" class="btn btn-green btn-sm" id="fb-download-all-zip-btn" onclick="fbDownloadBillsZip(true)" title="Tamam bills — filter chahay jo bhi ho — ek ZIP mein download karein">📦 Download ALL Bills (ZIP)</button>
+      </div>
+    </div>
     <div id="fb-allbills-table"></div>
   </div>
 
@@ -4088,7 +4095,7 @@ async function buildFullBackupData(){
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
     savedQuotations, quotSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
     stockItems, stockMovements, salesReturns, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
-    fbCustomers, fbBills, fbLedger, fbSettings,
+    fbCustomers, fbBills, fbLedger, fbSettings, fbDescriptions,
     documentManager: docsWithBlob,
     securityData: (typeof securityData!=='undefined'?securityData:null),
     backupDate:new Date().toISOString(), version:'20.0'
@@ -4276,7 +4283,7 @@ function buildCloudSyncData(){
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
     savedQuotations, quotSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
     stockItems, stockMovements, salesReturns, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
-    fbCustomers, fbBills, fbLedger, fbSettings,
+    fbCustomers, fbBills, fbLedger, fbSettings, fbDescriptions,
     securityData: (typeof securityData!=='undefined'?securityData:null),
     updatedAt: new Date().toISOString(),
     updatedBy: (typeof securityData!=='undefined' && securityData.currentUser) ? securityData.currentUser.username : (settings.operatorName||'Operator'),
@@ -4948,6 +4955,7 @@ async function applyRestoredBackupData(data){
   if(data.fbBills) { fbBills = data.fbBills; saveFbBills(); }
   if(data.fbLedger) { fbLedger = data.fbLedger; saveFbLedger(); }
   if(data.fbSettings) { fbSettings = data.fbSettings; saveFbSettings(); }
+  if(data.fbDescriptions) { fbDescriptions = data.fbDescriptions; saveFbDescriptions(); }
   if(data.bankAccounts) { bankAccounts = data.bankAccounts; saveBankAccounts(); }
   if(data.bankTransactions) { bankTransactions = data.bankTransactions; saveBankTransactions(); }
   if(data.auditLog && data.auditLog.length){
@@ -18344,10 +18352,9 @@ function fbPrintLastThermal(){ if(fbLastSavedBillId) fbPrintThermal(fbLastSavedB
 function fbPrintLastA4(){ if(fbLastSavedBillId) fbPrintA4(fbLastSavedBillId); }
 
 // ---- All Bills (view / edit / delete / reprint every bill ever saved) ----
-function fbRenderAllBills(){
-  const wrap = document.getElementById('fb-allbills-table');
-  const totalBox = document.getElementById('fb-allbills-total');
-  if(!wrap) return;
+// Shared filter logic — used by both the on-screen All Bills table AND the
+// "Download Filtered (ZIP)" button, so what you see is exactly what you get.
+function fbGetFilteredBillsList(){
   const searchEl = document.getElementById('fb-allbills-search');
   const fromEl = document.getElementById('fb-allbills-from');
   const toEl = document.getElementById('fb-allbills-to');
@@ -18360,6 +18367,13 @@ function fbRenderAllBills(){
   }
   if(from) list = list.filter(b=> (b.date||'') >= from);
   if(to) list = list.filter(b=> (b.date||'') <= to);
+  return list;
+}
+function fbRenderAllBills(){
+  const wrap = document.getElementById('fb-allbills-table');
+  const totalBox = document.getElementById('fb-allbills-total');
+  if(!wrap) return;
+  let list = fbGetFilteredBillsList();
   if(!list.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No bills found.</div>'; if(totalBox) totalBox.textContent=''; return; }
   const grandTotal = list.reduce((s,b)=>s+(b.isSample?0:(b.total||0)),0);
   if(totalBox) totalBox.textContent = `Showing ${list.length} bill(s) — Total (excluding samples): ${fmt(grandTotal)}`;
@@ -18829,6 +18843,166 @@ function fbPrintThermal(billId){
   if(!w){ toast('Print window block ho gayi — popup allow karein','warning'); return; }
   w.document.open(); w.document.write(html); w.document.close();
 }
+// ==================== DOWNLOAD ALL BILLS AS ONE ZIP (each bill = its own A4 PDF) ====================
+// Filenames are "<BillNo>_<CustomerName>.pdf" so extracting the zip gives an
+// already-numbered, already-sorted folder of every bill — works the same
+// whether there are 5 bills or 5,000.
+function fbSanitizeFileName(name){
+  return (name||'').toString()
+    .replace(/[\\/:*?"<>|]/g,'')   // characters that are illegal in file/folder names on Windows
+    .replace(/\s+/g,' ')
+    .trim() || 'Customer';
+}
+// Builds one A4 PDF (as a jsPDF doc, not saved/opened) for a single bill —
+// same layout/branding as the on-screen "A4 Print" button, but generated
+// silently in memory so hundreds of these can be produced back-to-back
+// without opening hundreds of print windows.
+function fbBuildBillPdfDoc(bill){
+  const doc = new jspdf.jsPDF();
+  try{ doc.addImage(FB_LOGO, 'PNG', 14, 10, 24, 20); }catch(e){}
+  doc.setFontSize(17); doc.setFont(undefined,'bold'); doc.setTextColor(255,106,0);
+  doc.text(FB_SHOP_NAME, 44, 18);
+  doc.setFontSize(9); doc.setFont(undefined,'normal'); doc.setTextColor(90,90,90);
+  doc.text(FB_SHOP_ADDR, 44, 24);
+  doc.text('Ph: '+FB_SHOP_PHONE, 44, 29);
+  doc.setDrawColor(255,106,0); doc.setLineWidth(0.9); doc.line(14,35,196,35);
+
+  doc.setTextColor(0,0,0);
+  doc.setFontSize(11); doc.setFont(undefined,'bold');
+  doc.text(`Bill #: ${bill.billNo}`, 14, 44);
+  doc.text(`Date: ${fmtDate(bill.date)}`, 140, 44);
+  doc.setFont(undefined,'normal'); doc.setFontSize(10);
+  doc.text(`Customer: ${bill.customerName||''}`, 14, 51);
+  if(bill.shopName) doc.text(`Shop: ${bill.shopName}`, 14, 57);
+  if(bill.phone) doc.text(`Ph: ${bill.phone}`, 140, 51);
+
+  let tableStartY = bill.shopName ? 63 : 57;
+  if(bill.isSample){
+    doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.setTextColor(255,106,0);
+    doc.text('SAMPLE (Not a Sale)', 14, tableStartY);
+    doc.setTextColor(0,0,0);
+    tableStartY += 6;
+  }
+
+  const rows = (bill.items||[]).map((it,i)=>[i+1, it.desc||'', it.qty||0, fmt(it.rate||0), fmt((it.qty||0)*(it.rate||0))]);
+  doc.autoTable({
+    startY: tableStartY,
+    head: [['Sr#','Description','Qty','Rate','Amount']],
+    body: rows,
+    styles:{fontSize:9}, headStyles:{fillColor:[255,106,0]},
+    alternateRowStyles:{fillColor:[250,245,240]}
+  });
+  const y = doc.lastAutoTable.finalY + 9;
+  doc.setFontSize(12); doc.setFont(undefined,'bold');
+  doc.text(`TOTAL: ${fmt(bill.total)}`, 140, y);
+
+  doc.setFontSize(8); doc.setFont(undefined,'normal'); doc.setTextColor(130,130,130);
+  doc.text(`${FB_SHOP_ADDR} — Ph: ${FB_SHOP_PHONE}`, 14, 285);
+  return doc;
+}
+// ---- Progress overlay shown while hundreds of PDFs are generated + zipped ----
+function fbShowZipProgressOverlay(){
+  if(document.getElementById('fb-zip-progress-overlay')) return;
+  const ov = document.createElement('div');
+  ov.id = 'fb-zip-progress-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.78);color:#fff;display:flex;align-items:center;justify-content:center;text-align:center;font-family:sans-serif;z-index:999997;padding:20px;';
+  ov.innerHTML = `<div style="background:#151b23;border:1px solid #333;border-radius:12px;padding:26px 34px;min-width:280px;max-width:90vw;">
+    <div style="font-size:34px;margin-bottom:8px;">📦</div>
+    <div id="fb-zip-progress-text" style="font-size:13px;font-weight:600;">Bills tayyar ho rahi hain…</div>
+    <div style="background:#2a2f38;border-radius:6px;height:8px;margin-top:14px;overflow:hidden;">
+      <div id="fb-zip-progress-bar" style="background:#ff6a00;height:100%;width:0%;transition:width .15s;"></div>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+}
+function fbUpdateZipProgress(text, percent){
+  const t = document.getElementById('fb-zip-progress-text');
+  const b = document.getElementById('fb-zip-progress-bar');
+  if(t && text!==undefined) t.textContent = text;
+  if(b && percent!==undefined) b.style.width = Math.max(0,Math.min(100,percent))+'%';
+}
+function fbHideZipProgressOverlay(){
+  document.getElementById('fb-zip-progress-overlay')?.remove();
+}
+// allBills=true  -> every bill ever saved, regardless of the on-screen search/date filter
+// allBills=false -> only whatever is currently showing in the All Bills table (search/date applied)
+async function fbDownloadBillsZip(allBills){
+  if(typeof JSZip==='undefined'){
+    toast('⚠️ ZIP library load nahi ho saki — internet check karke page reload karein.','error');
+    return;
+  }
+  const sourceList = allBills ? fbBills.slice() : fbGetFilteredBillsList();
+  if(!sourceList.length){
+    toast(allBills ? 'Koi bill mojood nahi hai' : 'Filter ke mutabiq koi bill nahi mila','warning');
+    return;
+  }
+  // Sort by bill number ascending (numeric where possible) so the extracted
+  // folder comes out already in 1, 2, 3… order as requested.
+  const sorted = sourceList.slice().sort((a,b)=>{
+    const an = parseFloat(a.billNo), bn = parseFloat(b.billNo);
+    if(!isNaN(an) && !isNaN(bn) && an!==bn) return an-bn;
+    return String(a.billNo).localeCompare(String(b.billNo));
+  });
+
+  const btnAll = document.getElementById('fb-download-all-zip-btn');
+  const btnFiltered = document.getElementById('fb-download-zip-btn');
+  [btnAll, btnFiltered].forEach(b=>{ if(b) b.disabled = true; });
+  fbShowZipProgressOverlay();
+
+  const zip = new JSZip();
+  const usedNames = new Set();
+  const total = sorted.length;
+  let failCount = 0;
+
+  for(let i=0;i<total;i++){
+    const bill = sorted[i];
+    try{
+      const doc = fbBuildBillPdfDoc(bill);
+      const blob = doc.output('blob');
+      const baseName = `${bill.billNo}_${fbSanitizeFileName(bill.customerName)}`;
+      let fileName = baseName + '.pdf';
+      let dupCount = 1;
+      while(usedNames.has(fileName.toLowerCase())){
+        dupCount++;
+        fileName = `${baseName}_${dupCount}.pdf`;
+      }
+      usedNames.add(fileName.toLowerCase());
+      zip.file(fileName, blob);
+    }catch(err){
+      failCount++;
+      console.error('Failed to generate PDF for bill #'+bill.billNo, err);
+    }
+    fbUpdateZipProgress(`Bill ${i+1} of ${total} tayyar ho rahi hai…`, ((i+1)/total)*70);
+    // Yield back to the browser periodically so the tab stays responsive
+    // even on very large batches (500-1000+ bills).
+    if(i % 15 === 0) await new Promise(r=>setTimeout(r, 0));
+  }
+
+  try{
+    fbUpdateZipProgress('ZIP file compress ho rahi hai…', 72);
+    const content = await zip.generateAsync(
+      { type:'blob', compression:'DEFLATE', compressionOptions:{ level:6 } },
+      (meta)=> fbUpdateZipProgress(`ZIP file compress ho rahi hai… ${Math.round(meta.percent)}%`, 70 + meta.percent*0.3)
+    );
+    const url = URL.createObjectURL(content);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0,10);
+    a.href = url;
+    a.download = `${FB_SHOP_NAME.replace(/[^a-zA-Z0-9]/g,'_')}_Bills_${allBills?'ALL':'Filtered'}_${stamp}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 8000);
+    toast(`✅ ${total} bill(s) ki ZIP file download ho gayi`+(failCount?` (⚠️ ${failCount} bill(s) skip huay, console check karein)`:''), failCount?'warning':'success');
+  }catch(err){
+    console.error('ZIP generation failed:', err);
+    toast('⚠️ ZIP file banane mein masla hua: '+(err.message||'unknown error'),'error');
+  }finally{
+    fbHideZipProgressOverlay();
+    [btnAll, btnFiltered].forEach(b=>{ if(b) b.disabled = false; });
+  }
+}
+
 function fbPrintA4(billId){
   const bill = fbBills.find(b=>b.id===billId);
   if(!bill){ toast('Bill not found','error'); return; }
