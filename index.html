@@ -2830,6 +2830,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <button type="button" class="btn btn-neon" id="fb-nav-newquot" onclick="fbShowSection('newquot')">📑 Quotation</button>
     <button type="button" class="btn btn-neon" id="fb-nav-allquots" onclick="fbShowSection('allquots')">📚 All Quotations</button>
     <button type="button" class="btn btn-neon" id="fb-nav-settings" onclick="fbShowSection('settings')">⚙️ Settings</button>
+    <button type="button" class="btn btn-neon" id="fb-nav-reports" onclick="fbShowSection('reports')">📊 Reports</button>
   </div>
 
   <!-- New Bill -->
@@ -3017,6 +3018,53 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div class="divider"></div>
     <button type="button" class="btn btn-green" onclick="fbSaveHeaderSettings()">💾 Save Settings</button>
     <button type="button" class="btn" onclick="fbResetHeaderSettings()">↩️ Reset to Default</button>
+  </div>
+
+  <!-- Reports & Insights -->
+  <div id="fb-sec-reports" class="settings-section" style="display:none;">
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="form-group"><label>From</label><input type="date" id="fb-rep-from" onchange="fbRenderReports()"></div>
+      <div class="form-group"><label>To</label><input type="date" id="fb-rep-to" onchange="fbRenderReports()"></div>
+      <div class="form-group">
+        <button type="button" class="btn btn-sm" onclick="fbReportsQuickRange('today')">Today</button>
+        <button type="button" class="btn btn-sm" onclick="fbReportsQuickRange('week')">This Week</button>
+        <button type="button" class="btn btn-sm" onclick="fbReportsQuickRange('month')">This Month</button>
+        <button type="button" class="btn btn-sm" onclick="fbReportsQuickRange('all')">All Time</button>
+      </div>
+    </div>
+
+    <div id="fb-rep-summary-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0;"></div>
+
+    <div class="divider"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <strong style="color:var(--neon);">📅 Sales Breakdown</strong>
+      <select id="fb-rep-breakdown-mode" onchange="fbRenderReports()" style="width:auto;">
+        <option value="daily">Daily</option>
+        <option value="monthly">Monthly</option>
+      </select>
+    </div>
+    <div id="fb-rep-breakdown-table" style="margin-top:10px;"></div>
+
+    <div class="divider"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div>
+        <strong style="color:var(--neon);">🏆 Top Customers</strong>
+        <div id="fb-rep-top-customers" style="margin-top:8px;"></div>
+      </div>
+      <div>
+        <strong style="color:var(--neon);">📦 Top Items</strong>
+        <div id="fb-rep-top-items" style="margin-top:8px;"></div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <strong style="color:var(--neon);">🧪 Sample Conversion Rate</strong>
+    <div id="fb-rep-sample-conv" style="margin-top:8px;"></div>
+
+    <div class="divider"></div>
+    <strong style="color:var(--neon5);">⏰ Due / Overdue Customers</strong>
+    <div style="font-size:12px;color:var(--text2);margin:4px 0 8px;">Customers with an outstanding balance right now — not affected by the date filter above.</div>
+    <div id="fb-rep-due-overdue"></div>
   </div>
 </div>
 
@@ -7714,7 +7762,9 @@ function exportLedgerPDF(){
   const party=document.getElementById('ledgerPartySelect').value;
   if(!party){toast('Select a party first','warning');return;}
   const detailMode = (document.getElementById('ledger-mode')||{}).value==='with_details';
-  generateLedgerPDF(party, detailMode);
+  const from = document.getElementById('ledgerFrom') ? document.getElementById('ledgerFrom').value : '';
+  const to = document.getElementById('ledgerTo') ? document.getElementById('ledgerTo').value : '';
+  generateLedgerPDF(party, detailMode, from, to);
 }
 
 // ==================== PARTIES ====================
@@ -8641,12 +8691,24 @@ function generateHSCodePDF(){
   closeModal('hsReportPdfModal');
   toast('HS Code Report PDF generated','success');
 }
-function generateLedgerPDF(party, detailMode){
-  const entries=ledgerData.filter(e=>e.partyName===party).sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.id||'').localeCompare(b.id||''));
+function generateLedgerPDF(party, detailMode, from, to){
+  let entries=ledgerData.filter(e=>e.partyName===party).sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.id||'').localeCompare(b.id||''));
   if(!entries.length){toast('No ledger entries for this party','warning');return;}
+  const dateFiltered = !!(from || to);
+  if(from) entries = entries.filter(e=>(e.date||'')>=from);
+  if(to) entries = entries.filter(e=>(e.date||'')<=to);
+  if(dateFiltered && !entries.length){toast('No ledger entries for this party in the selected date range','warning');return;}
   const doc=new jspdf.jsPDF();
   let y=pdfHeader(doc,`Party Ledger - ${party}`);
-  const ob = partyOpeningBalances[party] || {amount:0, date:''};
+  if(dateFiltered){
+    doc.setFontSize(9); doc.setFont(undefined,'normal'); doc.setTextColor(90,90,90);
+    doc.text(`Date range: ${from?fmtDate(from):'Start'} to ${to?fmtDate(to):'Today'}`, 14, y);
+    y += 6;
+  }
+  // Opening balance only makes sense for a full, unfiltered ledger — a date-filtered
+  // export starts counting from 0 rather than carrying forward a balance that would
+  // otherwise double-count entries excluded by the date range.
+  const ob = dateFiltered ? {amount:0, date:''} : (partyOpeningBalances[party] || {amount:0, date:''});
   let balance=(ob.amount||0), totalBills=0, totalPaid=0, totalDed=0;
   const cur=settings.currency||'PKR';
   const body=[];
@@ -18252,7 +18314,7 @@ function fbRenderNewQuotForm(){
 }
 function fbShowSection(sec){
   fbActiveSection = sec;
-  ['newbill','allbills','samples','ledger','customers','descriptions','newquot','allquots','settings'].forEach(s=>{
+  ['newbill','allbills','samples','ledger','customers','descriptions','newquot','allquots','settings','reports'].forEach(s=>{
     const el = document.getElementById('fb-sec-'+s);
     if(el) el.style.display = (s===sec)?'':'none';
     const btn = document.getElementById('fb-nav-'+s);
@@ -18265,6 +18327,7 @@ function fbShowSection(sec){
   if(sec==='samples') fbRenderSamples();
   if(sec==='allquots') fbRenderAllQuots();
   if(sec==='settings') fbLoadHeaderSettingsIntoForm();
+  if(sec==='reports') fbRenderReports();
 }
 
 // ---- New Bill ----
@@ -18716,6 +18779,166 @@ function fbResetHeaderSettings(){
   toast('↩️ Reset to default','info');
 }
 
+// ---- Reports & Insights ----
+function fbReportsQuickRange(kind){
+  const fromEl = document.getElementById('fb-rep-from'), toEl = document.getElementById('fb-rep-to');
+  const today = new Date();
+  const iso = d => d.toISOString().slice(0,10);
+  if(kind==='today'){ fromEl.value = iso(today); toEl.value = iso(today); }
+  else if(kind==='week'){
+    const day = today.getDay();
+    const monday = new Date(today); monday.setDate(today.getDate() - ((day+6)%7));
+    fromEl.value = iso(monday); toEl.value = iso(today);
+  } else if(kind==='month'){
+    const first = new Date(today.getFullYear(), today.getMonth(), 1);
+    fromEl.value = iso(first); toEl.value = iso(today);
+  } else { fromEl.value=''; toEl.value=''; }
+  fbRenderReports();
+}
+// Real (non-sample) bills only — samples are given out, not sold, so they're excluded from sales totals.
+function fbReportsFilteredBills(from, to){
+  return fbBills.filter(b=>{
+    if(b.isSample) return false;
+    if(from && (b.date||'') < from) return false;
+    if(to && (b.date||'') > to) return false;
+    return true;
+  });
+}
+function fbRenderReports(){
+  const from = document.getElementById('fb-rep-from') ? document.getElementById('fb-rep-from').value : '';
+  const to = document.getElementById('fb-rep-to') ? document.getElementById('fb-rep-to').value : '';
+  const bills = fbReportsFilteredBills(from, to);
+
+  // ---- Summary cards ----
+  const totalSales = bills.reduce((s,b)=>s+(b.total||0),0);
+  const totalPaid = bills.reduce((s,b)=>s+Math.min(b.paidAmount||0, b.total||0),0);
+  const totalUnpaid = totalSales - totalPaid;
+  const cardsWrap = document.getElementById('fb-rep-summary-cards');
+  if(cardsWrap){
+    const card = (label, val, color) => `<div class="settings-section" style="margin:0;padding:12px;text-align:center;">
+      <div style="font-size:11px;color:var(--text3);">${label}</div>
+      <div style="font-size:19px;font-weight:800;color:${color};margin-top:4px;">${val}</div>
+    </div>`;
+    cardsWrap.innerHTML =
+      card('Total Bills', bills.length, 'var(--neon)') +
+      card('Total Sales', fmt(totalSales), 'var(--neon2)') +
+      card('Total Paid', fmt(totalPaid), 'var(--neon4)') +
+      card('Total Unpaid', fmt(totalUnpaid), totalUnpaid>0?'var(--neon5)':'var(--neon4)');
+  }
+
+  // ---- Daily / Monthly breakdown ----
+  const modeEl = document.getElementById('fb-rep-breakdown-mode');
+  const mode = modeEl ? modeEl.value : 'daily';
+  const groups = {};
+  bills.forEach(b=>{
+    const key = mode==='monthly' ? (b.date||'').slice(0,7) : (b.date||'');
+    if(!key) return;
+    if(!groups[key]) groups[key] = { count:0, total:0, paid:0 };
+    groups[key].count++; groups[key].total += (b.total||0); groups[key].paid += Math.min(b.paidAmount||0, b.total||0);
+  });
+  const keys = Object.keys(groups).sort((a,b)=>b.localeCompare(a));
+  const breakdownWrap = document.getElementById('fb-rep-breakdown-table');
+  if(breakdownWrap){
+    if(!keys.length){ breakdownWrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No bills in this range.</div>'; }
+    else {
+      breakdownWrap.innerHTML = `<table class="items-table"><thead><tr><th>${mode==='monthly'?'Month':'Date'}</th><th>Bills</th><th style="text-align:right;">Total</th><th style="text-align:right;">Paid</th><th style="text-align:right;">Unpaid</th></tr></thead><tbody>
+        ${keys.map(k=>{
+          const g = groups[k];
+          const label = mode==='monthly' ? new Date(k+'-01').toLocaleDateString('en-PK',{month:'short',year:'numeric'}) : fmtDate(k);
+          return `<tr><td>${label}</td><td>${g.count}</td><td style="text-align:right;">${fmt(g.total)}</td><td style="text-align:right;color:var(--neon4);">${fmt(g.paid)}</td><td style="text-align:right;color:var(--neon5);">${fmt(g.total-g.paid)}</td></tr>`;
+        }).join('')}
+      </tbody></table>`;
+    }
+  }
+
+  // ---- Top customers ----
+  const custTotals = {};
+  bills.forEach(b=>{
+    const key = b.customerName || 'Unknown';
+    custTotals[key] = (custTotals[key]||0) + (b.total||0);
+  });
+  const topCustWrap = document.getElementById('fb-rep-top-customers');
+  if(topCustWrap){
+    const top = Object.entries(custTotals).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    topCustWrap.innerHTML = top.length ? `<table class="items-table"><tbody>
+      ${top.map(([name,total],i)=>`<tr><td>${i+1}. ${name}</td><td style="text-align:right;font-weight:700;">${fmt(total)}</td></tr>`).join('')}
+    </tbody></table>` : '<div style="color:var(--text3);font-size:12px;">No data.</div>';
+  }
+
+  // ---- Top items ----
+  const itemTotals = {};
+  bills.forEach(b=>(b.items||[]).forEach(it=>{
+    const key = (it.desc||'Item').trim() || 'Item';
+    if(!itemTotals[key]) itemTotals[key] = { qty:0, amount:0 };
+    itemTotals[key].qty += (parseFloat(it.qty)||0);
+    itemTotals[key].amount += (parseFloat(it.qty)||0)*(parseFloat(it.rate)||0);
+  }));
+  const topItemsWrap = document.getElementById('fb-rep-top-items');
+  if(topItemsWrap){
+    const top = Object.entries(itemTotals).sort((a,b)=>b[1].qty-a[1].qty).slice(0,5);
+    topItemsWrap.innerHTML = top.length ? `<table class="items-table"><tbody>
+      ${top.map(([name,d],i)=>`<tr><td>${i+1}. ${name}</td><td style="text-align:right;">Qty: ${d.qty}</td><td style="text-align:right;font-weight:700;">${fmt(d.amount)}</td></tr>`).join('')}
+    </tbody></table>` : '<div style="color:var(--text3);font-size:12px;">No data.</div>';
+  }
+
+  // ---- Sample conversion rate ---- (date range applies to when the sample bill was created)
+  const samples = fbBills.filter(b=>{
+    if(!b.isSample) return false;
+    if(from && (b.date||'') < from) return false;
+    if(to && (b.date||'') > to) return false;
+    return true;
+  });
+  const convWrap = document.getElementById('fb-rep-sample-conv');
+  if(convWrap){
+    const totalSamples = samples.length;
+    const converted = samples.filter(b=>b.sampleStatus==='converted').length;
+    const returned = samples.filter(b=>b.sampleStatus==='returned').length;
+    const pending = totalSamples - converted - returned;
+    const rate = totalSamples ? ((converted/totalSamples)*100).toFixed(1) : '0.0';
+    convWrap.innerHTML = totalSamples ? `<div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center;">
+      <div style="font-size:26px;font-weight:800;color:var(--neon4);">${rate}%</div>
+      <div style="font-size:12px;color:var(--text3);">
+        ${totalSamples} sample(s) given out — <span style="color:var(--neon4);">${converted} converted to sale</span>, 
+        <span style="color:var(--neon5);">${returned} returned</span>, 
+        <span style="color:var(--neon2);">${pending} still pending</span>
+      </div>
+    </div>` : '<div style="color:var(--text3);font-size:12px;">No samples in this range.</div>';
+  }
+
+  fbRenderDueOverdue();
+}
+function fbRenderDueOverdue(){
+  const wrap = document.getElementById('fb-rep-due-overdue');
+  if(!wrap) return;
+  const today = new Date().toISOString().slice(0,10);
+  const rows = fbCustomers.map(c=>{
+    const outstanding = fbGetCustomerBalance(c.id);
+    if(outstanding <= 0.5) return null;
+    const unpaidBills = fbBills.filter(b=>b.customerId===c.id && !b.isSample && (b.total||0) > (b.paidAmount||0));
+    unpaidBills.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    const oldest = unpaidBills[0];
+    let days = '';
+    if(oldest && oldest.date){
+      const diffMs = new Date(today) - new Date(oldest.date);
+      days = Math.max(0, Math.round(diffMs / 86400000));
+    }
+    return { cust:c, outstanding, oldest, days: (days===''?-1:days) };
+  }).filter(Boolean).sort((a,b)=>b.days-a.days);
+  if(!rows.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">🎉 No pending dues — every customer is settled up.</div>'; return; }
+  wrap.innerHTML = `<table class="items-table"><thead><tr><th>Customer</th><th>Shop</th><th style="text-align:right;">Outstanding</th><th>Oldest Unpaid Bill</th><th style="text-align:right;">Days Pending</th></tr></thead><tbody>
+    ${rows.map(r=>{
+      const overdueColor = r.days>=30 ? 'var(--neon5)' : (r.days>=15 ? '#f5a623' : 'var(--neon2)');
+      return `<tr>
+        <td>${r.cust.name}</td>
+        <td style="font-size:11px;color:var(--text3);">${r.cust.shopName||''}</td>
+        <td style="text-align:right;font-weight:700;color:var(--neon5);">${fmt(r.outstanding)}</td>
+        <td>${r.oldest ? ('#'+r.oldest.billNo+' — '+fmtDate(r.oldest.date)) : '-'}</td>
+        <td style="text-align:right;font-weight:700;color:${overdueColor};">${r.days>=0?r.days+' day(s)':'-'}</td>
+      </tr>`;
+    }).join('')}
+  </tbody></table>`;
+}
+
 // ---- All Bills (view / edit / delete / reprint every bill ever saved) ----
 // Shared filter logic — used by both the on-screen All Bills table AND the
 // "Download Filtered (ZIP)" button, so what you see is exactly what you get.
@@ -18744,8 +18967,11 @@ function fbRenderAllBills(){
   if(totalBox) totalBox.textContent = `Showing ${list.length} bill(s) — Total (excluding samples): ${fmt(grandTotal)}`;
   wrap.innerHTML = `<table class="items-table"><thead><tr><th>Bill #</th><th>Date</th><th>Customer</th><th>Shop</th><th style="text-align:right;">Total</th><th>Status</th><th></th></tr></thead><tbody>
     ${list.map(b=>{
+      const paidAmt = b.paidAmount||0;
       const paidBadge = b.isSample ? `<span class="badge" style="background:#7c3aed22;color:#7c3aed;">🧪 ${b.sampleStatus==='returned'?'Returned':'Sample'}</span>`
-        : ((b.paidAmount||0) >= b.total ? `<span class="badge badge-invoiced">✅ Paid</span>` : `<span class="badge" style="background:#ff6a0022;color:#ff6a00;">⏳ Pending</span>`);
+        : (paidAmt >= b.total ? `<span class="badge badge-invoiced">✅ Paid</span>`
+        : (paidAmt > 0 ? `<span class="badge" style="background:#f5a62322;color:#f5a623;">🟡 Partial (${fmt(paidAmt)}/${fmt(b.total)})</span>`
+        : `<span class="badge" style="background:#ff6a0022;color:#ff6a00;">⏳ Pending</span>`));
       return `<tr>
       <td>${b.billNo}</td>
       <td>${fmtDate(b.date)}</td>
@@ -18754,6 +18980,7 @@ function fbRenderAllBills(){
       <td style="text-align:right;">${fmt(b.total)}</td>
       <td>${paidBadge}</td>
       <td style="white-space:nowrap;">
+        ${(!b.isSample && paidAmt < b.total) ? `<button type="button" class="btn btn-xs btn-green" onclick="fbMarkBillPaid('${b.id}')" title="Record a payment (full or partial)">💵</button>` : ''}
         <button type="button" class="btn btn-xs btn-neon" onclick="fbEditBill('${b.id}')" title="Edit">✏️</button>
         <button type="button" class="btn btn-xs btn-neon" onclick="fbPrintThermal('${b.id}')" title="Thermal print">🖨️</button>
         <button type="button" class="btn btn-xs btn-neon" onclick="fbPrintA4('${b.id}')" title="A4 print">📄</button>
@@ -19057,13 +19284,19 @@ function fbMarkBillPaid(billId){
   const amtStr = prompt(`Payment amount for Bill #${bill.billNo} (remaining: ${fmt(remaining)})`, remaining);
   if(amtStr===null) return;
   const amt = parseFloat(amtStr);
-  if(!amt || amt<=0) return;
+  if(!amt || amt<=0){ toast('Enter a valid amount','warning'); return; }
+  if(amt > remaining + 0.5){
+    if(!confirm(`This is ${fmt(amt-remaining)} more than the remaining due (${fmt(remaining)}). Record it anyway as an advance/overpayment?`)) return;
+  }
   bill.paidAmount = (bill.paidAmount||0) + amt;
   saveFbBills();
   fbLedger.push({ id: fbUid(), customerId: bill.customerId, date: new Date().toISOString().slice(0,10), type:'payment', amount: amt, billNo: bill.billNo, note:`Payment for Bill #${bill.billNo}` });
   saveFbLedger();
   fbRenderLedger();
-  toast('✅ Payment recorded','success');
+  fbRenderAllBills();
+  if(document.getElementById('fb-sec-reports') && document.getElementById('fb-sec-reports').style.display!=='none') fbRenderReports();
+  const remainingNow = bill.total - bill.paidAmount;
+  toast(remainingNow>0.5 ? `✅ Partial payment recorded — ${fmt(remainingNow)} still due` : '✅ Bill fully paid','success');
 }
 function fbAddLumpSumPayment(){
   const custId = document.getElementById('fb-ledger-customer').value;
@@ -19178,7 +19411,7 @@ function fbPrintThermalDoc(docId, docType){
     .header{ font-size:23px; font-weight:900; letter-spacing:1px; }
     .sub{ font-size:13px; font-weight:700; margin-top:2px; }
     .doctype{ font-size:14px; font-weight:900; letter-spacing:3px; margin-top:4px; }
-    .sample-flag{ font-size:12px; font-weight:900; color:#000; border:2px solid #000; display:inline-block; padding:1px 8px; }
+    .sample-flag{ font-size:12px; font-weight:900; letter-spacing:1px; line-height:1.6; color:#000; border:2px solid #000; display:inline-block; padding:3px 10px; white-space:nowrap; }
     hr{ border:none; border-top:2px dashed #000; margin:6px 0; }
     table{ width:100%; table-layout:fixed; border-collapse:collapse; font-size:15px; }
     col.col-item{ width:37%; } col.col-qty{ width:15%; } col.col-rate{ width:23%; } col.col-amt{ width:25%; }
@@ -19421,7 +19654,7 @@ function fbPrintA4Doc(docId, docType){
     .hdr .shopinfo div{ font-size:12px;color:#333;font-weight:700; }
     .doctype{ font-size:15px;font-weight:900;letter-spacing:3px;color:#ff6a00;text-align:center;margin-bottom:14px; }
     .metarow{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;font-size:13px;font-weight:400; }
-    .flag-tag{ font-size:13px;font-weight:900;border:2px solid #ff6a00;color:#ff6a00;padding:2px 10px;border-radius:4px; }
+    .flag-tag{ display:inline-block; font-size:13px; font-weight:900; letter-spacing:1px; line-height:1.6; border:2px solid #ff6a00; color:#ff6a00; padding:3px 14px; border-radius:4px; margin-top:6px; white-space:nowrap; }
     th{ border:1px solid #999;padding:6px;background:#f2f2f2;text-align:left;font-weight:400; }
     td{ font-weight:400; }
     .totrow td{ font-weight:400;font-size:15px; }
