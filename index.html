@@ -2826,7 +2826,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <button type="button" class="btn btn-neon" id="fb-nav-samples" onclick="fbShowSection('samples')">🧪 Samples</button>
     <button type="button" class="btn btn-neon" id="fb-nav-ledger" onclick="fbShowSection('ledger')">📒 Ledger</button>
     <button type="button" class="btn btn-neon" id="fb-nav-customers" onclick="fbShowSection('customers')">👥 Customers</button>
-    <button type="button" class="btn btn-neon" id="fb-nav-descriptions" onclick="fbShowSection('descriptions')">📝 Descriptions</button>
+    <button type="button" class="btn btn-neon" id="fb-nav-descriptions" onclick="fbShowSection('descriptions')">💹 Rate List</button>
     <button type="button" class="btn btn-neon" id="fb-nav-newquot" onclick="fbShowSection('newquot')">📑 Quotation</button>
     <button type="button" class="btn btn-neon" id="fb-nav-allquots" onclick="fbShowSection('allquots')">📚 All Quotations</button>
     <button type="button" class="btn btn-neon" id="fb-nav-settings" onclick="fbShowSection('settings')">⚙️ Settings</button>
@@ -2931,11 +2931,18 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <button type="button" class="btn btn-green btn-sm" style="margin-top:10px;" onclick="fbAddCustomerRow()">➕ Add Customer</button>
   </div>
 
-  <!-- Descriptions -->
+  <!-- Rate List (formerly "Descriptions") -->
   <div id="fb-sec-descriptions" class="settings-section" style="display:none;">
-    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Item descriptions you type get saved here automatically along with their rate, so next time you can pick them from the dropdown on the New Bill form and the rate fills in by itself (still editable). Fix, reorder, or delete them here.</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">
+      Yeh aapki master Rate List hai. Jo bhi item yahan hoga, New Bill / Quotation mein Description likhte hi uska <strong>Retailer Price</strong> khud-ba-khud rate box mein aa jayega (phir bhi aap chahen to change kar sakte hain). Consumer Price sirf reference ke liye hai — billing mein use nahi hota. Units/Carton bhi yahan dikhta hai taake pata chale ek carton mein kitne pieces hain.
+    </div>
+    <div class="flex-gap" style="margin-bottom:10px;align-items:center;">
+      <input type="text" id="fb-rl-search" placeholder="🔍 Search item description..." oninput="fbRenderDescriptionsSettings()" style="max-width:340px;">
+      <span id="fb-rl-count" style="font-size:11px;color:var(--text3);"></span>
+      <button type="button" class="btn btn-neon btn-sm" onclick="fbImportDefaultRateList(true)">📥 Import/Refresh Default 110 Items</button>
+    </div>
     <div id="fb-descriptions-list"></div>
-    <button type="button" class="btn btn-green btn-sm" style="margin-top:10px;" onclick="fbAddDescriptionRow()">➕ Add Description</button>
+    <button type="button" class="btn btn-green btn-sm" style="margin-top:10px;" onclick="fbAddDescriptionRow()">➕ Add Item</button>
   </div>
 
   <!-- New Quotation (same format as New Bill — "Bill" becomes "Quotation", "Sample" becomes "Estimate") -->
@@ -3153,6 +3160,27 @@ Switch Socket"></textarea>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
       <button type="button" class="btn" onclick="closeModal('fb-bulk-paste-modal')">Cancel</button>
       <button type="button" class="btn btn-green" onclick="fbBulkPasteConfirm()">➕ Add These Items</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- RETURN ITEMS MODAL (Fast Billing: return goods from an already-saved bill back into stock) -->
+<div class="modal-overlay" id="fb-return-modal">
+<div class="modal">
+  <div class="modal-header">
+    <h3>↩️ Return Items — Bill #<span id="fb-return-billno"></span></h3>
+    <button class="close-btn" onclick="closeModal('fb-return-modal')">✕</button>
+  </div>
+  <div class="modal-body">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">
+      Customer jo bhi item wapis kar raha hai uski qty neeche likhein. Confirm karte hi wo qty stock mein wapis add ho jayegi aur customer ke balance se us amount ka Credit Note kat jayega.
+    </div>
+    <div id="fb-return-items-table"></div>
+    <div style="text-align:right;font-weight:700;margin-top:10px;font-size:14px;">Return Amount: <span style="color:var(--neon5);" id="fb-return-total">Rs 0</span></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+      <button type="button" class="btn" onclick="closeModal('fb-return-modal')">Cancel</button>
+      <button type="button" class="btn btn-red" onclick="fbSubmitReturn()">↩️ Confirm Return</button>
     </div>
   </div>
 </div>
@@ -18364,6 +18392,119 @@ function fbRenderHeaderCard(){
   if(logoImg) logoImg.src = h.logo;
 }
 
+const FB_DEFAULT_RATE_LIST = [
+{desc:'FAST LED Bulbs EcoBright A Bulb BL4 A55 B22 5W 3080 B22',rate:160.0,consumerRate:180.0,cartonQty:'100'},
+{desc:'FAST LED Bulbs EcoBright A Bulb BL4 A55 B22 5W 6580 B22',rate:160.0,consumerRate:180.0,cartonQty:'100'},
+{desc:'FAST LED Bulbs EcoBright A Bulb BL4 A55 E27 5W 3080 E27',rate:160.0,consumerRate:180.0,cartonQty:'100'},
+{desc:'FAST LED Bulbs EcoBright A Bulb BL4 A55 E27 5W 6580 E27',rate:160.0,consumerRate:180.0,cartonQty:'100'},
+{desc:'FAST LED Bulbs EcoBright A Bulb BL4 A65 B22 12W 3080 B22',rate:215.0,consumerRate:245.0,cartonQty:'100'},
+{desc:'FAST LED Bulbs EcoBright A Bulb BL4 A65 B22 12W 6580 B22',rate:215.0,consumerRate:245.0,cartonQty:'100'},
+{desc:'FAST LED Bulbs EcoBright A Bulb BL4 A65 E27 12W 3080 E27',rate:215.0,consumerRate:245.0,cartonQty:'100'},
+{desc:'FAST LED Bulbs EcoBright A Bulb BL4 A65 E27 12W 6580 E27',rate:215.0,consumerRate:245.0,cartonQty:'100'},
+{desc:'FAST LED Bulbs EcoBright A Bulb BL4 A80 B22 18W 3080 B22',rate:390.0,consumerRate:435.0,cartonQty:'40'},
+{desc:'FAST LED Bulbs EcoBright A Bulb BL4 A80 B22 18W 6580 B22',rate:390.0,consumerRate:435.0,cartonQty:'40'},
+{desc:'FAST LED Bulbs EcoBright A Bulb BL4 A80 E27 18W 3080 E27',rate:390.0,consumerRate:435.0,cartonQty:'40'},
+{desc:'FAST LED Bulbs EcoBright A Bulb BL4 A80 E27 18W 6580 E27',rate:390.0,consumerRate:435.0,cartonQty:'40'},
+{desc:'FAST LED Bulbs EcoBright T Bulb BL5 T80 B22 20W 3080 B22',rate:575.0,consumerRate:630.0,cartonQty:'40'},
+{desc:'FAST LED Bulbs EcoBright T Bulb BL5 T80 B22 20W 6580 B22',rate:575.0,consumerRate:630.0,cartonQty:'40'},
+{desc:'FAST LED Bulbs EcoBright T Bulb BL5 T80 E27 20W 3080 E27',rate:575.0,consumerRate:630.0,cartonQty:'40'},
+{desc:'FAST LED Bulbs EcoBright T Bulb BL5 T80 E27 20W 6580 E27',rate:575.0,consumerRate:630.0,cartonQty:'40'},
+{desc:'FAST LED Bulbs Eco A-Type Bulb BL1 A60 B22 9W 3080 B22',rate:212.0,consumerRate:240.0,cartonQty:'60'},
+{desc:'FAST LED Bulbs Eco A-Type Bulb BL1 A60 B22 9W 6580 B22',rate:212.0,consumerRate:240.0,cartonQty:'60'},
+{desc:'FAST LED Bulbs Eco A-Type Bulb BL1 A60 E27 9W 3080 E27',rate:212.0,consumerRate:240.0,cartonQty:'60'},
+{desc:'FAST LED Bulbs Eco A-Type Bulb BL1 A60 E27 9W 6580 E27',rate:212.0,consumerRate:240.0,cartonQty:'60'},
+{desc:'FAST LED Bulbs Eco A-Type Bulb BL1 A65 B22 12W 3080 B22',rate:250.0,consumerRate:275.0,cartonQty:'60'},
+{desc:'FAST LED Bulbs Eco A-Type Bulb BL1 A65 B22 12W 6580 B22',rate:250.0,consumerRate:275.0,cartonQty:'60'},
+{desc:'FAST LED Bulbs Eco A-Type Bulb BL1 A65 E27 12W 3080 E27',rate:250.0,consumerRate:275.0,cartonQty:'60'},
+{desc:'FAST LED Bulbs Eco A-Type Bulb BL1 A65 E27 12W 6580 E27',rate:250.0,consumerRate:275.0,cartonQty:'60'},
+{desc:'FAST LED Bulbs Eco A-Type Bulb BL1 A80 B22 16W 3080 B22',rate:520.0,consumerRate:575.0,cartonQty:'48'},
+{desc:'FAST LED Bulbs Eco A-Type Bulb BL1 A80 B22 16W 6580 B22',rate:520.0,consumerRate:575.0,cartonQty:'48'},
+{desc:'FAST LED Bulbs Eco A-Type Bulb BL1 A80 E27 16W 3080 E27',rate:520.0,consumerRate:575.0,cartonQty:'48'},
+{desc:'FAST LED Bulbs Eco A-Type Bulb BL1 A80 E27 16W 6580 E27',rate:520.0,consumerRate:575.0,cartonQty:'48'},
+{desc:'FAST LED Bulbs Value T-Type Bulb BL2 T80 E27 20W 3080 E27',rate:595.0,consumerRate:650.0,cartonQty:'24'},
+{desc:'FAST LED Bulbs Value T-Type Bulb BL2 T80 E27 20W 6580 E27',rate:595.0,consumerRate:650.0,cartonQty:'24'},
+{desc:'FAST LED Bulbs Value T-Type Bulb BL2 T100 E27 30W 3080 E27',rate:875.0,consumerRate:970.0,cartonQty:'12'},
+{desc:'FAST LED Bulbs Value T-Type Bulb BL2 T100 E27 30W 6580 E27',rate:875.0,consumerRate:970.0,cartonQty:'12'},
+{desc:'FAST LED Bulbs Value T-Type Bulb BL2 T115 E27 40W 3080 E27',rate:1175.0,consumerRate:1300.0,cartonQty:'6'},
+{desc:'FAST LED Bulbs Value T-Type Bulb BL2 T115 E27 40W 6580 E27',rate:1175.0,consumerRate:1300.0,cartonQty:'6'},
+{desc:'FAST LED Bulbs Value T-Type Bulb BL2 T130 E27 50W 3080 E27',rate:1400.0,consumerRate:1550.0,cartonQty:'6'},
+{desc:'FAST LED Bulbs Value T-Type Bulb BL2 T130 E27 50W 6580 E27',rate:1400.0,consumerRate:1550.0,cartonQty:'6'},
+{desc:'FAST SMD Down Lights EcoBright Downlight DL150 7W 3080 3"',rate:355.0,consumerRate:395.0,cartonQty:'100'},
+{desc:'FAST SMD Down Lights EcoBright Downlight DL150 7W 4080 3"',rate:355.0,consumerRate:395.0,cartonQty:'100'},
+{desc:'FAST SMD Down Lights EcoBright Downlight DL150 7W 6580 3"',rate:355.0,consumerRate:395.0,cartonQty:'100'},
+{desc:'FAST SMD Down Lights Eco Downlight DL10 7W 3080 3"',rate:477.0,consumerRate:530.0,cartonQty:'48'},
+{desc:'FAST SMD Down Lights Eco Downlight DL10 7W 4080 3"',rate:477.0,consumerRate:530.0,cartonQty:'48'},
+{desc:'FAST SMD Down Lights Eco Downlight DL10 7W 6580 3"',rate:477.0,consumerRate:530.0,cartonQty:'48'},
+{desc:'FAST SMD Down Lights Eco Downlight DL11 12W 3080 4"',rate:775.0,consumerRate:860.0,cartonQty:'36'},
+{desc:'FAST SMD Down Lights Eco Downlight DL11 12W 4080 4"',rate:775.0,consumerRate:860.0,cartonQty:'36'},
+{desc:'FAST SMD Down Lights Eco Downlight DL11 12W 6580 4"',rate:775.0,consumerRate:860.0,cartonQty:'36'},
+{desc:'FAST SMD Down Lights Eco Downlight DL12 18W 3080 6"',rate:1050.0,consumerRate:1165.0,cartonQty:'24'},
+{desc:'FAST SMD Down Lights Eco Downlight DL12 18W 4080 6"',rate:1050.0,consumerRate:1165.0,cartonQty:'24'},
+{desc:'FAST SMD Down Lights Eco Downlight DL12 18W 6580 6"',rate:1050.0,consumerRate:1165.0,cartonQty:'24'},
+{desc:'FAST Eco Series Spotlight EcoBright Spotlight DL160 3W 3080 2"',rate:295.0,consumerRate:330.0,cartonQty:'100'},
+{desc:'FAST Eco Series Spotlight EcoBright Spotlight DL160 3W 4080 2"',rate:295.0,consumerRate:330.0,cartonQty:'100'},
+{desc:'FAST Eco Series Spotlight Eco Spotlight DL30 7W 3080 3"',rate:780.0,consumerRate:865.0,cartonQty:'48'},
+{desc:'FAST Eco Series Spotlight Eco Spotlight DL30 7W 4080 3"',rate:780.0,consumerRate:865.0,cartonQty:'48'},
+{desc:'FAST Eco Series Spotlight Eco Spotlight DL30 7W 6580 3"',rate:780.0,consumerRate:865.0,cartonQty:'48'},
+{desc:'FAST Eco Series Spotlight Eco Spotlight DL31 12W 3080 4"',rate:1145.0,consumerRate:1270.0,cartonQty:'36'},
+{desc:'FAST Eco Series Spotlight Eco Spotlight DL31 12W 4080 4"',rate:1145.0,consumerRate:1270.0,cartonQty:'36'},
+{desc:'FAST Eco Series Spotlight Eco Spotlight DL31 12W 6580 4"',rate:1145.0,consumerRate:1270.0,cartonQty:'36'},
+{desc:'FAST Eco Series Spotlight Eco Spotlight DL32 18W 3080 6"',rate:1645.0,consumerRate:1800.0,cartonQty:'24'},
+{desc:'FAST Eco Series Spotlight Eco Spotlight DL32 18W 4080 6"',rate:1645.0,consumerRate:1800.0,cartonQty:'24'},
+{desc:'FAST Eco Series Spotlight Eco Spotlight DL32 18W 6580 6"',rate:1645.0,consumerRate:1800.0,cartonQty:'24'},
+{desc:'FAST Value Surface Downlight Value Surface Downlight CW10 12W 3080 5"',rate:1410.0,consumerRate:1550.0,cartonQty:'48'},
+{desc:'FAST Value Surface Downlight Value Surface Downlight CW10 12W 4080 5"',rate:1410.0,consumerRate:1550.0,cartonQty:'48'},
+{desc:'FAST Value Surface Downlight Value Surface Downlight CW10 12W 6580 5"',rate:1410.0,consumerRate:1550.0,cartonQty:'48'},
+{desc:'FAST Value Surface Downlight Value Surface Downlight CW11 18W 3080 7"',rate:2125.0,consumerRate:2325.0,cartonQty:'24'},
+{desc:'FAST Value Surface Downlight Value Surface Downlight CW11 18W 4080 7"',rate:2125.0,consumerRate:2325.0,cartonQty:'24'},
+{desc:'FAST Value Surface Downlight Value Surface Downlight CW11 18W 6580 7"',rate:2125.0,consumerRate:2325.0,cartonQty:'24'},
+{desc:'FAST Value Surface Downlight Value Surface Downlight CW12 24W 3080 9"',rate:2975.0,consumerRate:3250.0,cartonQty:'18'},
+{desc:'FAST Value Surface Downlight Value Surface Downlight CW12 24W 4080 9"',rate:2975.0,consumerRate:3250.0,cartonQty:'18'},
+{desc:'FAST Value Surface Downlight Value Surface Downlight CW12 24W 6580 9"',rate:2975.0,consumerRate:3250.0,cartonQty:'18'},
+{desc:'FAST Smart Smart Batten e T-8 BT10M 9W 4080 2\'',rate:1045.0,consumerRate:1150.0,cartonQty:'30'},
+{desc:'FAST Smart Smart Batten e T-8 BT10M 9W 6580 2\'',rate:1045.0,consumerRate:1150.0,cartonQty:'30'},
+{desc:'FAST Smart Smart Batten e T-8 BT11M 18W 4080 4\'',rate:1430.0,consumerRate:1570.0,cartonQty:'30'},
+{desc:'FAST Smart Smart Batten e T-8 BT11M 18W 6580 4\'',rate:1430.0,consumerRate:1570.0,cartonQty:'30'},
+{desc:'FAST Smart Smart Batten batten BT31M 40W 4080 4\'',rate:1235.0,consumerRate:1360.0,cartonQty:'20'},
+{desc:'FAST Smart Smart Batten batten BT31M 40W 6580 4\'',rate:1235.0,consumerRate:1360.0,cartonQty:'20'},
+{desc:'FAST Smart Smart Batten batten BT20M 40W 6580 4\'',rate:1600.0,consumerRate:1760.0,cartonQty:'20'},
+{desc:'FAST Smart Smart Batten Rod TR1 L1200 T8 18W 6580 4\'',rate:1240.0,consumerRate:1350.0,cartonQty:'30'},
+{desc:'FAST T-8 Fixture Single TR T8F SR Single Holder',rate:365.0,consumerRate:400.0,cartonQty:'60'},
+{desc:'FAST Value EcoBright Flood Light FL50 50W 3080 -',rate:3625.0,consumerRate:4000.0,cartonQty:'20'},
+{desc:'FAST Value EcoBright Flood Light FL50 50W 6580 -',rate:3625.0,consumerRate:4000.0,cartonQty:'20'},
+{desc:'FAST Value EcoBright Flood Light FL51 100W 3080 -',rate:6125.0,consumerRate:6780.0,cartonQty:'10'},
+{desc:'FAST Value EcoBright Flood Light FL51 100W 6580 -',rate:6125.0,consumerRate:6780.0,cartonQty:'10'},
+{desc:'FAST Flood Lights Value Flood Light FL20 30W 3070 -',rate:3900.0,consumerRate:4280.0,cartonQty:'1'},
+{desc:'FAST Flood Lights Value Flood Light FL20 30W 6570 -',rate:3900.0,consumerRate:4280.0,cartonQty:'1'},
+{desc:'FAST Flood Lights Value Flood Light FL20 50W 3070 -',rate:4175.0,consumerRate:4580.0,cartonQty:'1'},
+{desc:'FAST Flood Lights Value Flood Light FL20 50W 4070 -',rate:4175.0,consumerRate:4580.0,cartonQty:'1'},
+{desc:'FAST Flood Lights Value Flood Light FL20 50W 6570 -',rate:4175.0,consumerRate:4580.0,cartonQty:'1'},
+{desc:'FAST Flood Lights Value Flood Light FL21 100W 3070 -',rate:7200.0,consumerRate:7880.0,cartonQty:'1'},
+{desc:'FAST Flood Lights Value Flood Light FL21 100W 4070 -',rate:7200.0,consumerRate:7880.0,cartonQty:'1'},
+{desc:'FAST Flood Lights Value Flood Light FL21 100W 6570 -',rate:7200.0,consumerRate:7880.0,cartonQty:'1'},
+{desc:'FAST Flood Lights Value Flood Light FL22 150W 3070 -',rate:11000.0,consumerRate:12000.0,cartonQty:'1'},
+{desc:'FAST Flood Lights Value Flood Light FL22 150W 4070 -',rate:11000.0,consumerRate:12000.0,cartonQty:'1'},
+{desc:'FAST Flood Lights Value Flood Light FL22 150W 6570 -',rate:11000.0,consumerRate:12000.0,cartonQty:'1'},
+{desc:'FAST Flood Lights Value Flood Light FL23 200W 3070 -',rate:14200.0,consumerRate:15500.0,cartonQty:'1'},
+{desc:'FAST Flood Lights Value Flood Light FL23 200W 4070 -',rate:14200.0,consumerRate:15500.0,cartonQty:'1'},
+{desc:'FAST Flood Lights Value Flood Light FL23 200W 6570 -',rate:14200.0,consumerRate:15500.0,cartonQty:'1'},
+{desc:'FAST Panel EcoBright Backlit Panel 2x2 PL30 40W 4080 120D -',rate:4150.0,consumerRate:4600.0,cartonQty:'5'},
+{desc:'FAST Panel EcoBright Backlit Panel 2x2 PL30 40W 6580 120D -',rate:4150.0,consumerRate:4600.0,cartonQty:'5'},
+{desc:'FAST Glow Line Rope Light GlowLine Rope Light SR30 6W 3070 120 50M -',rate:8150.0,consumerRate:9050.0,cartonQty:'50M'},
+{desc:'FAST Glow Line Rope Light GlowLine Rope Light SR30 6W 4070 120 50M -',rate:8150.0,consumerRate:9050.0,cartonQty:'50M'},
+{desc:'FAST Glow Line Rope Light GlowLine Rope Light SR30 6W 6570 120 50M -',rate:8150.0,consumerRate:9050.0,cartonQty:'50M'},
+{desc:'FAST Glow Line Rope Light GlowLine Rope Light SR30 6W G 120 50M -',rate:8150.0,consumerRate:9050.0,cartonQty:'50M'},
+{desc:'FAST Glow Line Rope Light GlowLine Rope Light SR30 6W B 120 50M -',rate:8150.0,consumerRate:9050.0,cartonQty:'50M'},
+{desc:'FAST Glow Line Rope Light GlowLine Rope Light SR31 8W 3070 120 50M -',rate:9450.0,consumerRate:10500.0,cartonQty:'50M'},
+{desc:'FAST Glow Line Rope Light GlowLine Rope Light SR31 8W 4070 120 50M -',rate:9450.0,consumerRate:10500.0,cartonQty:'50M'},
+{desc:'FAST Glow Line Rope Light GlowLine Rope Light SR31 8W 6570 120 50M -',rate:9450.0,consumerRate:10500.0,cartonQty:'50M'},
+{desc:'FAST Glow Line Rope Light GlowLine Rope Light SR31 8W G 120 50M -',rate:9450.0,consumerRate:10500.0,cartonQty:'50M'},
+{desc:'FAST Glow Line Rope Light GlowLine Rope Light SR31 8W B 120 50M -',rate:9450.0,consumerRate:10500.0,cartonQty:'50M'},
+{desc:'FAST GlowLine Driver SR30 ACS D 330W -',rate:130.0,consumerRate:145.0,cartonQty:''},
+{desc:'FAST GlowLine Driver SR31 ACS D 660W -',rate:195.0,consumerRate:215.0,cartonQty:''},
+{desc:'FAST Bulb Holder Line Holder BL F E27 E27',rate:190.0,consumerRate:210.0,cartonQty:'180'}
+];
+
 function fbUid(){ return 'fb'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function loadFastBilling(){
   try{ fbCustomers = JSON.parse(localStorage.getItem('fb_customers')||'[]'); }catch(e){ fbCustomers=[]; }
@@ -18378,6 +18519,10 @@ function loadFastBilling(){
   if(!fbSettings.nextQuotNo) fbSettings.nextQuotNo = 1;
   if(!fbSettings.headers) fbSettings.headers = { bill:{}, quot:{useSameAsBill:true} };
   fbRenderHeaderCard();
+  // First time ever opening Fast Billing (nothing saved yet) — load the shop's default rate list automatically.
+  if(!fbDescriptions.length && typeof FB_DEFAULT_RATE_LIST!=='undefined' && FB_DEFAULT_RATE_LIST.length){
+    fbImportDefaultRateList(false);
+  }
 }
 function saveFbQuotations(){ (typeof safeSetItem==='function'?safeSetItem:( (k,v)=>localStorage.setItem(k,v) ))('fb_quotations', JSON.stringify(fbQuotations)); }
 function saveFbCustomers(){ (typeof safeSetItem==='function'?safeSetItem:( (k,v)=>localStorage.setItem(k,v) ))('fb_customers', JSON.stringify(fbCustomers)); }
@@ -18524,6 +18669,14 @@ function fbAutofillRateForItem(idx){
   const shopRate = shopVal && match.shopRates ? match.shopRates[shopVal] : undefined;
   it.rate = (shopRate!==undefined && shopRate!==null) ? shopRate : (match.rate||0);
 }
+// Small "📦 X pcs/carton" hint shown under a description input once it matches a Rate List item.
+function fbCartonHint(desc){
+  desc = (desc||'').trim();
+  if(!desc) return '';
+  const match = fbDescriptions.find(d=>(d.desc||'').toLowerCase()===desc.toLowerCase());
+  if(!match || !match.cartonQty) return '';
+  return `<div style="font-size:10px;color:var(--text3);margin-top:2px;">📦 ${match.cartonQty} pcs/carton</div>`;
+}
 function fbCalcBillTotal(){
   return fbCurrentItems.reduce((s,it)=>s+(parseFloat(it.qty)||0)*(parseFloat(it.rate)||0),0);
 }
@@ -18551,7 +18704,7 @@ function fbRenderItemsTable(){
   const d = fbCurrentDiscount || {type:'flat',value:0};
   wrap.innerHTML = `<table class="items-table"><thead><tr><th>Description</th><th style="width:70px;">Qty</th><th style="width:100px;">Rate</th><th style="width:110px;">Amount</th><th style="width:36px;"></th></tr></thead><tbody>
     ${fbCurrentItems.map((it,i)=>`<tr>
-      <td><input type="text" list="fb-desc-list" value="${(it.desc||'').replace(/"/g,'&quot;')}" onchange="fbUpdateItemField(${i},'desc',this.value)" placeholder="Item description" style="width:100%;"></td>
+      <td><input type="text" list="fb-desc-list" value="${(it.desc||'').replace(/"/g,'&quot;')}" onchange="fbUpdateItemField(${i},'desc',this.value)" placeholder="Item description" style="width:100%;">${fbCartonHint(it.desc)}</td>
       <td><input type="number" value="${it.qty}" onchange="fbUpdateItemField(${i},'qty',this.value)" style="width:100%;"></td>
       <td><input type="number" value="${it.rate}" onchange="fbUpdateItemField(${i},'rate',this.value)" style="width:100%;"></td>
       <td style="text-align:right;">${fmt((parseFloat(it.qty)||0)*(parseFloat(it.rate)||0))}</td>
@@ -18773,7 +18926,7 @@ function fbRenderQuotItemsTable(){
   const d = fbQuotCurrentDiscount || {type:'flat',value:0};
   wrap.innerHTML = `<table class="items-table"><thead><tr><th>Description</th><th style="width:70px;">Qty</th><th style="width:100px;">Rate</th><th style="width:110px;">Amount</th><th style="width:36px;"></th></tr></thead><tbody>
     ${fbQuotCurrentItems.map((it,i)=>`<tr>
-      <td><input type="text" list="fb-desc-list" value="${(it.desc||'').replace(/"/g,'&quot;')}" onchange="fbQuotUpdateItemField(${i},'desc',this.value)" placeholder="Item description" style="width:100%;"></td>
+      <td><input type="text" list="fb-desc-list" value="${(it.desc||'').replace(/"/g,'&quot;')}" onchange="fbQuotUpdateItemField(${i},'desc',this.value)" placeholder="Item description" style="width:100%;">${fbCartonHint(it.desc)}</td>
       <td><input type="number" value="${it.qty}" onchange="fbQuotUpdateItemField(${i},'qty',this.value)" style="width:100%;"></td>
       <td><input type="number" value="${it.rate}" onchange="fbQuotUpdateItemField(${i},'rate',this.value)" style="width:100%;"></td>
       <td style="text-align:right;">${fmt((parseFloat(it.qty)||0)*(parseFloat(it.rate)||0))}</td>
@@ -19248,19 +19401,22 @@ function fbRenderAllBills(){
   wrap.innerHTML = `<table class="items-table"><thead><tr><th>Bill #</th><th>Date</th><th>Customer</th><th>Shop</th><th style="text-align:right;">Total</th><th>Status</th><th></th></tr></thead><tbody>
     ${list.map(b=>{
       const paidAmt = b.paidAmount||0;
+      const returnedAmt = fbBillReturnedAmount(b);
       const paidBadge = b.isSample ? `<span class="badge" style="background:#7c3aed22;color:#7c3aed;">🧪 ${b.sampleStatus==='returned'?'Returned':'Sample'}</span>`
         : (paidAmt >= b.total ? `<span class="badge badge-invoiced">✅ Paid</span>`
         : (paidAmt > 0 ? `<span class="badge" style="background:#f5a62322;color:#f5a623;">🟡 Partial (${fmt(paidAmt)}/${fmt(b.total)})</span>`
         : `<span class="badge" style="background:#ff6a0022;color:#ff6a00;">⏳ Pending</span>`));
+      const returnBadge = returnedAmt>0 ? `<div><span class="badge" style="background:#ef444422;color:#ef4444;">↩️ Returned ${fmt(returnedAmt)}</span></div>` : '';
       return `<tr>
       <td>${b.billNo}</td>
       <td>${fmtDate(b.date)}</td>
       <td>${b.customerName||''}</td>
       <td style="font-size:11px;color:var(--text3);">${b.shopName||''}</td>
       <td style="text-align:right;">${fmt(b.total)}</td>
-      <td>${paidBadge}</td>
+      <td>${paidBadge}${returnBadge}</td>
       <td style="white-space:nowrap;">
         ${(!b.isSample && paidAmt < b.total) ? `<button type="button" class="btn btn-xs btn-green" onclick="fbMarkBillPaid('${b.id}')" title="Record a payment (full or partial)">💵</button>` : ''}
+        ${!b.isSample ? `<button type="button" class="btn btn-xs" onclick="fbOpenReturnModal('${b.id}')" title="Return items from this bill back into stock">↩️</button>` : ''}
         <button type="button" class="btn btn-xs btn-neon" onclick="fbEditBill('${b.id}')" title="Edit">✏️</button>
         <button type="button" class="btn btn-xs btn-neon" onclick="fbPrintThermal('${b.id}')" title="Thermal print">🖨️</button>
         <button type="button" class="btn btn-xs btn-neon" onclick="fbPrintA4('${b.id}')" title="A4 print">📄</button>
@@ -19295,7 +19451,8 @@ function fbEditBill(billId){
 function fbDeleteBill(billId){
   const bill = fbBills.find(b=>b.id===billId);
   if(!bill) return;
-  if(!confirm(`Delete Bill #${bill.billNo} for ${bill.customerName}? This also removes its ledger entry, any payments recorded against it, and restores any stock it had deducted.`)) return;
+  const returnNote = (bill.returns && bill.returns.length) ? `\n\n⚠️ Is bill par ${bill.returns.length} return(s) bhi record hain (total ${fmt(fbBillReturnedAmount(bill))}) — bill delete hone se un returns ka stock/credit note wapas nahi hoga, sirf bill hi hatega.` : '';
+  if(!confirm(`Delete Bill #${bill.billNo} for ${bill.customerName}? This also removes its ledger entry, any payments recorded against it, and restores any stock it had deducted.${returnNote}`)) return;
   fbSyncStockForBill(bill.id, bill.items, [], bill.date, bill.billNo);
   fbBills = fbBills.filter(b=>b.id!==billId);
   fbLedger = fbLedger.filter(l=>!(String(l.billNo)===String(bill.billNo) && l.customerId===bill.customerId));
@@ -19308,7 +19465,101 @@ function fbDeleteBill(billId){
   toast('🗑️ Bill deleted','success');
 }
 
-// ---- Samples (bills marked as sample — tracked separately, don't count toward balance) ----
+// ---- Return Items (customer brings back goods from an already-saved, non-sample bill) ----
+// Each bill can accumulate multiple partial returns; bill.returns = [{id,date,items:[{desc,qty,rate}],amount}]
+function fbBillReturnedQty(bill, desc){
+  if(!bill.returns) return 0;
+  const d = (desc||'').trim().toLowerCase();
+  return bill.returns.reduce((s,r)=> s + (r.items||[]).filter(it=>(it.desc||'').trim().toLowerCase()===d).reduce((s2,it)=>s2+(parseFloat(it.qty)||0),0), 0);
+}
+function fbBillReturnedAmount(bill){
+  if(!bill.returns) return 0;
+  return bill.returns.reduce((s,r)=>s+(r.amount||0),0);
+}
+let fbReturnBillId = null;
+function fbOpenReturnModal(billId){
+  const bill = fbBills.find(b=>b.id===billId);
+  if(!bill){ toast('Bill not found','error'); return; }
+  fbReturnBillId = billId;
+  const label = document.getElementById('fb-return-billno'); if(label) label.textContent = bill.billNo;
+  fbRenderReturnItemsTable();
+  openModal('fb-return-modal');
+}
+function fbRenderReturnItemsTable(){
+  const wrap = document.getElementById('fb-return-items-table');
+  if(!wrap) return;
+  const bill = fbBills.find(b=>b.id===fbReturnBillId);
+  if(!bill){ wrap.innerHTML=''; return; }
+  const rows = (bill.items||[]).map((it,i)=>{
+    const billedQty = parseFloat(it.qty)||0;
+    const alreadyReturned = fbBillReturnedQty(bill, it.desc);
+    const maxReturn = Math.max(0, billedQty - alreadyReturned);
+    return { i, desc: it.desc, rate: it.rate, billedQty, alreadyReturned, maxReturn };
+  });
+  wrap.innerHTML = `<table class="items-table"><thead><tr><th>Description</th><th style="width:70px;">Billed</th><th style="width:80px;">Already Returned</th><th style="width:100px;">Return Qty</th><th style="width:90px;">Rate</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr>
+      <td>${(r.desc||'').replace(/</g,'&lt;')}</td>
+      <td style="text-align:right;">${r.billedQty}</td>
+      <td style="text-align:right;color:var(--text3);">${r.alreadyReturned}</td>
+      <td><input type="number" min="0" max="${r.maxReturn}" value="0" id="fb-return-qty-${r.i}" onchange="fbRenderReturnTotal()" style="width:100%;" ${r.maxReturn<=0?'disabled':''}></td>
+      <td style="text-align:right;">${fmt(r.rate)}</td>
+    </tr>`).join('')}
+  </tbody></table>`;
+  fbRenderReturnTotal();
+}
+function fbRenderReturnTotal(){
+  const bill = fbBills.find(b=>b.id===fbReturnBillId);
+  if(!bill) return;
+  let total = 0;
+  (bill.items||[]).forEach((it,i)=>{
+    const el = document.getElementById('fb-return-qty-'+i);
+    const q = el ? (parseFloat(el.value)||0) : 0;
+    total += q * (parseFloat(it.rate)||0);
+  });
+  const totalEl = document.getElementById('fb-return-total'); if(totalEl) totalEl.textContent = fmt(total);
+}
+function fbSubmitReturn(){
+  const bill = fbBills.find(b=>b.id===fbReturnBillId);
+  if(!bill){ toast('Bill not found','error'); return; }
+  const returnItems = [];
+  (bill.items||[]).forEach((it,i)=>{
+    const el = document.getElementById('fb-return-qty-'+i);
+    const q = el ? (parseFloat(el.value)||0) : 0;
+    const alreadyReturned = fbBillReturnedQty(bill, it.desc);
+    const maxReturn = Math.max(0, (parseFloat(it.qty)||0) - alreadyReturned);
+    if(q>0){
+      const clamped = Math.min(q, maxReturn);
+      returnItems.push({ desc: it.desc, qty: clamped, rate: it.rate });
+    }
+  });
+  if(!returnItems.length){ toast('Return karne ke liye kam se kam ek item ki qty likhein','warning'); return; }
+  const amount = returnItems.reduce((s,it)=>s+(it.qty*(parseFloat(it.rate)||0)),0);
+  const date = new Date().toISOString().slice(0,10);
+  const returnRec = { id: fbUid(), date, time: fbNowTime(), items: returnItems, amount };
+  bill.returns = bill.returns || [];
+  bill.returns.push(returnRec);
+  saveFbBills();
+
+  // Add the returned qty back into stock (only for items that match a tracked stock item — skipped silently otherwise)
+  returnItems.forEach(it=>{
+    const stockItem = fbFindStockItemByName(it.desc);
+    if(!stockItem) return;
+    fbApplyStockMovement(stockItem.id, it.qty, 'return', date, `Return — Bill #${bill.billNo}`, bill.id);
+  });
+  saveFbStockItems();
+  saveFbStockMovements();
+
+  // Credit note against the customer's balance (reduces it, same direction as a payment)
+  fbLedger.push({ id: fbUid(), customerId: bill.customerId, date, time: fbNowTime(), type:'payment', amount, billNo: bill.billNo, note:`↩️ Return — Bill #${bill.billNo} (${returnItems.map(it=>it.desc+' x'+it.qty).join(', ')})` });
+  saveFbLedger();
+
+  closeModal('fb-return-modal');
+  fbRenderAllBills();
+  fbRenderStock();
+  fbRenderLedger();
+  toast(`✅ Return recorded — ${fmt(amount)} credited, stock updated`,'success');
+}
+
 function fbRenderSamples(){
   const wrap = document.getElementById('fb-samples-table');
   if(!wrap) return;
@@ -19507,29 +19758,40 @@ function fbAddCustomerRow(){
   fbRenderCustomersSettings();
 }
 
-// ---- Descriptions (saved item descriptions + remembered rates, editable/deletable) ----
+// ---- Rate List (saved item descriptions + Retailer/Consumer price + Units per Carton, editable/deletable) ----
 function fbRenderDescriptionsSettings(){
   const wrap = document.getElementById('fb-descriptions-list');
+  const countEl = document.getElementById('fb-rl-count');
   if(!wrap) return;
-  if(!fbDescriptions.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No saved descriptions yet — they get added automatically the first time you type an item description on a bill.</div>'; return; }
-  wrap.innerHTML = `<table class="items-table"><thead><tr><th>#</th><th>Description</th><th style="width:120px;">Default Rate</th><th style="width:110px;">Order</th><th></th></tr></thead><tbody>
-    ${fbDescriptions.map((d,i)=>`<tr>
-      <td style="color:var(--text3);">${i+1}</td>
+  if(!fbDescriptions.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">Rate List khali hai — "📥 Import/Refresh Default 110 Items" button se apni list load karein, ya neeche "➕ Add Item" se manually shuru karein.</div>'; if(countEl) countEl.textContent=''; return; }
+  const search = (document.getElementById('fb-rl-search')?.value||'').trim().toLowerCase();
+  let list = fbDescriptions.map((d,i)=>({...d,_idx:i}));
+  if(search) list = list.filter(d=>(d.desc||'').toLowerCase().includes(search));
+  if(countEl) countEl.textContent = `${list.length} of ${fbDescriptions.length} item(s)`;
+  if(!list.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No items match this search.</div>'; return; }
+  wrap.innerHTML = `<table class="items-table"><thead><tr><th>#</th><th>Description</th><th style="width:110px;">Retailer Price</th><th style="width:110px;">Consumer Price</th><th style="width:100px;">Units/Carton</th><th style="width:90px;">Order</th><th></th></tr></thead><tbody>
+    ${list.map((d,rowIdx)=>{ const i=d._idx; return `<tr>
+      <td style="color:var(--text3);">${rowIdx+1}</td>
       <td><input type="text" value="${(d.desc||'').replace(/"/g,'&quot;')}" onchange="fbUpdateDescriptionField(${i},'desc',this.value)" style="width:100%;"></td>
-      <td><input type="number" value="${d.rate||0}" onchange="fbUpdateDescriptionField(${i},'rate',this.value)" style="width:100%;"></td>
+      <td><input type="number" value="${d.rate||0}" onchange="fbUpdateDescriptionField(${i},'rate',this.value)" style="width:100%;" title="Yeh rate New Bill/Quotation mein auto-fill hota hai"></td>
+      <td><input type="number" value="${d.consumerRate||0}" onchange="fbUpdateDescriptionField(${i},'consumerRate',this.value)" style="width:100%;" title="Sirf reference ke liye — billing mein use nahi hota"></td>
+      <td><input type="text" value="${(d.cartonQty||'').toString().replace(/"/g,'&quot;')}" onchange="fbUpdateDescriptionField(${i},'cartonQty',this.value)" style="width:100%;" placeholder="e.g. 100"></td>
       <td>
         <button type="button" class="btn btn-xs" onclick="fbMoveDescription(${i},-1)" ${i===0?'disabled':''}>⬆️</button>
         <button type="button" class="btn btn-xs" onclick="fbMoveDescription(${i},1)" ${i===fbDescriptions.length-1?'disabled':''}>⬇️</button>
       </td>
       <td><button type="button" class="btn btn-xs btn-red" onclick="fbDeleteDescription(${i})">🗑️</button></td>
-    </tr>`).join('')}
+    </tr>`;}).join('')}
   </tbody></table>`;
 }
 function fbUpdateDescriptionField(idx, field, val){
   if(!fbDescriptions[idx]) return;
-  fbDescriptions[idx][field] = (field==='desc') ? (val||'').trim() : (parseFloat(val)||0);
+  if(field==='desc' || field==='cartonQty') fbDescriptions[idx][field] = (val||'').trim();
+  else fbDescriptions[idx][field] = (parseFloat(val)||0);
   saveFbDescriptions();
   fbPopulateDescDatalist();
+  fbRenderItemsTable();
+  fbRenderQuotItemsTable();
   toast('Saved','success');
 }
 function fbMoveDescription(idx, dir){
@@ -19542,16 +19804,39 @@ function fbMoveDescription(idx, dir){
 function fbDeleteDescription(idx){
   const d = fbDescriptions[idx];
   if(!d) return;
-  if(!confirm(`Delete saved description "${d.desc}"? Existing bills keep it, it just won't auto-suggest anymore.`)) return;
+  if(!confirm(`Delete "${d.desc}" from Rate List? Existing bills keep it, it just won't auto-suggest / auto-fill rate anymore.`)) return;
   fbDescriptions.splice(idx,1);
   saveFbDescriptions();
   fbRenderDescriptionsSettings();
   fbPopulateDescDatalist();
 }
 function fbAddDescriptionRow(){
-  fbDescriptions.push({id: fbUid(), desc:'New Item', rate:0, shopRates:{}});
+  fbDescriptions.push({id: fbUid(), desc:'New Item', rate:0, consumerRate:0, cartonQty:'', shopRates:{}});
   saveFbDescriptions();
   fbRenderDescriptionsSettings();
+}
+// One-time (or on-demand) import of the shop's default 110-item rate list.
+// Merges by description name: existing items get their price/carton fields
+// refreshed, brand-new ones get added — nothing is duplicated.
+function fbImportDefaultRateList(doConfirm){
+  if(typeof FB_DEFAULT_RATE_LIST === 'undefined' || !FB_DEFAULT_RATE_LIST.length) return;
+  if(doConfirm && !confirm(`Yeh ${FB_DEFAULT_RATE_LIST.length} default items load/refresh karega (naye add honge, jo pehle se hain unki price update ho jayegi). Continue?`)) return;
+  let added = 0, updated = 0;
+  FB_DEFAULT_RATE_LIST.forEach(src=>{
+    let d = fbDescriptions.find(x=>(x.desc||'').toLowerCase()===src.desc.toLowerCase());
+    if(!d){ d = {id: fbUid(), desc: src.desc, rate: src.rate, consumerRate: src.consumerRate, cartonQty: src.cartonQty, shopRates:{}}; fbDescriptions.push(d); added++; }
+    else { d.rate = src.rate; d.consumerRate = src.consumerRate; d.cartonQty = src.cartonQty; updated++; }
+    // Also make sure a matching Stock item exists so stock tracking works out of the box.
+    if(!fbFindStockItemByName(src.desc)){
+      fbStockItems.push({id: fbUid(), name: src.desc, unit:'Pcs', currentQty:0, minQty:0, notes:'', cartonQty: src.cartonQty, location:''});
+    }
+  });
+  saveFbDescriptions();
+  saveFbStockItems();
+  fbPopulateDescDatalist();
+  fbRenderDescriptionsSettings();
+  fbRenderStock();
+  if(doConfirm) toast(`✅ Rate List: ${added} added, ${updated} updated`,'success');
 }
 
 // ==================== STOCK SYSTEM (Fast Billing) ====================
@@ -19589,7 +19874,7 @@ function fbRenderStock(){
   if(filter==='low') list = list.filter(s=>(s.minQty||0)>0 && (s.currentQty||0)<=s.minQty);
   if(!fbStockItems.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No stock items yet. Add one below, or matching item names on bills won\'t affect stock.</div>'; return; }
   if(!list.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No items match this filter.</div>'; return; }
-  wrap.innerHTML = `<table class="items-table"><thead><tr><th>#</th><th>Item Name</th><th style="width:90px;">Unit</th><th style="width:110px;">Current Qty</th><th style="width:100px;">Low Alert At</th><th>Notes</th><th></th></tr></thead><tbody>
+  wrap.innerHTML = `<table class="items-table"><thead><tr><th>#</th><th>Item Name</th><th style="width:80px;">Unit</th><th style="width:110px;">Current Qty</th><th style="width:90px;">Low Alert At</th><th style="width:90px;">Units/Carton</th><th style="width:110px;">🏭 Rack/Location</th><th>Notes</th><th></th></tr></thead><tbody>
     ${list.map((s,rowIdx)=>{
       const i = s._idx;
       const low = (s.minQty||0)>0 && (s.currentQty||0)<=s.minQty;
@@ -19599,6 +19884,8 @@ function fbRenderStock(){
       <td><input type="text" value="${(s.unit||'').replace(/"/g,'&quot;')}" onchange="fbUpdateStockItemField(${i},'unit',this.value)" style="width:100%;" placeholder="Pcs"></td>
       <td style="text-align:right;font-weight:700;color:${low?'var(--neon5)':(s.currentQty<0?'var(--neon5)':'var(--text2)')};">${s.currentQty||0}${low?' ⚠️':''}</td>
       <td><input type="number" min="0" value="${s.minQty||0}" onchange="fbUpdateStockItemField(${i},'minQty',this.value)" style="width:100%;"></td>
+      <td><input type="text" value="${(s.cartonQty||'').toString().replace(/"/g,'&quot;')}" onchange="fbUpdateStockItemField(${i},'cartonQty',this.value)" style="width:100%;" placeholder="e.g. 100"></td>
+      <td><input type="text" value="${(s.location||'').replace(/"/g,'&quot;')}" onchange="fbUpdateStockItemField(${i},'location',this.value)" style="width:100%;" placeholder="e.g. Rack A-3"></td>
       <td><input type="text" value="${(s.notes||'').replace(/"/g,'&quot;')}" onchange="fbUpdateStockItemField(${i},'notes',this.value)" style="width:100%;"></td>
       <td style="white-space:nowrap;"><button type="button" class="btn btn-xs btn-red" onclick="fbDeleteStockItem(${i})">🗑️</button></td>
     </tr>`;
@@ -19627,7 +19914,7 @@ function fbUpdateStockItemField(idx, field, val){
   toast('Saved','success');
 }
 function fbAddStockItemRow(){
-  fbStockItems.push({id: fbUid(), name:'New Item', unit:'Pcs', currentQty:0, minQty:0, notes:''});
+  fbStockItems.push({id: fbUid(), name:'New Item', unit:'Pcs', currentQty:0, minQty:0, notes:'', cartonQty:'', location:''});
   saveFbStockItems();
   fbRenderStock();
 }
@@ -19677,7 +19964,7 @@ function fbRenderStockMovements(){
   list = list.sort((a,b)=>(b.date||'').localeCompare(a.date||'') || (b.time||'').localeCompare(a.time||''));
   list = list.slice(0,200); // keep the view light on large histories
   if(!list.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No stock movements yet.</div>'; return; }
-  const typeLabel = {purchase:'➕ Purchase', sale:'➖ Sale (Bill)', adjustment_add:'➕ Correction', adjustment_remove:'➖ Correction', reversal:'↩️ Reversal'};
+  const typeLabel = {purchase:'➕ Purchase', sale:'➖ Sale (Bill)', adjustment_add:'➕ Correction', adjustment_remove:'➖ Correction', reversal:'↩️ Reversal', return:'↩️ Customer Return'};
   wrap.innerHTML = `<table class="items-table"><thead><tr><th>Date</th><th>Item</th><th>Type</th><th style="text-align:right;">Qty</th><th>Note / Ref</th></tr></thead><tbody>
     ${list.map(m=>{
       const item = fbStockItems.find(s=>s.id===m.stockItemId);
