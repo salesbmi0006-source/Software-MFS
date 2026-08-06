@@ -2831,6 +2831,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <button type="button" class="btn btn-neon" id="fb-nav-allquots" onclick="fbShowSection('allquots')">📚 All Quotations</button>
     <button type="button" class="btn btn-neon" id="fb-nav-settings" onclick="fbShowSection('settings')">⚙️ Settings</button>
     <button type="button" class="btn btn-neon" id="fb-nav-reports" onclick="fbShowSection('reports')">📊 Reports</button>
+    <button type="button" class="btn btn-neon" id="fb-nav-stock" onclick="fbShowSection('stock')">🗄️ Stock</button>
   </div>
 
   <!-- New Bill -->
@@ -2861,6 +2862,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
       <strong style="color:var(--neon);">📦 Items</strong>
       <button type="button" class="btn btn-green btn-sm" onclick="fbAddItemRow()">➕ Add Item</button>
+      <button type="button" class="btn btn-neon btn-sm" onclick="fbOpenBulkPaste('bill')">📋 Paste Items</button>
     </div>
     <div id="fb-items-table"></div>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
@@ -2945,6 +2947,9 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div class="form-row">
       <div class="form-group"><label>Quot No</label><input type="text" id="fb-quotno"></div>
       <div class="form-group"><label>Date</label><input type="date" id="fb-quot-date"></div>
+      <div class="form-group"><label>Valid Till</label><input type="date" id="fb-quot-validtill">
+        <div style="margin-top:4px;"><button type="button" class="btn btn-xs" onclick="fbSetQuotValidity(15)">+15d</button> <button type="button" class="btn btn-xs" onclick="fbSetQuotValidity(30)">+30d</button></div>
+      </div>
       <div class="form-group" style="align-self:flex-end;">
         <label>Quotation Status</label>
         <select id="fb-quot-status">
@@ -2963,6 +2968,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
       <strong style="color:var(--neon);">📦 Items</strong>
       <button type="button" class="btn btn-green btn-sm" onclick="fbQuotAddItemRow()">➕ Add Item</button>
+      <button type="button" class="btn btn-neon btn-sm" onclick="fbOpenBulkPaste('quot')">📋 Paste Items</button>
     </div>
     <div id="fb-quot-items-table"></div>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
@@ -3066,6 +3072,90 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div style="font-size:12px;color:var(--text2);margin:4px 0 8px;">Customers with an outstanding balance right now — not affected by the date filter above.</div>
     <div id="fb-rep-due-overdue"></div>
   </div>
+
+  <!-- Stock -->
+  <div id="fb-sec-stock" class="settings-section" style="display:none;">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Track item quantities for Fast Billing. When a bill's item description matches a stock item's name exactly (not case-sensitive), that quantity is automatically deducted when the bill is saved, and restored if the bill is edited or deleted. Everything here is included in the same full JSON backup as the rest of the app — no separate backup needed.</div>
+    <div id="fb-stock-summary-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px;"></div>
+
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="form-group" style="flex:2;"><label>Search Item</label><input type="text" id="fb-stock-search" placeholder="Search by name..." oninput="fbRenderStock()"></div>
+      <div class="form-group"><label>Show</label>
+        <select id="fb-stock-filter" onchange="fbRenderStock()" style="width:auto;">
+          <option value="all">All Items</option>
+          <option value="low">Low Stock Only</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="fb-stock-list" style="margin-top:10px;"></div>
+    <button type="button" class="btn btn-green btn-sm" style="margin-top:10px;" onclick="fbAddStockItemRow()">➕ Add Stock Item</button>
+
+    <div class="divider"></div>
+    <strong style="color:var(--neon);">📦 Adjust Stock (Purchase / Manual Correction)</strong>
+    <div style="font-size:11px;color:var(--text3);margin:4px 0 8px;">Use this to add newly purchased stock, or correct a count after a physical check. Sales made through New Bill deduct automatically — you don't need to enter those here.</div>
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="form-group" style="flex:2;"><label>Stock Item</label>
+        <input type="text" id="fb-stock-adj-item" list="fb-stockitem-list" placeholder="Type or pick item name...">
+        <datalist id="fb-stockitem-list"></datalist>
+      </div>
+      <div class="form-group"><label>Type</label>
+        <select id="fb-stock-adj-type" style="width:auto;">
+          <option value="purchase">➕ Purchase (add)</option>
+          <option value="adjustment_add">➕ Correction (add)</option>
+          <option value="adjustment_remove">➖ Correction (remove)</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Qty</label><input type="number" id="fb-stock-adj-qty" min="0" step="any" placeholder="Qty"></div>
+      <div class="form-group" style="flex:2;"><label>Note</label><input type="text" id="fb-stock-adj-note" placeholder="e.g. Purchased from XYZ supplier"></div>
+      <div class="form-group" style="align-self:flex-end;"><button type="button" class="btn btn-green btn-sm" onclick="fbAdjustStock()">💾 Apply</button></div>
+    </div>
+
+    <div class="divider"></div>
+    <strong style="color:var(--neon);">📜 Stock Movement History</strong>
+    <div class="form-row" style="align-items:flex-end;margin-top:8px;">
+      <div class="form-group" style="flex:2;"><label>Filter by Item</label>
+        <select id="fb-stock-move-filter" onchange="fbRenderStockMovements()" style="width:100%;"><option value="">All items</option></select>
+      </div>
+    </div>
+    <div id="fb-stock-movements-list" style="margin-top:10px;"></div>
+  </div>
+</div>
+
+<!-- CUSTOMER PURCHASE HISTORY MODAL -->
+<div class="modal-overlay" id="fb-cust-history-modal">
+<div class="modal">
+  <div class="modal-header">
+    <h3 id="fb-cust-history-title">📜 Purchase History</h3>
+    <button class="close-btn" onclick="closeModal('fb-cust-history-modal')">✕</button>
+  </div>
+  <div class="modal-body">
+    <div id="fb-cust-history-summary" style="margin-bottom:12px;"></div>
+    <div id="fb-cust-history-body"></div>
+  </div>
+</div>
+</div>
+
+<!-- BULK PASTE ITEMS MODAL (Fast Billing: New Bill / New Quotation) -->
+<div class="modal-overlay" id="fb-bulk-paste-modal">
+<div class="modal">
+  <div class="modal-header">
+    <h3>📋 Paste Items from Excel</h3>
+    <button class="close-btn" onclick="closeModal('fb-bulk-paste-modal')">✕</button>
+  </div>
+  <div class="modal-body">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">
+      Copy rows from Excel/Sheets and paste below. One item per line — <strong>Description, Qty, Rate</strong> (tab or comma separated). Qty/Rate are optional (Qty defaults to 1, Rate to 0 or its remembered value).
+    </div>
+    <textarea id="fb-bulk-paste-text" rows="8" style="width:100%;font-family:monospace;font-size:13px;" placeholder="Fast EcoBright Batten Light 40W	5	850
+LED Bulb 12W	10	220
+Switch Socket"></textarea>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+      <button type="button" class="btn" onclick="closeModal('fb-bulk-paste-modal')">Cancel</button>
+      <button type="button" class="btn btn-green" onclick="fbBulkPasteConfirm()">➕ Add These Items</button>
+    </div>
+  </div>
+</div>
 </div>
 
 <!-- ====== SECURITY TAB ====== -->
@@ -4230,7 +4320,7 @@ async function buildFullBackupData(){
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
     savedQuotations, quotSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
     stockItems, stockMovements, salesReturns, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
-    fbCustomers, fbBills, fbLedger, fbSettings, fbDescriptions,
+    fbCustomers, fbBills, fbQuotations, fbLedger, fbSettings, fbDescriptions, fbStockItems, fbStockMovements,
     documentManager: docsWithBlob,
     securityData: (typeof securityData!=='undefined'?securityData:null),
     backupDate:new Date().toISOString(), version:'20.0'
@@ -4418,7 +4508,7 @@ function buildCloudSyncData(){
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
     savedQuotations, quotSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
     stockItems, stockMovements, salesReturns, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
-    fbCustomers, fbBills, fbLedger, fbSettings, fbDescriptions,
+    fbCustomers, fbBills, fbQuotations, fbLedger, fbSettings, fbDescriptions, fbStockItems, fbStockMovements,
     securityData: (typeof securityData!=='undefined'?securityData:null),
     updatedAt: new Date().toISOString(),
     updatedBy: (typeof securityData!=='undefined' && securityData.currentUser) ? securityData.currentUser.username : (settings.operatorName||'Operator'),
@@ -5088,9 +5178,12 @@ async function applyRestoredBackupData(data){
   if(data.pantryExpenses) { pantryExpenses = data.pantryExpenses; savePantryExpenses(); }
   if(data.fbCustomers) { fbCustomers = data.fbCustomers; saveFbCustomers(); }
   if(data.fbBills) { fbBills = data.fbBills; saveFbBills(); }
+  if(data.fbQuotations) { fbQuotations = data.fbQuotations; saveFbQuotations(); }
   if(data.fbLedger) { fbLedger = data.fbLedger; saveFbLedger(); }
   if(data.fbSettings) { fbSettings = data.fbSettings; saveFbSettings(); }
   if(data.fbDescriptions) { fbDescriptions = data.fbDescriptions; saveFbDescriptions(); }
+  if(data.fbStockItems) { fbStockItems = data.fbStockItems; saveFbStockItems(); }
+  if(data.fbStockMovements) { fbStockMovements = data.fbStockMovements; saveFbStockMovements(); }
   if(data.bankAccounts) { bankAccounts = data.bankAccounts; saveBankAccounts(); }
   if(data.bankTransactions) { bankTransactions = data.bankTransactions; saveBankTransactions(); }
   if(data.auditLog && data.auditLog.length){
@@ -18228,8 +18321,12 @@ let fbQuotations = [];  // {id, quotNo, date, customerId, customerName, shopName
 let fbLedger = [];      // {id, customerId, date, time, type:'bill'|'payment'|'sample', sampleEvent:'out'|'return'|'converted', amount, billNo, note}
 let fbDescriptions = []; // {id, desc, rate, shopRates:{shopName:rate}}
 let fbSettings = { nextBillNo: 1, nextQuotNo: 1 };
+let fbStockItems = [];     // {id, name, unit, currentQty, minQty, notes}
+let fbStockMovements = []; // {id, stockItemId, type:'opening'|'purchase'|'sale'|'adjustment_add'|'adjustment_remove'|'reversal', qty(+/-), date, time, ref, note}
 let fbCurrentItems = [];
 let fbQuotCurrentItems = [];
+let fbCurrentDiscount = { type:'flat', value:0 };
+let fbQuotCurrentDiscount = { type:'flat', value:0 };
 let fbLastSavedBillId = '';
 let fbLastSavedQuotId = '';
 let fbActiveSection = 'newbill';
@@ -18275,6 +18372,8 @@ function loadFastBilling(){
   try{ fbLedger = JSON.parse(localStorage.getItem('fb_ledger')||'[]'); }catch(e){ fbLedger=[]; }
   try{ fbSettings = JSON.parse(localStorage.getItem('fb_settings')||'null') || {nextBillNo:1,nextQuotNo:1}; }catch(e){ fbSettings={nextBillNo:1,nextQuotNo:1}; }
   try{ fbDescriptions = JSON.parse(localStorage.getItem('fb_descriptions')||'[]'); }catch(e){ fbDescriptions=[]; }
+  try{ fbStockItems = JSON.parse(localStorage.getItem('fb_stock_items')||'[]'); }catch(e){ fbStockItems=[]; }
+  try{ fbStockMovements = JSON.parse(localStorage.getItem('fb_stock_movements')||'[]'); }catch(e){ fbStockMovements=[]; }
   if(!fbSettings.nextBillNo) fbSettings.nextBillNo = 1;
   if(!fbSettings.nextQuotNo) fbSettings.nextQuotNo = 1;
   if(!fbSettings.headers) fbSettings.headers = { bill:{}, quot:{useSameAsBill:true} };
@@ -18286,6 +18385,8 @@ function saveFbBills(){ (typeof safeSetItem==='function'?safeSetItem:( (k,v)=>lo
 function saveFbLedger(){ (typeof safeSetItem==='function'?safeSetItem:( (k,v)=>localStorage.setItem(k,v) ))('fb_ledger', JSON.stringify(fbLedger)); }
 function saveFbSettings(){ (typeof safeSetItem==='function'?safeSetItem:( (k,v)=>localStorage.setItem(k,v) ))('fb_settings', JSON.stringify(fbSettings)); }
 function saveFbDescriptions(){ (typeof safeSetItem==='function'?safeSetItem:( (k,v)=>localStorage.setItem(k,v) ))('fb_descriptions', JSON.stringify(fbDescriptions)); }
+function saveFbStockItems(){ (typeof safeSetItem==='function'?safeSetItem:( (k,v)=>localStorage.setItem(k,v) ))('fb_stock_items', JSON.stringify(fbStockItems)); }
+function saveFbStockMovements(){ (typeof safeSetItem==='function'?safeSetItem:( (k,v)=>localStorage.setItem(k,v) ))('fb_stock_movements', JSON.stringify(fbStockMovements)); }
 function fbNowTime(){ return new Date().toTimeString().slice(0,5); }
 function fbNowDateTime(){ const d=new Date(); return d.toISOString().slice(0,10)+' '+d.toTimeString().slice(0,5); }
 
@@ -18305,6 +18406,7 @@ function renderFastBillingTab(){
   fbRenderAllBills();
   fbRenderSamples();
   fbRenderAllQuots();
+  fbRenderStock();
 }
 function fbRenderNewQuotForm(){
   if(!fbQuotCurrentItems || !fbQuotCurrentItems.length) fbQuotCurrentItems = [{desc:'',qty:1,rate:0}];
@@ -18314,7 +18416,7 @@ function fbRenderNewQuotForm(){
 }
 function fbShowSection(sec){
   fbActiveSection = sec;
-  ['newbill','allbills','samples','ledger','customers','descriptions','newquot','allquots','settings','reports'].forEach(s=>{
+  ['newbill','allbills','samples','ledger','customers','descriptions','newquot','allquots','settings','reports','stock'].forEach(s=>{
     const el = document.getElementById('fb-sec-'+s);
     if(el) el.style.display = (s===sec)?'':'none';
     const btn = document.getElementById('fb-nav-'+s);
@@ -18328,6 +18430,7 @@ function fbShowSection(sec){
   if(sec==='allquots') fbRenderAllQuots();
   if(sec==='settings') fbLoadHeaderSettingsIntoForm();
   if(sec==='reports') fbRenderReports();
+  if(sec==='stock') fbRenderStock();
 }
 
 // ---- New Bill ----
@@ -18357,6 +18460,7 @@ function fbNewBillReset(){
   const banner = document.getElementById('fb-edit-banner'); if(banner) banner.style.display='none';
   const saveBtn = document.getElementById('fb-save-btn'); if(saveBtn) saveBtn.textContent = '💾 Save Bill';
   fbCurrentItems = [{desc:'',qty:1,rate:0}];
+  fbCurrentDiscount = { type:'flat', value:0 };
   const billNoEl = document.getElementById('fb-billno'); if(billNoEl) billNoEl.value = fbSettings.nextBillNo;
   const dateEl = document.getElementById('fb-date'); if(dateEl) dateEl.value = new Date().toISOString().slice(0,10);
   const nameEl = document.getElementById('fb-cust-name'); if(nameEl) nameEl.value = '';
@@ -18423,9 +18527,28 @@ function fbAutofillRateForItem(idx){
 function fbCalcBillTotal(){
   return fbCurrentItems.reduce((s,it)=>s+(parseFloat(it.qty)||0)*(parseFloat(it.rate)||0),0);
 }
+function fbCalcBillDiscountAmt(subtotal){
+  const d = fbCurrentDiscount || {type:'flat',value:0};
+  const v = parseFloat(d.value)||0;
+  if(v<=0) return 0;
+  let amt = d.type==='percent' ? subtotal*(v/100) : v;
+  return Math.min(amt, subtotal); // discount can never exceed the subtotal
+}
+function fbCalcBillGrandTotal(){
+  const sub = fbCalcBillTotal();
+  return sub - fbCalcBillDiscountAmt(sub);
+}
+function fbUpdateBillDiscount(field, val){
+  fbCurrentDiscount = fbCurrentDiscount || {type:'flat',value:0};
+  fbCurrentDiscount[field] = field==='type' ? val : (parseFloat(val)||0);
+  fbRenderItemsTable();
+}
 function fbRenderItemsTable(){
   const wrap = document.getElementById('fb-items-table');
   if(!wrap) return;
+  const sub = fbCalcBillTotal();
+  const discAmt = fbCalcBillDiscountAmt(sub);
+  const d = fbCurrentDiscount || {type:'flat',value:0};
   wrap.innerHTML = `<table class="items-table"><thead><tr><th>Description</th><th style="width:70px;">Qty</th><th style="width:100px;">Rate</th><th style="width:110px;">Amount</th><th style="width:36px;"></th></tr></thead><tbody>
     ${fbCurrentItems.map((it,i)=>`<tr>
       <td><input type="text" list="fb-desc-list" value="${(it.desc||'').replace(/"/g,'&quot;')}" onchange="fbUpdateItemField(${i},'desc',this.value)" placeholder="Item description" style="width:100%;"></td>
@@ -18435,12 +18558,28 @@ function fbRenderItemsTable(){
       <td><button type="button" class="btn btn-xs btn-red" onclick="fbRemoveItemRow(${i})">✖</button></td>
     </tr>`).join('')}
   </tbody></table>
-  <div style="text-align:right;font-weight:700;margin-top:8px;font-size:16px;">Total: <span style="color:var(--neon);">${fmt(fbCalcBillTotal())}</span></div>`;
+  <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:10px;font-size:13px;">
+    <span>Subtotal: <strong>${fmt(sub)}</strong></span>
+    <span>Discount:</span>
+    <input type="number" value="${d.value||0}" min="0" onchange="fbUpdateBillDiscount('value', this.value)" style="width:80px;">
+    <select onchange="fbUpdateBillDiscount('type', this.value)" style="width:auto;">
+      <option value="flat" ${d.type!=='percent'?'selected':''}>Rs</option>
+      <option value="percent" ${d.type==='percent'?'selected':''}>%</option>
+    </select>
+    <span style="color:var(--neon5);">(-${fmt(discAmt)})</span>
+  </div>
+  <div style="text-align:right;font-weight:700;margin-top:6px;font-size:16px;">Grand Total: <span style="color:var(--neon);">${fmt(fbCalcBillGrandTotal())}</span></div>`;
 }
 function fbPopulateDescDatalist(){
   const dl = document.getElementById('fb-desc-list');
   if(!dl) return;
-  dl.innerHTML = fbDescriptions.map(d=>`<option value="${(d.desc||'').replace(/"/g,'&quot;')}">`).join('');
+  // Union of saved descriptions + stock item names (deduped, case-insensitive) so
+  // picking a stock item's exact name from the New Bill item row is one click,
+  // which keeps the description matching stock deduction relies on accurate.
+  const names = new Map();
+  fbDescriptions.forEach(d=>{ const n=(d.desc||'').trim(); if(n) names.set(n.toLowerCase(), n); });
+  (fbStockItems||[]).forEach(s=>{ const n=(s.name||'').trim(); if(n && !names.has(n.toLowerCase())) names.set(n.toLowerCase(), n); });
+  dl.innerHTML = Array.from(names.values()).map(n=>`<option value="${n.replace(/"/g,'&quot;')}">`).join('');
 }
 // Remembers each description's rate (globally, and per shop) so it can auto-fill next time.
 function fbRememberDescription(desc, rate, shopName){
@@ -18467,12 +18606,25 @@ function fbSaveBill(){
   if(!name){ toast('Customer name required','warning'); return; }
   const items = fbCurrentItems.filter(it=>(it.desc||'').trim() || (parseFloat(it.qty)||0) || (parseFloat(it.rate)||0));
   if(!items.length){ toast('Add at least one item','warning'); return; }
-  const total = items.reduce((s,it)=>s+(parseFloat(it.qty)||0)*(parseFloat(it.rate)||0),0);
+  const subtotal = items.reduce((s,it)=>s+(parseFloat(it.qty)||0)*(parseFloat(it.rate)||0),0);
+  const discount = { type: fbCurrentDiscount.type||'flat', value: parseFloat(fbCurrentDiscount.value)||0 };
+  const discountAmt = discount.type==='percent' ? Math.min(subtotal*(discount.value/100), subtotal) : Math.min(discount.value, subtotal);
+  const total = subtotal - discountAmt;
 
   let cust = fbCustomers.find(c=>(c.name||'').toLowerCase()===name.toLowerCase());
   if(!cust){ cust = {id: fbUid(), name, shopName, phone}; fbCustomers.push(cust); }
   else { if(shopName && !cust.shopName) cust.shopName = shopName; if(phone && !cust.phone) cust.phone = phone; }
   saveFbCustomers();
+
+  // credit limit check — only relevant for a brand-new, non-sample, not-fully-paid bill
+  if(!fbEditingBillId && !isSample && cust.creditLimit>0){
+    const addsToBalance = markPaidNow ? 0 : total;
+    const projectedBalance = fbGetCustomerBalance(cust.id) + addsToBalance;
+    if(projectedBalance > cust.creditLimit){
+      const ok = confirm(`⚠️ ${cust.name}'s outstanding balance will become ${fmt(projectedBalance)}, which is over their credit limit of ${fmt(cust.creditLimit)}.\n\nSave this bill anyway?`);
+      if(!ok) return;
+    }
+  }
 
   // remember each item's description + rate (globally and against this shop) for next time
   items.forEach(it=>fbRememberDescription(it.desc, it.rate, shopName||cust.shopName));
@@ -18483,9 +18635,11 @@ function fbSaveBill(){
     // ---- UPDATE existing bill ----
     const bill = fbBills.find(b=>b.id===fbEditingBillId);
     if(!bill){ toast('Bill not found — cannot update','error'); fbNewBillReset(); return; }
+    const prevItemsForStock = bill.items;
     bill.billNo = billNo; bill.date = date; bill.time = bill.time||time; bill.customerId = cust.id; bill.customerName = cust.name;
     bill.shopName = shopName||cust.shopName||''; bill.phone = phone||cust.phone||'';
-    bill.items = items; bill.total = total; bill.isSample = isSample;
+    bill.items = items; bill.subtotal = subtotal; bill.discount = discount; bill.total = total; bill.isSample = isSample;
+    fbSyncStockForBill(bill.id, prevItemsForStock, items, date, billNo);
     if(isSample && !bill.sampleStatus) bill.sampleStatus = 'pending';
     if(!isSample) delete bill.sampleStatus;
     if(markPaidNow) bill.paidAmount = total;
@@ -18513,9 +18667,10 @@ function fbSaveBill(){
   } else {
     // ---- CREATE new bill ----
     const bill = { id: fbUid(), billNo, date, time, customerId: cust.id, customerName: cust.name,
-      shopName: shopName||cust.shopName||'', phone: phone||cust.phone||'', items, total, paidAmount: markPaidNow?total:0, isSample };
+      shopName: shopName||cust.shopName||'', phone: phone||cust.phone||'', items, subtotal, discount, total, paidAmount: markPaidNow?total:0, isSample };
     if(isSample) bill.sampleStatus = 'pending';
     fbBills.push(bill);
+    fbSyncStockForBill(bill.id, [], items, date, billNo);
 
     const entry = { id: fbUid(), customerId: cust.id, date, time, type: isSample?'sample':'bill', sampleEvent: isSample?'out':undefined, amount: isSample?0:total, billNo, note: itemSummary||`Bill #${billNo}` };
     fbLedger.push(entry);
@@ -18555,8 +18710,10 @@ function fbNewQuotReset(){
   const banner = document.getElementById('fb-quot-edit-banner'); if(banner) banner.style.display='none';
   const saveBtn = document.getElementById('fb-quot-save-btn'); if(saveBtn) saveBtn.textContent = '💾 Save Quotation';
   fbQuotCurrentItems = [{desc:'',qty:1,rate:0}];
+  fbQuotCurrentDiscount = { type:'flat', value:0 };
   const noEl = document.getElementById('fb-quotno'); if(noEl) noEl.value = fbSettings.nextQuotNo;
   const dateEl = document.getElementById('fb-quot-date'); if(dateEl) dateEl.value = new Date().toISOString().slice(0,10);
+  const validEl = document.getElementById('fb-quot-validtill'); if(validEl) validEl.value = '';
   const nameEl = document.getElementById('fb-quot-cust-name'); if(nameEl) nameEl.value = '';
   const shopEl = document.getElementById('fb-quot-cust-shop'); if(shopEl) shopEl.value = '';
   const phoneEl = document.getElementById('fb-quot-cust-phone'); if(phoneEl) phoneEl.value = '';
@@ -18592,9 +18749,28 @@ function fbQuotAutofillRateForItem(idx){
 function fbCalcQuotTotal(){
   return fbQuotCurrentItems.reduce((s,it)=>s+(parseFloat(it.qty)||0)*(parseFloat(it.rate)||0),0);
 }
+function fbCalcQuotDiscountAmt(subtotal){
+  const d = fbQuotCurrentDiscount || {type:'flat',value:0};
+  const v = parseFloat(d.value)||0;
+  if(v<=0) return 0;
+  let amt = d.type==='percent' ? subtotal*(v/100) : v;
+  return Math.min(amt, subtotal);
+}
+function fbCalcQuotGrandTotal(){
+  const sub = fbCalcQuotTotal();
+  return sub - fbCalcQuotDiscountAmt(sub);
+}
+function fbUpdateQuotDiscount(field, val){
+  fbQuotCurrentDiscount = fbQuotCurrentDiscount || {type:'flat',value:0};
+  fbQuotCurrentDiscount[field] = field==='type' ? val : (parseFloat(val)||0);
+  fbRenderQuotItemsTable();
+}
 function fbRenderQuotItemsTable(){
   const wrap = document.getElementById('fb-quot-items-table');
   if(!wrap) return;
+  const sub = fbCalcQuotTotal();
+  const discAmt = fbCalcQuotDiscountAmt(sub);
+  const d = fbQuotCurrentDiscount || {type:'flat',value:0};
   wrap.innerHTML = `<table class="items-table"><thead><tr><th>Description</th><th style="width:70px;">Qty</th><th style="width:100px;">Rate</th><th style="width:110px;">Amount</th><th style="width:36px;"></th></tr></thead><tbody>
     ${fbQuotCurrentItems.map((it,i)=>`<tr>
       <td><input type="text" list="fb-desc-list" value="${(it.desc||'').replace(/"/g,'&quot;')}" onchange="fbQuotUpdateItemField(${i},'desc',this.value)" placeholder="Item description" style="width:100%;"></td>
@@ -18604,11 +18780,76 @@ function fbRenderQuotItemsTable(){
       <td><button type="button" class="btn btn-xs btn-red" onclick="fbQuotRemoveItemRow(${i})">✖</button></td>
     </tr>`).join('')}
   </tbody></table>
-  <div style="text-align:right;font-weight:700;margin-top:8px;font-size:16px;">Total: <span style="color:var(--neon);">${fmt(fbCalcQuotTotal())}</span></div>`;
+  <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:10px;font-size:13px;">
+    <span>Subtotal: <strong>${fmt(sub)}</strong></span>
+    <span>Discount:</span>
+    <input type="number" value="${d.value||0}" min="0" onchange="fbUpdateQuotDiscount('value', this.value)" style="width:80px;">
+    <select onchange="fbUpdateQuotDiscount('type', this.value)" style="width:auto;">
+      <option value="flat" ${d.type!=='percent'?'selected':''}>Rs</option>
+      <option value="percent" ${d.type==='percent'?'selected':''}>%</option>
+    </select>
+    <span style="color:var(--neon5);">(-${fmt(discAmt)})</span>
+  </div>
+  <div style="text-align:right;font-weight:700;margin-top:6px;font-size:16px;">Grand Total: <span style="color:var(--neon);">${fmt(fbCalcQuotGrandTotal())}</span></div>`;
+}
+// ---- Bulk paste items from Excel/Sheets (works for both New Bill and New Quotation) ----
+let fbBulkPasteTarget = 'bill';
+function fbOpenBulkPaste(target){
+  fbBulkPasteTarget = target;
+  const ta = document.getElementById('fb-bulk-paste-text'); if(ta) ta.value = '';
+  openModal('fb-bulk-paste-modal');
+}
+function fbParseBulkPasteLine(line){
+  // Prefer tab-separated (native Excel paste); fall back to comma-separated.
+  let cols = line.includes('\t') ? line.split('\t') : line.split(',');
+  cols = cols.map(c=>c.trim()).filter((c,i)=>i===0 || c!=='' || cols.length>1);
+  const desc = (cols[0]||'').trim();
+  if(!desc) return null;
+  let qty = 1, rate = 0;
+  if(cols.length>=3){ qty = parseFloat(cols[1])||1; rate = parseFloat(cols[2])||0; }
+  else if(cols.length===2){ 
+    // Single extra column: treat as rate if it's a plain number, otherwise as qty.
+    const n = parseFloat(cols[1]);
+    if(!isNaN(n)) rate = n;
+  }
+  return { desc, qty, rate };
+}
+function fbBulkPasteConfirm(){
+  const ta = document.getElementById('fb-bulk-paste-text');
+  const raw = ta ? ta.value : '';
+  const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  if(!lines.length){ toast('Paste at least one item line','warning'); return; }
+  const parsed = lines.map(fbParseBulkPasteLine).filter(Boolean);
+  if(!parsed.length){ toast('Could not read any items from that text','warning'); return; }
+
+  const isQuot = fbBulkPasteTarget==='quot';
+  let target = isQuot ? fbQuotCurrentItems : fbCurrentItems;
+  // auto-fill rate from remembered description prices when the pasted row didn't include one
+  parsed.forEach(it=>{
+    if(!it.rate){
+      const match = fbDescriptions.find(d=>(d.desc||'').toLowerCase()===it.desc.toLowerCase());
+      if(match) it.rate = match.rate||0;
+    }
+  });
+  // drop a single still-empty starter row before appending
+  target = target.filter(it=>(it.desc||'').trim() || (parseFloat(it.qty)||0) || (parseFloat(it.rate)||0));
+  target = target.concat(parsed);
+  if(isQuot) fbQuotCurrentItems = target; else fbCurrentItems = target;
+
+  if(isQuot) fbRenderQuotItemsTable(); else fbRenderItemsTable();
+  closeModal('fb-bulk-paste-modal');
+  toast(`✅ ${parsed.length} item(s) added`,'success');
+}
+function fbSetQuotValidity(days){
+  const dateEl = document.getElementById('fb-quot-date');
+  const base = dateEl && dateEl.value ? new Date(dateEl.value) : new Date();
+  base.setDate(base.getDate()+days);
+  const validEl = document.getElementById('fb-quot-validtill'); if(validEl) validEl.value = base.toISOString().slice(0,10);
 }
 function fbSaveQuotation(){
   const quotNo = document.getElementById('fb-quotno').value || fbSettings.nextQuotNo;
   const date = document.getElementById('fb-quot-date').value || new Date().toISOString().slice(0,10);
+  const validTill = document.getElementById('fb-quot-validtill') ? document.getElementById('fb-quot-validtill').value : '';
   const time = fbNowTime();
   const shopName = (document.getElementById('fb-quot-cust-shop').value||'').trim();
   const name = (document.getElementById('fb-quot-cust-name').value||'').trim();
@@ -18620,7 +18861,10 @@ function fbSaveQuotation(){
   if(!name){ toast('Customer name required','warning'); return; }
   const items = fbQuotCurrentItems.filter(it=>(it.desc||'').trim() || (parseFloat(it.qty)||0) || (parseFloat(it.rate)||0));
   if(!items.length){ toast('Add at least one item','warning'); return; }
-  const total = items.reduce((s,it)=>s+(parseFloat(it.qty)||0)*(parseFloat(it.rate)||0),0);
+  const subtotal = items.reduce((s,it)=>s+(parseFloat(it.qty)||0)*(parseFloat(it.rate)||0),0);
+  const discount = { type: fbQuotCurrentDiscount.type||'flat', value: parseFloat(fbQuotCurrentDiscount.value)||0 };
+  const discountAmt = discount.type==='percent' ? Math.min(subtotal*(discount.value/100), subtotal) : Math.min(discount.value, subtotal);
+  const total = subtotal - discountAmt;
 
   let cust = fbCustomers.find(c=>(c.name||'').toLowerCase()===name.toLowerCase());
   if(!cust){ cust = {id: fbUid(), name, shopName, phone}; fbCustomers.push(cust); saveFbCustomers(); }
@@ -18631,15 +18875,15 @@ function fbSaveQuotation(){
   if(fbEditingQuotId){
     const q = fbQuotations.find(x=>x.id===fbEditingQuotId);
     if(!q){ toast('Quotation not found — cannot update','error'); fbNewQuotReset(); return; }
-    q.quotNo = quotNo; q.date = date; q.time = q.time||time; q.customerId = cust.id; q.customerName = cust.name;
+    q.quotNo = quotNo; q.date = date; q.validTill = validTill; q.time = q.time||time; q.customerId = cust.id; q.customerName = cust.name;
     q.shopName = shopName||cust.shopName||''; q.phone = phone||cust.phone||'';
-    q.items = items; q.total = total; q.isEstimate = isEstimate; q.paidAmount = markPaidNow?total:(q.paidAmount||0);
+    q.items = items; q.subtotal = subtotal; q.discount = discount; q.total = total; q.isEstimate = isEstimate; q.paidAmount = markPaidNow?total:(q.paidAmount||0);
     saveFbQuotations();
     fbLastSavedQuotId = q.id;
     toast('✅ Quotation #'+quotNo+' updated','success');
   } else {
-    const q = { id: fbUid(), quotNo, date, time, customerId: cust.id, customerName: cust.name,
-      shopName: shopName||cust.shopName||'', phone: phone||cust.phone||'', items, total, paidAmount: markPaidNow?total:0, isEstimate };
+    const q = { id: fbUid(), quotNo, date, validTill, time, customerId: cust.id, customerName: cust.name,
+      shopName: shopName||cust.shopName||'', phone: phone||cust.phone||'', items, subtotal, discount, total, paidAmount: markPaidNow?total:0, isEstimate };
     fbQuotations.push(q);
     saveFbQuotations();
     fbSettings.nextQuotNo = (parseInt(quotNo)||fbSettings.nextQuotNo) + 1;
@@ -18676,7 +18920,8 @@ function fbRenderAllQuots(){
   if(!list.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No quotations found.</div>'; return; }
   wrap.innerHTML = `<table class="items-table"><thead><tr><th>Quot #</th><th>Date</th><th>Customer</th><th>Shop</th><th style="text-align:right;">Total</th><th>Status</th><th></th></tr></thead><tbody>
     ${list.map(q=>{
-      const badge = q.isEstimate ? `<span class="badge" style="background:#7c3aed22;color:#7c3aed;">📐 Estimate</span>`
+      const badge = q.convertedToBillId ? `<span class="badge badge-invoiced">➡️ Converted to Bill #${q.convertedBillNo||''}</span>`
+        : q.isEstimate ? `<span class="badge" style="background:#7c3aed22;color:#7c3aed;">📐 Estimate</span>`
         : ((q.paidAmount||0) >= q.total ? `<span class="badge badge-invoiced">✅ Paid</span>` : `<span class="badge" style="background:#ff6a0022;color:#ff6a00;">⏳ Unpaid</span>`);
       return `<tr>
       <td>${q.quotNo}</td>
@@ -18689,11 +18934,44 @@ function fbRenderAllQuots(){
         <button type="button" class="btn btn-xs btn-neon" onclick="fbEditQuot('${q.id}')" title="Edit">✏️</button>
         <button type="button" class="btn btn-xs btn-neon" onclick="fbPrintThermalQuot('${q.id}')" title="Thermal print">🖨️</button>
         <button type="button" class="btn btn-xs btn-neon" onclick="fbPrintA4Quot('${q.id}')" title="A4 print">📄</button>
+        ${!q.convertedToBillId ? `<button type="button" class="btn btn-xs btn-green" onclick="fbConvertQuotToBill('${q.id}')" title="Convert to Bill">➡️ Bill</button>` : ''}
         <button type="button" class="btn btn-xs btn-red" onclick="fbDeleteQuot('${q.id}')" title="Delete">🗑️</button>
       </td>
     </tr>`;
     }).join('')}
   </tbody></table>`;
+}
+function fbConvertQuotToBill(quotId){
+  const q = fbQuotations.find(x=>x.id===quotId);
+  if(!q){ toast('Quotation not found','error'); return; }
+  if(q.convertedToBillId){ toast('This quotation has already been converted to a bill','warning'); return; }
+  if(!confirm(`Convert Quotation #${q.quotNo} into a new Bill for ${q.customerName}?`)) return;
+
+  const billNo = fbSettings.nextBillNo;
+  const date = new Date().toISOString().slice(0,10);
+  const time = fbNowTime();
+  const items = (q.items||[]).map(it=>({...it}));
+  const itemSummary = items.map(it=>it.desc).filter(Boolean).slice(0,3).join(', ') + (items.length>3?` +${items.length-3} more`:'');
+
+  const bill = { id: fbUid(), billNo, date, time, customerId: q.customerId, customerName: q.customerName,
+    shopName: q.shopName||'', phone: q.phone||'', items, subtotal: q.subtotal!=null?q.subtotal:q.total,
+    discount: q.discount||{type:'flat',value:0}, total: q.total, paidAmount: 0, isSample: false,
+    convertedFromQuotId: q.id, convertedFromQuotNo: q.quotNo };
+  fbBills.push(bill);
+
+  const entry = { id: fbUid(), customerId: q.customerId, date, time, type:'bill', amount: q.total, billNo, note: (itemSummary||`Bill #${billNo}`)+` (from Quotation #${q.quotNo})` };
+  fbLedger.push(entry);
+  bill.ledgerEntryId = entry.id;
+
+  fbSettings.nextBillNo = (parseInt(billNo)||fbSettings.nextBillNo) + 1;
+  q.convertedToBillId = bill.id;
+  q.convertedBillNo = billNo;
+
+  saveFbBills(); saveFbLedger(); saveFbSettings(); saveFbQuotations();
+  fbRenderAllQuots();
+  fbRenderAllBills();
+  fbRenderLedger();
+  toast(`✅ Quotation #${q.quotNo} converted to Bill #${billNo}`,'success');
 }
 function fbEditQuot(quotId){
   const q = fbQuotations.find(x=>x.id===quotId);
@@ -18701,8 +18979,10 @@ function fbEditQuot(quotId){
   fbEditingQuotId = q.id;
   fbQuotCurrentItems = (q.items||[]).map(it=>({...it}));
   if(!fbQuotCurrentItems.length) fbQuotCurrentItems = [{desc:'',qty:1,rate:0}];
+  fbQuotCurrentDiscount = q.discount ? {...q.discount} : { type:'flat', value:0 };
   const noEl = document.getElementById('fb-quotno'); if(noEl) noEl.value = q.quotNo;
   const dateEl = document.getElementById('fb-quot-date'); if(dateEl) dateEl.value = q.date || new Date().toISOString().slice(0,10);
+  const validEl = document.getElementById('fb-quot-validtill'); if(validEl) validEl.value = q.validTill || '';
   const nameEl = document.getElementById('fb-quot-cust-name'); if(nameEl) nameEl.value = q.customerName || '';
   const shopEl = document.getElementById('fb-quot-cust-shop'); if(shopEl) shopEl.value = q.shopName || '';
   const phoneEl = document.getElementById('fb-quot-cust-phone'); if(phoneEl) phoneEl.value = q.phone || '';
@@ -18996,6 +19276,7 @@ function fbEditBill(billId){
   fbEditingBillId = bill.id;
   fbCurrentItems = (bill.items||[]).map(it=>({...it}));
   if(!fbCurrentItems.length) fbCurrentItems = [{desc:'',qty:1,rate:0}];
+  fbCurrentDiscount = bill.discount ? {...bill.discount} : { type:'flat', value:0 };
   const billNoEl = document.getElementById('fb-billno'); if(billNoEl) billNoEl.value = bill.billNo;
   const dateEl = document.getElementById('fb-date'); if(dateEl) dateEl.value = bill.date || new Date().toISOString().slice(0,10);
   const nameEl = document.getElementById('fb-cust-name'); if(nameEl) nameEl.value = bill.customerName || '';
@@ -19014,7 +19295,8 @@ function fbEditBill(billId){
 function fbDeleteBill(billId){
   const bill = fbBills.find(b=>b.id===billId);
   if(!bill) return;
-  if(!confirm(`Delete Bill #${bill.billNo} for ${bill.customerName}? This also removes its ledger entry and any payments recorded against it.`)) return;
+  if(!confirm(`Delete Bill #${bill.billNo} for ${bill.customerName}? This also removes its ledger entry, any payments recorded against it, and restores any stock it had deducted.`)) return;
+  fbSyncStockForBill(bill.id, bill.items, [], bill.date, bill.billNo);
   fbBills = fbBills.filter(b=>b.id!==billId);
   fbLedger = fbLedger.filter(l=>!(String(l.billNo)===String(bill.billNo) && l.customerId===bill.customerId));
   saveFbBills();
@@ -19118,24 +19400,79 @@ function fbRenderCustomersSettings(){
   const wrap = document.getElementById('fb-customers-list');
   if(!wrap) return;
   if(!fbCustomers.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No customers yet — they get added automatically the first time you save a bill, or add one manually below.</div>'; return; }
-  wrap.innerHTML = `<table class="items-table"><thead><tr><th>#</th><th>Customer Name</th><th>Shop Name</th><th>Phone</th><th style="width:110px;">Order</th><th></th></tr></thead><tbody>
-    ${fbCustomers.map((c,i)=>`<tr>
+  wrap.innerHTML = `<table class="items-table"><thead><tr><th>#</th><th>Customer Name</th><th>Shop Name</th><th>Phone</th><th style="width:100px;">Credit Limit</th><th style="width:100px;">Balance</th><th style="width:110px;">Order</th><th></th></tr></thead><tbody>
+    ${fbCustomers.map((c,i)=>{
+      const bal = fbGetCustomerBalance(c.id);
+      const overLimit = c.creditLimit>0 && bal>c.creditLimit;
+      return `<tr>
       <td style="color:var(--text3);">${i+1}</td>
       <td><input type="text" value="${(c.name||'').replace(/"/g,'&quot;')}" onchange="fbUpdateCustomerField(${i},'name',this.value)" style="width:100%;"></td>
       <td><input type="text" value="${(c.shopName||'').replace(/"/g,'&quot;')}" onchange="fbUpdateCustomerField(${i},'shopName',this.value)" style="width:100%;"></td>
       <td><input type="text" value="${(c.phone||'').replace(/"/g,'&quot;')}" onchange="fbUpdateCustomerField(${i},'phone',this.value)" style="width:100%;"></td>
+      <td><input type="number" min="0" value="${c.creditLimit||0}" onchange="fbUpdateCustomerField(${i},'creditLimit',this.value)" style="width:100%;" title="0 = no limit"></td>
+      <td style="text-align:right;font-weight:700;color:${overLimit?'var(--neon5)':'var(--text2)'};">${fmt(bal)}${overLimit?' ⚠️':''}</td>
       <td>
         <button type="button" class="btn btn-xs" onclick="fbMoveCustomer(${i},-1)" ${i===0?'disabled':''}>⬆️</button>
         <button type="button" class="btn btn-xs" onclick="fbMoveCustomer(${i},1)" ${i===fbCustomers.length-1?'disabled':''}>⬇️</button>
       </td>
-      <td><button type="button" class="btn btn-xs btn-red" onclick="fbDeleteCustomer(${i})">🗑️</button></td>
-    </tr>`).join('')}
+      <td style="white-space:nowrap;">
+        <button type="button" class="btn btn-xs btn-neon" onclick="fbShowCustomerHistory('${c.id}')" title="Purchase history">📜</button>
+        <button type="button" class="btn btn-xs btn-red" onclick="fbDeleteCustomer(${i})">🗑️</button>
+      </td>
+    </tr>`;
+    }).join('')}
   </tbody></table>`;
+}
+function fbShowCustomerHistory(custId){
+  const cust = fbCustomers.find(c=>c.id===custId);
+  if(!cust){ toast('Customer not found','error'); return; }
+  const titleEl = document.getElementById('fb-cust-history-title');
+  if(titleEl) titleEl.textContent = `📜 Purchase History — ${cust.name}`;
+
+  const bills = fbBills.filter(b=>b.customerId===custId && !b.isSample).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const samples = fbBills.filter(b=>b.customerId===custId && b.isSample);
+  const quots = fbQuotations.filter(q=>q.customerId===custId);
+  const totalSpent = bills.reduce((s,b)=>s+(b.total||0),0);
+  const balance = fbGetCustomerBalance(custId);
+
+  const summaryEl = document.getElementById('fb-cust-history-summary');
+  if(summaryEl){
+    summaryEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;">
+      <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">Total Bills</div><div style="font-size:16px;font-weight:800;">${bills.length}</div></div>
+      <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">Total Spent</div><div style="font-size:16px;font-weight:800;color:var(--neon2);">${fmt(totalSpent)}</div></div>
+      <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">Outstanding</div><div style="font-size:16px;font-weight:800;color:${balance>0?'var(--neon5)':'var(--neon4)'};">${fmt(balance)}</div></div>
+      <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">Samples Given</div><div style="font-size:16px;font-weight:800;">${samples.length}</div></div>
+      ${cust.creditLimit>0 ? `<div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">Credit Limit</div><div style="font-size:16px;font-weight:800;color:${balance>cust.creditLimit?'var(--neon5)':'var(--text2)'};">${fmt(cust.creditLimit)}</div></div>` : ''}
+    </div>`;
+  }
+
+  const bodyEl = document.getElementById('fb-cust-history-body');
+  if(bodyEl){
+    let html = '';
+    if(bills.length){
+      html += `<strong style="color:var(--neon);">🧾 Bills</strong><table class="items-table" style="margin-top:6px;"><thead><tr><th>Bill #</th><th>Date</th><th style="text-align:right;">Total</th><th>Status</th><th></th></tr></thead><tbody>
+        ${bills.map(b=>`<tr>
+          <td>${b.billNo}</td><td>${fmtDate(b.date)}</td><td style="text-align:right;">${fmt(b.total)}</td>
+          <td>${(b.paidAmount||0)>=b.total ? '✅ Paid' : (b.paidAmount>0 ? '🟡 Partial' : '⏳ Unpaid')}</td>
+          <td><button type="button" class="btn btn-xs btn-neon" onclick="fbPrintA4('${b.id}')">📄</button></td>
+        </tr>`).join('')}
+      </tbody></table>`;
+    } else {
+      html += '<div style="color:var(--text3);font-size:12px;">No bills yet.</div>';
+    }
+    if(quots.length){
+      html += `<div class="divider"></div><strong style="color:var(--neon);">📑 Quotations</strong><table class="items-table" style="margin-top:6px;"><thead><tr><th>Quot #</th><th>Date</th><th style="text-align:right;">Total</th></tr></thead><tbody>
+        ${quots.map(q=>`<tr><td>${q.quotNo}</td><td>${fmtDate(q.date)}</td><td style="text-align:right;">${fmt(q.total)}</td></tr>`).join('')}
+      </tbody></table>`;
+    }
+    bodyEl.innerHTML = html;
+  }
+  openModal('fb-cust-history-modal');
 }
 function fbUpdateCustomerField(idx, field, val){
   if(!fbCustomers[idx]) return;
   const old = fbCustomers[idx][field];
-  fbCustomers[idx][field] = (val||'').trim();
+  fbCustomers[idx][field] = (field==='creditLimit') ? (parseFloat(val)||0) : (val||'').trim();
   saveFbCustomers();
   // keep any already-saved bills' displayed name/shop/phone in sync when corrected from Customers screen
   if(field==='name' && old){
@@ -19144,6 +19481,7 @@ function fbUpdateCustomerField(idx, field, val){
   }
   fbPopulatePartyDatalist();
   fbPopulateLedgerCustomerSelect();
+  fbRenderCustomersSettings();
   toast('Saved','success');
 }
 function fbMoveCustomer(idx, dir){
@@ -19214,6 +19552,167 @@ function fbAddDescriptionRow(){
   fbDescriptions.push({id: fbUid(), desc:'New Item', rate:0, shopRates:{}});
   saveFbDescriptions();
   fbRenderDescriptionsSettings();
+}
+
+// ==================== STOCK SYSTEM (Fast Billing) ====================
+// Self-contained: its own fb_stock_items / fb_stock_movements localStorage keys,
+// loaded/saved the same way as Customers/Descriptions/Bills/Quotations/Ledger,
+// and included in the same single full JSON backup as everything else — no
+// separate backup needed for this. When a bill's item description matches a
+// stock item's name (case-insensitive, trimmed), saving that bill deducts the
+// qty automatically; editing or deleting a bill reverses the old deduction
+// first so nothing double-counts.
+function fbFindStockItemByName(name){
+  const n = (name||'').trim().toLowerCase();
+  if(!n) return null;
+  return fbStockItems.find(s=>(s.name||'').trim().toLowerCase()===n) || null;
+}
+function fbRenderStock(){
+  fbPopulateStockDatalist();
+  fbPopulateStockMoveFilter();
+  const cardsWrap = document.getElementById('fb-stock-summary-cards');
+  if(cardsWrap){
+    const totalItems = fbStockItems.length;
+    const lowCount = fbStockItems.filter(s=>(s.minQty||0)>0 && (s.currentQty||0)<=s.minQty).length;
+    const zeroCount = fbStockItems.filter(s=>(s.currentQty||0)<=0).length;
+    cardsWrap.innerHTML = `
+      <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">Stock Items</div><div style="font-size:18px;font-weight:800;">${totalItems}</div></div>
+      <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">Low Stock</div><div style="font-size:18px;font-weight:800;color:${lowCount?'#ff6a00':'var(--text2)'};">${lowCount}</div></div>
+      <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">Out of Stock</div><div style="font-size:18px;font-weight:800;color:${zeroCount?'var(--neon5)':'var(--text2)'};">${zeroCount}</div></div>`;
+  }
+  const wrap = document.getElementById('fb-stock-list');
+  if(!wrap) return;
+  const search = (document.getElementById('fb-stock-search')?.value||'').trim().toLowerCase();
+  const filter = document.getElementById('fb-stock-filter')?.value || 'all';
+  let list = fbStockItems.map((s,i)=>({...s, _idx:i}));
+  if(search) list = list.filter(s=>(s.name||'').toLowerCase().includes(search));
+  if(filter==='low') list = list.filter(s=>(s.minQty||0)>0 && (s.currentQty||0)<=s.minQty);
+  if(!fbStockItems.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No stock items yet. Add one below, or matching item names on bills won\'t affect stock.</div>'; return; }
+  if(!list.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No items match this filter.</div>'; return; }
+  wrap.innerHTML = `<table class="items-table"><thead><tr><th>#</th><th>Item Name</th><th style="width:90px;">Unit</th><th style="width:110px;">Current Qty</th><th style="width:100px;">Low Alert At</th><th>Notes</th><th></th></tr></thead><tbody>
+    ${list.map((s,rowIdx)=>{
+      const i = s._idx;
+      const low = (s.minQty||0)>0 && (s.currentQty||0)<=s.minQty;
+      return `<tr>
+      <td style="color:var(--text3);">${rowIdx+1}</td>
+      <td><input type="text" value="${(s.name||'').replace(/"/g,'&quot;')}" onchange="fbUpdateStockItemField(${i},'name',this.value)" style="width:100%;"></td>
+      <td><input type="text" value="${(s.unit||'').replace(/"/g,'&quot;')}" onchange="fbUpdateStockItemField(${i},'unit',this.value)" style="width:100%;" placeholder="Pcs"></td>
+      <td style="text-align:right;font-weight:700;color:${low?'var(--neon5)':(s.currentQty<0?'var(--neon5)':'var(--text2)')};">${s.currentQty||0}${low?' ⚠️':''}</td>
+      <td><input type="number" min="0" value="${s.minQty||0}" onchange="fbUpdateStockItemField(${i},'minQty',this.value)" style="width:100%;"></td>
+      <td><input type="text" value="${(s.notes||'').replace(/"/g,'&quot;')}" onchange="fbUpdateStockItemField(${i},'notes',this.value)" style="width:100%;"></td>
+      <td style="white-space:nowrap;"><button type="button" class="btn btn-xs btn-red" onclick="fbDeleteStockItem(${i})">🗑️</button></td>
+    </tr>`;
+    }).join('')}
+  </tbody></table>`;
+  fbRenderStockMovements();
+}
+function fbPopulateStockDatalist(){
+  const dl = document.getElementById('fb-stockitem-list');
+  if(!dl) return;
+  dl.innerHTML = fbStockItems.map(s=>`<option value="${(s.name||'').replace(/"/g,'&quot;')}">`).join('');
+}
+function fbPopulateStockMoveFilter(){
+  const sel = document.getElementById('fb-stock-move-filter');
+  if(!sel) return;
+  const keep = sel.value;
+  sel.innerHTML = '<option value="">All items</option>' + fbStockItems.map(s=>`<option value="${s.id}">${(s.name||'').replace(/"/g,'&quot;')}</option>`).join('');
+  if(keep && fbStockItems.some(s=>s.id===keep)) sel.value = keep;
+}
+function fbUpdateStockItemField(idx, field, val){
+  if(!fbStockItems[idx]) return;
+  if(field==='minQty') fbStockItems[idx][field] = parseFloat(val)||0;
+  else fbStockItems[idx][field] = (val||'').trim();
+  saveFbStockItems();
+  fbRenderStock();
+  toast('Saved','success');
+}
+function fbAddStockItemRow(){
+  fbStockItems.push({id: fbUid(), name:'New Item', unit:'Pcs', currentQty:0, minQty:0, notes:''});
+  saveFbStockItems();
+  fbRenderStock();
+}
+function fbDeleteStockItem(idx){
+  const s = fbStockItems[idx];
+  if(!s) return;
+  if(!confirm(`Delete stock item "${s.name}"? Its movement history will also be removed. Bills already saved are not affected.`)) return;
+  fbStockMovements = fbStockMovements.filter(m=>m.stockItemId!==s.id);
+  fbStockItems.splice(idx,1);
+  saveFbStockItems();
+  saveFbStockMovements();
+  fbRenderStock();
+}
+// Records a movement and applies it to the item's currentQty. qtyDelta can be +/-.
+function fbApplyStockMovement(stockItemId, qtyDelta, type, date, note, ref){
+  const item = fbStockItems.find(s=>s.id===stockItemId);
+  if(!item || !qtyDelta) return;
+  item.currentQty = (item.currentQty||0) + qtyDelta;
+  fbStockMovements.push({ id: fbUid(), stockItemId, type, qty: qtyDelta, date: date||new Date().toISOString().slice(0,10), time: fbNowTime(), note: note||'', ref: ref||'' });
+}
+function fbAdjustStock(){
+  const nameEl = document.getElementById('fb-stock-adj-item');
+  const name = (nameEl?.value||'').trim();
+  const type = document.getElementById('fb-stock-adj-type')?.value || 'purchase';
+  const qty = parseFloat(document.getElementById('fb-stock-adj-qty')?.value) || 0;
+  const note = (document.getElementById('fb-stock-adj-note')?.value||'').trim();
+  if(!name){ toast('Enter a stock item name','warning'); return; }
+  if(!qty || qty<=0){ toast('Enter a qty greater than 0','warning'); return; }
+  let item = fbFindStockItemByName(name);
+  if(!item){ item = {id: fbUid(), name, unit:'Pcs', currentQty:0, minQty:0, notes:''}; fbStockItems.push(item); }
+  const delta = (type==='adjustment_remove') ? -qty : qty;
+  fbApplyStockMovement(item.id, delta, type, new Date().toISOString().slice(0,10), note, '');
+  saveFbStockItems();
+  saveFbStockMovements();
+  if(nameEl) nameEl.value = '';
+  const qtyEl = document.getElementById('fb-stock-adj-qty'); if(qtyEl) qtyEl.value = '';
+  const noteEl = document.getElementById('fb-stock-adj-note'); if(noteEl) noteEl.value = '';
+  fbRenderStock();
+  toast('✅ Stock updated for "'+item.name+'"','success');
+}
+function fbRenderStockMovements(){
+  const wrap = document.getElementById('fb-stock-movements-list');
+  if(!wrap) return;
+  const filterId = document.getElementById('fb-stock-move-filter')?.value || '';
+  let list = fbStockMovements.slice();
+  if(filterId) list = list.filter(m=>m.stockItemId===filterId);
+  list = list.sort((a,b)=>(b.date||'').localeCompare(a.date||'') || (b.time||'').localeCompare(a.time||''));
+  list = list.slice(0,200); // keep the view light on large histories
+  if(!list.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No stock movements yet.</div>'; return; }
+  const typeLabel = {purchase:'➕ Purchase', sale:'➖ Sale (Bill)', adjustment_add:'➕ Correction', adjustment_remove:'➖ Correction', reversal:'↩️ Reversal'};
+  wrap.innerHTML = `<table class="items-table"><thead><tr><th>Date</th><th>Item</th><th>Type</th><th style="text-align:right;">Qty</th><th>Note / Ref</th></tr></thead><tbody>
+    ${list.map(m=>{
+      const item = fbStockItems.find(s=>s.id===m.stockItemId);
+      return `<tr>
+      <td style="white-space:nowrap;">${fmtDate(m.date)}</td>
+      <td>${item ? item.name : '(deleted item)'}</td>
+      <td>${typeLabel[m.type]||m.type}</td>
+      <td style="text-align:right;color:${m.qty<0?'var(--neon5)':'var(--neon4)'};font-weight:700;">${m.qty>0?'+':''}${m.qty}</td>
+      <td style="font-size:11px;color:var(--text3);">${[m.note, m.ref?('Ref: '+m.ref):''].filter(Boolean).join(' — ')}</td>
+    </tr>`;
+    }).join('')}
+  </tbody></table>`;
+}
+// Reconciles stock for a bill's items against what was previously deducted for
+// that same bill: reverses old items' deductions (if any), then deducts for
+// the new item list. Called on create, update, and delete (with newItems=[]).
+// Safe to call even if no items match any stock item — those are simply skipped.
+function fbSyncStockForBill(billId, oldItems, newItems, date, billNo){
+  // 1) reverse whatever was previously recorded against this bill
+  const prevMoves = fbStockMovements.filter(m=>m.ref===billId && m.type==='sale');
+  prevMoves.forEach(m=>{
+    const item = fbStockItems.find(s=>s.id===m.stockItemId);
+    if(item) item.currentQty = (item.currentQty||0) - m.qty; // m.qty is negative, so this adds it back
+  });
+  fbStockMovements = fbStockMovements.filter(m=>!(m.ref===billId && m.type==='sale'));
+  // 2) apply fresh deductions for the current item list
+  (newItems||[]).forEach(it=>{
+    const qty = parseFloat(it.qty)||0;
+    if(!qty) return;
+    const stockItem = fbFindStockItemByName(it.desc);
+    if(!stockItem) return; // no matching stock item — not tracked, skip silently
+    fbApplyStockMovement(stockItem.id, -qty, 'sale', date, `Bill #${billNo}`, billId);
+  });
+  saveFbStockItems();
+  saveFbStockMovements();
 }
 
 // ---- Ledger (per-party, in order, with Paid buttons + lump sum payments) ----
@@ -19438,12 +19937,18 @@ function fbPrintThermalDoc(docId, docType){
     <div class="meta">Customer: ${bill.customerName||''}</div>
     ${bill.shopName ? `<div class="meta">Shop: ${bill.shopName}</div>` : ''}
     ${bill.phone ? `<div class="meta">Ph: ${bill.phone}</div>` : ''}
+    ${(isQuot && bill.validTill) ? `<div class="meta" style="font-weight:700;">Valid Till: ${fmtDate(bill.validTill)}</div>` : ''}
     <hr>
     <table>
       <colgroup><col class="col-item"><col class="col-qty"><col class="col-rate"><col class="col-amt"></colgroup>
       <thead><tr><th>Item</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Amt</th></tr></thead>
       <tbody>${itemRows}</tbody>
-      <tfoot><tr class="totalRow"><td colspan="2">TOTAL</td><td colspan="2" style="text-align:right;">${fmt(bill.total)}</td></tr></tfoot>
+      <tfoot>
+        ${(bill.discount && bill.discount.value>0) ? `
+        <tr><td colspan="2" style="font-size:12px;">Subtotal</td><td colspan="2" style="text-align:right;font-size:12px;">${fmt(bill.subtotal!=null?bill.subtotal:bill.total)}</td></tr>
+        <tr><td colspan="2" style="font-size:12px;">Discount${bill.discount.type==='percent'?` (${bill.discount.value}%)`:''}</td><td colspan="2" style="text-align:right;font-size:12px;">-${fmt((bill.subtotal!=null?bill.subtotal:bill.total)-bill.total)}</td></tr>` : ''}
+        <tr class="totalRow"><td colspan="2">TOTAL</td><td colspan="2" style="text-align:right;">${fmt(bill.total)}</td></tr>
+      </tfoot>
     </table>
     <hr>
     <div class="footer">${flagged ? flagWord : 'Thank you!'}</div>
@@ -19672,11 +20177,14 @@ function fbPrintA4Doc(docId, docType){
     </div>
     <div class="doctype">${docWord}</div>
     <div class="metarow">
-      <div><strong>${noWord}:</strong> ${docNo}<br><strong>Date:</strong> ${fmtDate(bill.date)}${flagged ? `<br><span class="flag-tag">${flagWord}</span>` : ''}</div>
+      <div><strong>${noWord}:</strong> ${docNo}<br><strong>Date:</strong> ${fmtDate(bill.date)}${(isQuot && bill.validTill) ? `<br><strong>Valid Till:</strong> ${fmtDate(bill.validTill)}` : ''}${flagged ? `<br><span class="flag-tag">${flagWord}</span>` : ''}</div>
       <div style="text-align:right;"><strong>Customer:</strong> ${bill.customerName}<br>${bill.shopName?('<strong>Shop:</strong> '+bill.shopName+'<br>'):''}${bill.phone?('<strong>Ph:</strong> '+bill.phone):''}</div>
     </div>
     <table><thead><tr><th>Sr#</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead>
     <tbody>${rows}
+      ${(bill.discount && bill.discount.value>0) ? `
+      <tr><td colspan="4" style="border:1px solid #999;padding:5px;text-align:right;font-size:12px;">Subtotal</td><td style="border:1px solid #999;padding:5px;text-align:right;font-size:12px;">${fmt(bill.subtotal!=null?bill.subtotal:bill.total)}</td></tr>
+      <tr><td colspan="4" style="border:1px solid #999;padding:5px;text-align:right;font-size:12px;">Discount${bill.discount.type==='percent'?` (${bill.discount.value}%)`:''}</td><td style="border:1px solid #999;padding:5px;text-align:right;font-size:12px;">-${fmt((bill.subtotal!=null?bill.subtotal:bill.total)-bill.total)}</td></tr>` : ''}
       <tr class="totrow"><td colspan="4" style="border:1px solid #999;padding:6px;text-align:right;">TOTAL</td><td style="border:1px solid #999;padding:6px;text-align:right;">${fmt(bill.total)}</td></tr>
     </tbody></table>
     ${(!isQuot && flagged) ? `
