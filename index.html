@@ -3098,6 +3098,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Track item quantities for Fast Billing. When a bill's item description matches a stock item's name exactly (not case-sensitive), that quantity is automatically deducted when the bill is saved, and restored if the bill is edited or deleted. Everything here is included in the same full JSON backup as the rest of the app — no separate backup needed.</div>
     <div id="fb-stock-summary-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px;"></div>
     <button type="button" class="btn btn-purple btn-sm" style="margin-bottom:14px;" onclick="fbOpenStockValueReport()">🔒 Full Stock Value Report (Admin)</button>
+    <button type="button" class="btn btn-neon btn-sm" style="margin-bottom:14px;margin-left:8px;" onclick="fbOpenStockAvailReport()">📋 Stock Availability Report</button>
 
     <div class="form-row" style="align-items:flex-end;">
       <div class="form-group" style="flex:2;"><label>Search Item</label><input type="text" id="fb-stock-search" placeholder="🔍 e.g. spot 12w (any word, any order)" oninput="fbRenderStock()"></div>
@@ -3173,6 +3174,29 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     </div>
     <div class="divider"></div>
     <div id="fb-stock-value-table" style="max-height:400px;overflow:auto;"></div>
+  </div>
+</div>
+</div>
+
+<!-- STOCK AVAILABILITY REPORT MODAL (Fast Billing: Stock tab, no admin lock — quantities only, no rates/values) -->
+<div class="modal-overlay" id="fb-stock-avail-modal">
+<div class="modal" style="max-width:820px;">
+  <div class="modal-header">
+    <h3>📋 Stock Availability Report</h3>
+    <button class="close-btn" onclick="closeModal('fb-stock-avail-modal')">✕</button>
+  </div>
+  <div class="modal-body">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Sirf quantities — kitna stock available hai, kitna low hai, aur kitna khatam ho chuka hai. Koi price/value nahi (uske liye 🔒 Full Stock Value Report use karein).</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+      <button type="button" class="btn btn-sm" id="fb-stock-avail-tab-available" onclick="fbSwitchStockAvailTab('available')">✅ Available Stock</button>
+      <button type="button" class="btn btn-sm" id="fb-stock-avail-tab-low" onclick="fbSwitchStockAvailTab('low')">⚠️ Low Stock</button>
+      <button type="button" class="btn btn-sm" id="fb-stock-avail-tab-out" onclick="fbSwitchStockAvailTab('out')">❌ Out of Stock</button>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <div id="fb-stock-avail-count" style="font-size:12px;color:var(--text3);"></div>
+      <button type="button" class="btn btn-purple btn-sm" onclick="fbDownloadStockAvailPDF()">📄 Download PDF</button>
+    </div>
+    <div id="fb-stock-avail-table" style="max-height:420px;overflow:auto;"></div>
   </div>
 </div>
 </div>
@@ -11066,7 +11090,7 @@ function renderQuotationDashboard(){
     ? topItems.map(([desc,cnt])=>`<div class="accent-box mb-8" style="display:flex;align-items:center;gap:8px;">
         <span class="badge badge-invoiced">${cnt}x</span>
         <span style="font-size:12px;flex:1;">${desc}</span>
-        <button class="btn btn-neon btn-xs" onclick="document.getElementById('qb-desc').value='${desc.replace(/'/g,"\\'")}';renderQbDescPreview();document.getElementById('qb-card').scrollIntoView({behavior:'smooth'});">➕ Reuse</button>
+        <button class="btn btn-neon btn-xs" onclick="document.getElementById('qb-desc').value='${desc.replace(/'/g,"\\'").replace(/"/g,'&quot;')}';renderQbDescPreview();document.getElementById('qb-card').scrollIntoView({behavior:'smooth'});">➕ Reuse</button>
       </div>`).join('')
     : '<div style="color:var(--text3);font-size:12px;">No items yet. Save a quotation to see top items.</div>';
   // Recent parties
@@ -18750,8 +18774,22 @@ function fbRemoveItemRow(idx){
   fbRenderItemsTable();
 }
 function fbUpdateItemField(idx, field, val){
-  if(!fbCurrentItems[idx]) return;
-  fbCurrentItems[idx][field] = (field==='desc') ? val : (parseFloat(val)||0);
+  const it = fbCurrentItems[idx];
+  if(!it) return;
+  if(field==='desc'){
+    const newDesc = (val||'').trim();
+    const oldDesc = (it.desc||'').trim();
+    if(newDesc && newDesc.toLowerCase()!==oldDesc.toLowerCase()){
+      const stockItem = fbFindStockItemByName(newDesc);
+      if(stockItem && (parseFloat(stockItem.currentQty)||0)<=0){
+        if(!confirm(`⚠️ "${newDesc}" is OUT OF STOCK (0 ${stockItem.unit||'units'} available). Add it to this bill anyway?`)){
+          fbRenderItemsTable();
+          return;
+        }
+      }
+    }
+  }
+  it[field] = (field==='desc') ? val : (parseFloat(val)||0);
   if(field==='desc') fbAutofillRateForItem(idx);
   fbRenderItemsTable();
 }
@@ -18864,7 +18902,7 @@ function fbDescSuggestInput(inputEl, idx, mode){
   let matches = q ? names.filter(n=>fbFuzzyMatch(n,q)) : names;
   matches = matches.slice(0,30);
   if(!matches.length){ box.style.display='none'; return; }
-  box.innerHTML = matches.map(n=>`<div style="padding:7px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''" onmousedown="fbDescSuggestPick(event,'${n.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">${n.replace(/</g,'&lt;')}</div>`).join('');
+  box.innerHTML = matches.map(n=>`<div style="padding:7px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''" onmousedown="fbDescSuggestPick(event,'${n.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;')}')">${n.replace(/</g,'&lt;')}</div>`).join('');
   const rect = inputEl.getBoundingClientRect();
   box.style.left = rect.left+'px';
   box.style.top = (rect.bottom+2)+'px';
@@ -19939,6 +19977,19 @@ function fbRenderDescriptionsSettings(){
 }
 function fbUpdateDescriptionField(idx, field, val){
   if(!fbDescriptions[idx]) return;
+  if(field==='desc'){
+    const newDesc = (val||'').trim();
+    const oldDesc = (fbDescriptions[idx].desc||'').trim();
+    if(newDesc && newDesc.toLowerCase()!==oldDesc.toLowerCase()){
+      const dup = fbDescriptions.find((d,i)=>i!==idx && (d.desc||'').trim().toLowerCase()===newDesc.toLowerCase());
+      if(dup){
+        if(!confirm(`⚠️ "${newDesc}" already exists in the Rate List (Retailer Price: ${dup.rate||0}). Save as a duplicate anyway?`)){
+          fbRenderDescriptionsSettings();
+          return;
+        }
+      }
+    }
+  }
   if(field==='desc' || field==='cartonQty') fbDescriptions[idx][field] = (val||'').trim();
   else fbDescriptions[idx][field] = (parseFloat(val)||0);
   saveFbDescriptions();
@@ -20111,6 +20162,68 @@ function fbOpenStockValueReport(){
   openModal('fb-stock-value-modal');
   const discEl = document.getElementById('fb-stock-value-discpct'); if(discEl) discEl.value = 0;
   fbRenderStockValueReport();
+}
+// ---- Stock Availability Report: quantities only (no rates/values), no admin lock.
+// Three views: Available (qty > low-alert level), Low Stock (qty>0 but <= min), Out of Stock (qty<=0).
+let fbStockAvailTab = 'available';
+function fbOpenStockAvailReport(){
+  fbStockAvailTab = 'available';
+  openModal('fb-stock-avail-modal');
+  fbRenderStockAvailReport();
+}
+function fbSwitchStockAvailTab(tab){
+  fbStockAvailTab = tab;
+  fbRenderStockAvailReport();
+}
+function fbGetStockAvailRows(tab){
+  const low = fbStockItems.filter(s=>(s.minQty||0)>0 && (s.currentQty||0)>0 && (s.currentQty||0)<=s.minQty);
+  const out = fbStockItems.filter(s=>(s.currentQty||0)<=0);
+  const lowIds = new Set(low.map(s=>s.id));
+  const outIds = new Set(out.map(s=>s.id));
+  const available = fbStockItems.filter(s=>!lowIds.has(s.id) && !outIds.has(s.id));
+  if(tab==='low') return low;
+  if(tab==='out') return out;
+  return available;
+}
+function fbRenderStockAvailReport(){
+  const tabs = {available:'fb-stock-avail-tab-available', low:'fb-stock-avail-tab-low', out:'fb-stock-avail-tab-out'};
+  Object.entries(tabs).forEach(([key,id])=>{
+    const btn = document.getElementById(id);
+    if(btn) btn.className = 'btn btn-sm' + (fbStockAvailTab===key ? ' btn-neon' : '');
+  });
+  const rows = fbGetStockAvailRows(fbStockAvailTab).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const countEl = document.getElementById('fb-stock-avail-count');
+  const labels = {available:'Available Stock', low:'Low Stock', out:'Out of Stock'};
+  if(countEl) countEl.textContent = `${rows.length} item(s) — ${labels[fbStockAvailTab]}`;
+  const tableWrap = document.getElementById('fb-stock-avail-table');
+  if(!tableWrap) return;
+  if(!rows.length){ tableWrap.innerHTML = `<div style="color:var(--text3);font-size:12px;">No items in "${labels[fbStockAvailTab]}" right now.</div>`; return; }
+  tableWrap.innerHTML = `<table class="items-table"><thead><tr><th>#</th><th>Item</th><th style="width:80px;">Unit</th><th style="width:110px;">Current Qty</th><th style="width:110px;">Low Alert At</th><th style="width:110px;">🏭 Location</th></tr></thead><tbody>
+    ${rows.map((s,i)=>`<tr>
+      <td style="color:var(--text3);">${i+1}</td>
+      <td>${(s.name||'').replace(/</g,'&lt;')}</td>
+      <td style="color:var(--text3);">${(s.unit||'').replace(/</g,'&lt;')}</td>
+      <td style="text-align:right;font-weight:700;color:${(s.currentQty||0)<=0?'var(--neon5)':((s.minQty||0)>0&&(s.currentQty||0)<=s.minQty?'#ff6a00':'var(--text2)')};">${s.currentQty||0}</td>
+      <td style="text-align:right;color:var(--text3);">${s.minQty||0}</td>
+      <td style="color:var(--text3);">${(s.location||'').replace(/</g,'&lt;')}</td>
+    </tr>`).join('')}
+  </tbody></table>`;
+}
+function fbDownloadStockAvailPDF(){
+  const labels = {available:'Available Stock', low:'Low Stock', out:'Out of Stock'};
+  const rows = fbGetStockAvailRows(fbStockAvailTab).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  if(!rows.length){ toast('No items to export in this list','warning'); return; }
+  const doc = new jspdf.jsPDF();
+  let y = pdfHeader(doc, `Stock Report — ${labels[fbStockAvailTab]}`);
+  doc.autoTable({
+    startY:y,
+    head:[['#','Item','Unit','Current Qty','Low Alert At','Location']],
+    body: rows.map((s,i)=>[i+1, s.name||'', s.unit||'', s.currentQty||0, s.minQty||0, s.location||'']),
+    styles:{fontSize:9}, headStyles:{fillColor:[20,20,40]}
+  });
+  stampBrandLogoOnAllPages(doc);
+  doc.save(`Stock_${fbStockAvailTab}_${new Date().toISOString().slice(0,10)}.pdf`);
+  toast('Stock Availability PDF generated','success');
 }
 function fbRenderStockValueReport(){
   const cardsWrap = document.getElementById('fb-stock-value-cards');
