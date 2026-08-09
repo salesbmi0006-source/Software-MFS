@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SAU CORPORATION | FULL MANAGEMENT v31</title>
+<title>MFS | FULL MANAGEMENT</title>
 <link id="pwa-manifest-link" rel="manifest" href="">
 <script>
 // PHASE 14 — inline Web App Manifest (single-file app, so it's built as a
@@ -363,7 +363,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
     <div style="display:flex;gap:8px;">
       <button class="btn btn-sm" style="flex:1;background:var(--bg3);border:1px solid var(--neon4);color:var(--neon4);padding:10px 6px;" onclick="empLoginFromLock()" title="Employee login — see only your own dispatch/attendance/commission">👤 Employee Login</button>
     </div>
-    <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--text3);">SAU CORPORATION v31 | Management System</div>
+    <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--text3);">MFS | FULL MANAGEMENT</div>
   </div>
 </div>
 <!-- APP CONTENT -->
@@ -4127,7 +4127,7 @@ const DEFAULT_SETTINGS = {
   address:'167B Railway Road Faisalabad.Zam Zam Tower H22 Johar Town,Lahore.\n',
   phone:'0307-7776464', email:'Asimumair86@yahoo.com',
   autoBackup:'off', backupPrefix:'SAU_Backup', backupInterval:'30',
-  backupFolder:'', defaultFilter:'all', pageTitle:'SAU CORPORATION | FULL MANAGEMENT',
+  backupFolder:'', defaultFilter:'all', pageTitle:'MFS | FULL MANAGEMENT',
   perPage:'100', theme:'cyan', defaultTax:'18', currency:'PKR',
   furtherTax:'3', defaultUom:'Pcs', openingQty:0, openingAmt:0, mode:'dark',
   pdfFullDetails:true, pdfReportOrder:'invoice', approvalWorkflowEnabled:false,
@@ -4152,6 +4152,12 @@ function renderHeaderButtons(){
   if(!wrap) return;
   if(!settings.headerButtons) settings.headerButtons = {...DEFAULT_SETTINGS.headerButtons};
   wrap.innerHTML = HEADER_BTN_DEFS.filter(b=>settings.headerButtons[b.id]!==false).map(b=>b.html()).join('');
+  // Bug fix: re-rendering the header buttons (which happens whenever settings are
+  // applied — toggling a header button, changing theme/mode, etc.) recreates the
+  // 🔔 badge element fresh/hidden each time, wiping out the notification count
+  // until something else happened to call updateNotifBadge() again. Refresh it
+  // right here so the count never silently disappears.
+  if(typeof updateNotifBadge==='function') updateNotifBadge();
 }
 function renderHeaderButtonsSettings(){
   const el = document.getElementById('header-buttons-settings');
@@ -9575,26 +9581,25 @@ function drawTerminationNote(doc, emp, startY){
   const contentW = pageW-36;
   let img=null, imgH=0;
   try{
-    const urduText = `ملازم کو ${exitDateStr} کو ملازمت سے فارغ کر دیا گیا۔ یہ اس کا آخری دن تھا۔ اس تاریخ تک تمام واجبات اور کلیئرنس ادا کر دی گئی، اور ریکارڈ اس تاریخ سے بند کر دیا گیا۔`;
-    img = urduTextToImageDataUrl(urduText, {fontPx:22, maxWidthPx:1100});
+    const urduText = `ملازم کو ${exitDateStr} کو ملازمت سے فارغ کر دیا گیا۔ اس تاریخ تک واجبات و کلیئرنس ادا کر کے ریکارڈ بند کر دیا گیا۔`;
+    img = urduTextToImageDataUrl(urduText, {fontPx:16, maxWidthPx:1700});
     imgH = contentW * (img.height/img.width);
   }catch(e){ img=null; }
-  const boxH = 18 + (img?imgH+3:0);
+  const boxH = 11.5 + (img?imgH+2:0);
   let y = startY;
   if(y + boxH + 4 > pageH - 10){ doc.addPage(); y = 15; }
   doc.setDrawColor(200,0,0); doc.setFillColor(255,235,235);
   doc.roundedRect(14, y, pageW-28, boxH, 2, 2, 'FD');
-  doc.setTextColor(180,0,0); doc.setFont(undefined,'bold'); doc.setFontSize(10);
-  doc.text('🔴 TERMINATED', 18, y+6);
-  doc.setFont(undefined,'normal'); doc.setFontSize(8.3);
-  doc.text(`Last working day: ${exitDateStr}. This was the employee's final day with the company.`, 18, y+11);
-  doc.text(`All dues and clearance were settled as of this date. Record closed from the termination date.`, 18, y+15);
+  doc.setTextColor(180,0,0); doc.setFont(undefined,'bold'); doc.setFontSize(9);
+  doc.text('TERMINATED', 18, y+5);
+  doc.setFont(undefined,'normal'); doc.setFontSize(7.6);
+  doc.text(`Last working day: ${exitDateStr}. All dues & clearance settled; record closed from this date.`, 18, y+9);
   doc.setTextColor(0,0,0);
   if(img){
-    try{ doc.addImage(img.dataUrl, 'PNG', 18, y+17.5, contentW-4, imgH); }catch(e){ /* image embed failed - English note above still stands */ }
+    try{ doc.addImage(img.dataUrl, 'PNG', 18, y+10.3, contentW-4, imgH); }catch(e){ /* image embed failed - English note above still stands */ }
   }
   doc.setDrawColor(0,0,0);
-  return y+boxH+5;
+  return y+boxH+3;
 }
 function pdfHeader(doc, title){
   if(settings.logoBase64){
@@ -13533,7 +13538,7 @@ function buildSalarySlipPage(doc, s, startY, emp){
   y+=5;
   doc.text('Employee Signature', 14, y);
   doc.text('Authorized Signature', 130, y);
-  y = drawTerminationNote(doc, emp, y+8);
+  y = drawTerminationNote(doc, emp, y+4);
   return y;
 }
 // ---- Compact Attendance Calendar block, drawn at the END of a salary slip
@@ -13656,7 +13661,7 @@ function buildQuickSalarySlipPage(doc, s, startY, emp){
   y+=5;
   doc.text('Employee Signature', 14, y);
   doc.text('Authorized Signature', 130, y);
-  y = drawTerminationNote(doc, emp, y+8);
+  y = drawTerminationNote(doc, emp, y+4);
   return y;
 }
 function downloadQuickSalarySlipPDF(slipId){
@@ -20383,7 +20388,9 @@ function fbDownloadStockAvailPDF(){
 function fbComputeStockValueRows(discPctOverride){
   const discPct = Math.max(0, Math.min(100, discPctOverride!==undefined ? discPctOverride : (parseFloat(document.getElementById('fb-stock-value-discpct')?.value)||0)));
   let totalQty=0, totalRetailerValue=0, totalConsumerValue=0;
-  const rows = fbStockItems.map(s=>{
+  // Only items with stock on hand belong in a "value" report — an item sitting at
+  // qty 0 has zero value and cluttered the list/PDF without saying anything useful.
+  const rows = fbStockItems.filter(s=>(parseFloat(s.currentQty)||0)>0).map(s=>{
     const desc = fbDescriptions.find(d=>(d.desc||'').trim().toLowerCase()===(s.name||'').trim().toLowerCase());
     const retailerRate = desc ? (parseFloat(desc.rate)||0) : 0;
     const consumerRate = desc ? (parseFloat(desc.consumerRate)||0) : 0;
@@ -20406,7 +20413,7 @@ function fbRenderStockValueReport(){
   const cur = settings.currency||'PKR';
   const {discPct, rows, totalQty, totalRetailerValue, totalConsumerValue, distributorProfit, grossMarginPct} = fbComputeStockValueRows();
   cardsWrap.innerHTML = `
-    <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">Stock Items</div><div style="font-size:16px;font-weight:800;">${fbStockItems.length}</div></div>
+    <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">Stock Items (in-stock only)</div><div style="font-size:16px;font-weight:800;">${rows.length}</div></div>
     <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">Total Qty (all items)</div><div style="font-size:16px;font-weight:800;">${fmt(totalQty)}</div></div>
     <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">Total Retailer Value</div><div style="font-size:16px;font-weight:800;color:var(--neon);">${cur} ${fmt(totalRetailerValue)}</div></div>
     <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">Total Consumer Value</div><div style="font-size:16px;font-weight:800;color:var(--neon5);">${cur} ${fmt(totalConsumerValue)}</div></div>`;
@@ -20454,7 +20461,7 @@ function fbDownloadFullStockValuePDF(){
     startY:y,
     head:[['Description','Amount']],
     body:[
-      ['Total Stock Items', String(fbStockItems.length)],
+      ['Total Stock Items (in-stock only)', String(rows.length)],
       ['Total Quantity (all items)', fmt(totalQty)],
       ['Total Value at Retailer Price', cur+' '+fmt(totalRetailerValue)],
       ['Total Value at Consumer Price', cur+' '+fmt(totalConsumerValue)],
