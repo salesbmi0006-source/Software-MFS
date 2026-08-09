@@ -13551,42 +13551,59 @@ function buildAttendanceCalendarBlock(doc, emp, month, startY){
   if(!yy || !mm) return startY;
   const daysInMonth = new Date(yy, mm, 0).getDate();
   const firstDow = new Date(yy, mm-1, 1).getDay(); // 0=Sun
-  const cell = 7.2, gap = 0.8;
   const rows = Math.ceil((daysInMonth+firstDow)/7);
-  const gridH = 4 + rows*(cell+gap) + 9; // header row + grid + legend
+  const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
+  const startX = 14;
+  const gap = 0.7;
+  // Grow the grid sideways (wide cells) instead of stacking tall square
+  // cells — the page has plenty of spare width, so use it to keep the
+  // grid short enough to stay on page 1 with the rest of the slip.
+  const contentW = pageW - 28;
+  let cellW = Math.min(16, (contentW - 6*gap) / 7);
+  let cellH = 5.6;
   let y = startY;
-  if(y + gridH + 12 > pageH - 10){ doc.addPage(); y = 15; }
+  // If there isn't enough room left on the current page at the normal
+  // row height, shrink the row height (not the cell width) until the
+  // whole grid + legend fits, rather than pushing to a second page.
+  const headerH = 4, legendH = 9, safety = 4;
+  const availH = (pageH - 10) - y - headerH - legendH - safety;
+  const neededH = rows*(cellH+gap);
+  if(neededH > availH && availH > rows*2.6){
+    cellH = Math.max(3.2, (availH/rows) - gap);
+  }
+  const gridH = headerH + rows*(cellH+gap) + legendH;
+  if(y + gridH + 6 > pageH - 10){ doc.addPage(); y = 15; }
   doc.setFontSize(10); doc.setFont(undefined,'bold');
   doc.text(`Attendance Calendar — ${month}`, 14, y); y+=5;
   const colors = {present:[30,125,50],halfday:[184,134,11],late:[212,160,23],leave:[21,101,192],absent:[183,28,28]};
   const labels = {present:'P',halfday:'H',late:'La',leave:'Lv',absent:'A'};
   const attByDate = {};
   (emp.attendance||[]).forEach(a=>{ if(a.date) attByDate[a.date]=a.type; });
-  const startX = 14;
   const dowNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   doc.setFontSize(7); doc.setFont(undefined,'bold'); doc.setTextColor(120,120,120);
-  dowNames.forEach((d,i)=>{ doc.text(d, startX + i*(cell+gap) + cell/2, y, {align:'center'}); });
+  dowNames.forEach((d,i)=>{ doc.text(d, startX + i*(cellW+gap) + cellW/2, y, {align:'center'}); });
   doc.setTextColor(0,0,0);
   y += 4;
+  const dayFontSize = cellH < 4.4 ? 5.4 : 6.2;
   let col = firstDow, row = 0;
   for(let d=1; d<=daysInMonth; d++){
     const dateStr = `${month}-${String(d).padStart(2,'0')}`;
     const type = attByDate[dateStr];
-    const x = startX + col*(cell+gap);
-    const cy = y + row*(cell+gap);
+    const x = startX + col*(cellW+gap);
+    const cy = y + row*(cellH+gap);
     if(type && colors[type]){ doc.setFillColor(...colors[type]); doc.setTextColor(255,255,255); }
     else { doc.setFillColor(230,230,230); doc.setTextColor(90,90,90); }
-    doc.rect(x, cy, cell, cell, 'F');
-    doc.setFont(undefined,'normal'); doc.setFontSize(6.2);
-    doc.text(String(d), x+0.8, cy+2.8);
-    if(type) doc.text(labels[type]||'', x+0.8, cy+6.3);
+    doc.rect(x, cy, cellW, cellH, 'F');
+    doc.setFont(undefined,'normal'); doc.setFontSize(dayFontSize);
+    doc.text(String(d), x+0.9, cy+dayFontSize*0.42+0.4);
+    if(type) doc.text(labels[type]||'', x+cellW-6.5, cy+dayFontSize*0.42+0.4);
     col++;
     if(col>6){ col=0; row++; }
   }
   doc.setTextColor(0,0,0);
   const totalRows = row + (col>0?1:0);
-  y += totalRows*(cell+gap) + 4;
+  y += totalRows*(cellH+gap) + 4;
   doc.setFontSize(7); doc.setFont(undefined,'normal');
   let lx = startX;
   Object.keys(labels).forEach(k=>{
