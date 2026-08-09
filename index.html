@@ -84,6 +84,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 #header-left h1{font-size:18px;font-weight:800;background:linear-gradient(90deg,var(--neon),var(--neon2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:1px;}
 #header-left p{font-size:11px;color:var(--text2);}
 #header-center{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+#header-buttons-wrap{display:inline-flex;gap:8px;flex-wrap:wrap;align-items:center;}
 #header-right{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text2);}
 #clock{font-family:monospace;color:var(--neon);font-size:13px;font-weight:700;}
 #operator-name{color:var(--neon4);font-weight:700;font-size:13px;animation:blink 2s infinite;}
@@ -3172,6 +3173,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
       <div class="form-group"><label>Distributor Discount % (Retailer Price se)</label><input type="number" id="fb-stock-value-discpct" min="0" max="100" step="any" value="0" oninput="fbRenderStockValueReport()" placeholder="e.g. 15"></div>
       <div class="form-group" style="flex:2;"><div id="fb-stock-value-profit" style="font-size:13px;font-weight:700;color:var(--neon4);"></div></div>
     </div>
+    <div style="margin-bottom:10px;"><button type="button" class="btn btn-purple btn-sm" onclick="fbDownloadFullStockValuePDF()">📄 Download Full Report PDF (Items + Profit/Loss + Balance Sheet)</button></div>
     <div class="divider"></div>
     <div id="fb-stock-value-table" style="max-height:400px;overflow:auto;"></div>
   </div>
@@ -3188,6 +3190,7 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
   <div class="modal-body">
     <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Sirf quantities — kitna stock available hai, kitna low hai, aur kitna khatam ho chuka hai. Koi price/value nahi (uske liye 🔒 Full Stock Value Report use karein).</div>
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+      <button type="button" class="btn btn-sm" id="fb-stock-avail-tab-all" onclick="fbSwitchStockAvailTab('all')">📋 All</button>
       <button type="button" class="btn btn-sm" id="fb-stock-avail-tab-available" onclick="fbSwitchStockAvailTab('available')">✅ Available Stock</button>
       <button type="button" class="btn btn-sm" id="fb-stock-avail-tab-low" onclick="fbSwitchStockAvailTab('low')">⚠️ Low Stock</button>
       <button type="button" class="btn btn-sm" id="fb-stock-avail-tab-out" onclick="fbSwitchStockAvailTab('out')">❌ Out of Stock</button>
@@ -4130,7 +4133,7 @@ const DEFAULT_SETTINGS = {
   pdfFullDetails:true, pdfReportOrder:'invoice', approvalWorkflowEnabled:false,
   poApprovalWorkflowEnabled:false, expApprovalWorkflowEnabled:false, chqApprovalWorkflowEnabled:false,
   logoBase64:'',
-  headerButtons:{notif:true,newdc:true,dashboard:true,backup:true,po:true,settings:true,mode:true,emplogin:true}
+  headerButtons:{notif:true,newdc:true,dashboard:true,backup:true,po:true,fastbilling:true,settings:true,mode:true,emplogin:true}
 };
 // Definitions for every optional header button. id must match a key in settings.headerButtons.
 const HEADER_BTN_DEFS = [
@@ -4139,6 +4142,7 @@ const HEADER_BTN_DEFS = [
   {id:'dashboard', label:'📊 Dashboard', html:()=>`<button class="btn btn-purple btn-sm" onclick="showTab('dashboard')">📊 Dashboard</button>`},
   {id:'backup',  label:'💾 Backup', html:()=>`<button class="btn btn-green btn-sm" onclick="doBackup()">💾 Backup</button>`},
   {id:'po',      label:'📝 Purchase Order Module', html:()=>`<button class="btn btn-sm" style="background:var(--bg3);border:1px solid var(--neon2);color:var(--neon2);" onclick="showTab('purchaseorders')">📝 Purchase Orders</button>`},
+  {id:'fastbilling', label:'⚡ Fast Billing', html:()=>`<button class="btn btn-sm" style="background:var(--bg3);border:1px solid #ffb020;color:#ffb020;" onclick="showTab('fastbilling')">⚡ Fast Billing</button>`},
   {id:'settings',label:'⚙️ Settings', html:()=>`<button class="btn btn-yellow btn-sm" onclick="openModal('settingsModal')">⚙️ Settings</button>`},
   {id:'mode',    label:'🌙 Dark/Light Mode Toggle', html:()=>`<button class="btn btn-sm" id="modeToggleBtn" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);" onclick="toggleModeQuick()" title="Toggle Dark/Light Mode">${settings.mode==='light'?'☀️':'🌙'}</button>`},
   {id:'emplogin',label:'👤 Employee Login', html:()=>`<button class="btn btn-sm" style="background:var(--bg3);border:1px solid var(--neon4);color:var(--neon4);" onclick="openEmpLoginModal()" title="Employee login — see only your own dispatch/attendance/commission">👤 Employee Login</button>`}
@@ -6000,6 +6004,7 @@ const MOBILE_MORE_GROUPS = [
     {id:'dashboard',label:'Dashboard',icon:'📊'},{id:'analytics',label:'Analytics',icon:'📊'}
   ]},
   {label:'Sales & Documents', tabs:[
+    {id:'fastbilling',label:'Fast Billing',icon:'⚡'},
     {id:'ledger',label:'Ledger',icon:'📒'},{id:'fbr',label:'FBR/Tax',icon:'🧾'},
     {id:'quotation',label:'Quotation',icon:'💬'},{id:'descriptions',label:'Descriptions',icon:'📄'},
     {id:'digitalinvoices',label:'D.Invoices',icon:'📎'},{id:'docmanager',label:'Documents',icon:'📁'}
@@ -9519,6 +9524,78 @@ function executeDescMerge(){
 }
 
 // ==================== PO NUMBER IN PDF ====================
+// ---- Renders Urdu/Nastaliq text to a PNG image via <canvas> so it can be
+// embedded into a jsPDF document. jsPDF's built-in fonts (Helvetica/Times/
+// Courier) contain no Arabic-script glyphs and jsPDF does no RTL/contextual
+// shaping of its own, so plain doc.text() cannot show Urdu correctly. The
+// browser's canvas text engine, however, already knows how to shape and
+// join Arabic-script letters and lay them out right-to-left, so drawing the
+// text to a canvas and embedding the resulting image sidesteps that gap
+// entirely. ----
+function urduTextToImageDataUrl(text, opts={}){
+  const fontPx = opts.fontPx || 22;
+  const color = opts.color || '#111111';
+  const maxWidthPx = opts.maxWidthPx || 1100;
+  const fontFamily = "'Jameel Noori Nastaleeq','Noto Nastaliq Urdu',Tahoma,'Segoe UI',Arial,sans-serif";
+  const measure = document.createElement('canvas').getContext('2d');
+  measure.font = `${fontPx}px ${fontFamily}`;
+  const words = text.split(' ');
+  const lines = []; let line = '';
+  words.forEach(w=>{
+    const test = line ? line+' '+w : w;
+    if(measure.measureText(test).width > maxWidthPx && line){ lines.push(line); line = w; }
+    else line = test;
+  });
+  if(line) lines.push(line);
+  const lineHeight = fontPx*1.55;
+  const width = maxWidthPx, height = Math.ceil(lines.length*lineHeight + 8);
+  const scale = 3; // supersample for a crisp result once scaled down into the PDF
+  const canvas = document.createElement('canvas');
+  canvas.width = width*scale; canvas.height = height*scale;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  ctx.font = `${fontPx}px ${fontFamily}`;
+  ctx.fillStyle = color;
+  ctx.direction = 'rtl';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+  lines.forEach((l,i)=>{ ctx.fillText(l, width-2, 4+i*lineHeight); });
+  return { dataUrl: canvas.toDataURL('image/png'), width, height };
+}
+// ---- Draws the bilingual (English + Urdu) "Terminated" notice used on
+// salary slips. Only shows when the employee's status is 'terminated' and
+// an exit date is on file — active/resigned/on-leave employees get no box.
+// Placed by the caller right after the signature line, before the
+// attendance calendar block. ----
+function drawTerminationNote(doc, emp, startY){
+  if(!emp || emp.status!=='terminated' || !emp.exitDate) return startY;
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const exitDateStr = fmtDate(emp.exitDate);
+  const contentW = pageW-36;
+  let img=null, imgH=0;
+  try{
+    const urduText = `ملازم کو ${exitDateStr} کو ملازمت سے فارغ کر دیا گیا۔ یہ اس کا آخری دن تھا۔ اس تاریخ تک تمام واجبات اور کلیئرنس ادا کر دی گئی، اور ریکارڈ اس تاریخ سے بند کر دیا گیا۔`;
+    img = urduTextToImageDataUrl(urduText, {fontPx:22, maxWidthPx:1100});
+    imgH = contentW * (img.height/img.width);
+  }catch(e){ img=null; }
+  const boxH = 18 + (img?imgH+3:0);
+  let y = startY;
+  if(y + boxH + 4 > pageH - 10){ doc.addPage(); y = 15; }
+  doc.setDrawColor(200,0,0); doc.setFillColor(255,235,235);
+  doc.roundedRect(14, y, pageW-28, boxH, 2, 2, 'FD');
+  doc.setTextColor(180,0,0); doc.setFont(undefined,'bold'); doc.setFontSize(10);
+  doc.text('🔴 TERMINATED', 18, y+6);
+  doc.setFont(undefined,'normal'); doc.setFontSize(8.3);
+  doc.text(`Last working day: ${exitDateStr}. This was the employee's final day with the company.`, 18, y+11);
+  doc.text(`All dues and clearance were settled as of this date. Record closed from the termination date.`, 18, y+15);
+  doc.setTextColor(0,0,0);
+  if(img){
+    try{ doc.addImage(img.dataUrl, 'PNG', 18, y+17.5, contentW-4, imgH); }catch(e){ /* image embed failed - English note above still stands */ }
+  }
+  doc.setDrawColor(0,0,0);
+  return y+boxH+5;
+}
 function pdfHeader(doc, title){
   if(settings.logoBase64){
     try{
@@ -13405,7 +13482,7 @@ function shareSalarySlipEmail(slipId){
   const body = `Dear ${s.empName},\n\nHere is your salary summary for ${s.month}:\nBase Salary: ${cur} ${fmt(s.baseSalary)}\nDeduction: ${cur} ${fmt(s.deduction)}\nBonus/Overtime: ${cur} ${fmt((s.bonus||0)+(s.overtime||0))}\nAdvance Deducted: ${cur} ${fmt(s.advance)}\nTax/EOBI/PF: ${cur} ${fmt(s.statutoryDeductions||0)}\nNet Payable: ${cur} ${fmt(t.presentBasedNetSalary)}\n\n(Please attach the downloaded PDF slip before sending — email links can't attach files automatically.)\n\nRegards`;
   window.location.href = `mailto:${s.email||''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
-function buildSalarySlipPage(doc, s, startY){
+function buildSalarySlipPage(doc, s, startY, emp){
   const cur = settings.currency||'PKR';
   const t = deriveSalaryTotals(s);
   let y = startY;
@@ -13456,6 +13533,7 @@ function buildSalarySlipPage(doc, s, startY){
   y+=5;
   doc.text('Employee Signature', 14, y);
   doc.text('Authorized Signature', 130, y);
+  y = drawTerminationNote(doc, emp, y+8);
   return y;
 }
 // ---- Compact Attendance Calendar block, drawn at the END of a salary slip
@@ -13521,8 +13599,8 @@ function downloadSalarySlipPDF(slipId){
   const s = salarySlips.find(x=>x.id===slipId);
   if(!s){ toast('Slip not found','error'); return; }
   const doc = new jspdf.jsPDF();
-  let y = buildSalarySlipPage(doc, s);
   const emp = employees.find(e=>e.id===s.empId);
+  let y = buildSalarySlipPage(doc, s, undefined, emp);
   buildAttendanceCalendarBlock(doc, emp, s.month, y+4);
   stampBrandLogoOnAllPages(doc);
   doc.save(`Salary_Slip_${s.empName.replace(/[^a-zA-Z0-9]/g,'_')}_${s.month}.pdf`);
@@ -13537,8 +13615,8 @@ function downloadAllSalarySlipsPDF(){
   const doc = new jspdf.jsPDF();
   list.forEach((s,i)=>{
     if(i>0) doc.addPage();
-    const y = buildSalarySlipPage(doc, s);
     const emp = employees.find(e=>e.id===s.empId);
+    const y = buildSalarySlipPage(doc, s, undefined, emp);
     buildAttendanceCalendarBlock(doc, emp, s.month, y+4);
   });
   stampBrandLogoOnAllPages(doc);
@@ -13547,7 +13625,7 @@ function downloadAllSalarySlipsPDF(){
   toast('PDF generated','success');
 }
 // ---- Quick/Simple Slip: just Days × Per-Day Rate + Bonus - Advance = Net ----
-function buildQuickSalarySlipPage(doc, s, startY){
+function buildQuickSalarySlipPage(doc, s, startY, emp){
   const cur = settings.currency||'PKR';
   const t = deriveSalaryTotals(s);
   let y = startY;
@@ -13578,14 +13656,15 @@ function buildQuickSalarySlipPage(doc, s, startY){
   y+=5;
   doc.text('Employee Signature', 14, y);
   doc.text('Authorized Signature', 130, y);
+  y = drawTerminationNote(doc, emp, y+8);
   return y;
 }
 function downloadQuickSalarySlipPDF(slipId){
   const s = salarySlips.find(x=>x.id===slipId);
   if(!s){ toast('Slip not found','error'); return; }
   const doc = new jspdf.jsPDF();
-  let y = buildQuickSalarySlipPage(doc, s);
   const emp = employees.find(e=>e.id===s.empId);
+  let y = buildQuickSalarySlipPage(doc, s, undefined, emp);
   buildAttendanceCalendarBlock(doc, emp, s.month, y+4);
   stampBrandLogoOnAllPages(doc);
   doc.save(`Salary_Slip_Quick_${s.empName.replace(/[^a-zA-Z0-9]/g,'_')}_${s.month}.pdf`);
@@ -18720,9 +18799,31 @@ function fbPopulatePartyDatalist(){
   dl.innerHTML = list.map(c=>`<option value="${(c.name||'').replace(/"/g,'&quot;')}">`).join('');
 }
 function fbOnShopNameInput(){
-  // Re-filter the Customer Name dropdown down to just this shop's people,
-  // and if the shop itself is already known, nothing else to guess yet.
+  // Re-filter the Customer Name dropdown down to just this shop's people.
   fbPopulatePartyDatalist();
+  // Bug fix: picking a known shop only used to fill the datalist, never the
+  // Customer Name/Phone boxes themselves. Now: if this shop has exactly one
+  // customer on file, auto-fill both name and phone right away. If it has
+  // more than one, at least auto-fill the phone once a name match is clear
+  // (single candidate) — otherwise leave it for the Customer Name field's
+  // own autofill (fbOnCustomerNameInput) once the user picks a name.
+  const shopEl = document.getElementById('fb-cust-shop');
+  const nameEl = document.getElementById('fb-cust-name');
+  const phoneEl = document.getElementById('fb-cust-phone');
+  if(!shopEl || !nameEl || !phoneEl) return;
+  const shopVal = (shopEl.value||'').trim();
+  if(!shopVal) return;
+  const matches = fbCustomers.filter(c=>(c.shopName||'').trim().toLowerCase()===shopVal.toLowerCase());
+  if(matches.length===1){
+    nameEl.value = matches[0].name||'';
+    phoneEl.value = matches[0].phone||'';
+  } else if(matches.length>1){
+    // Multiple people at this shop — if the name box already has a value
+    // that matches one of them, fill in the phone for that one.
+    const curName = (nameEl.value||'').trim().toLowerCase();
+    const nameMatch = curName && matches.find(c=>(c.name||'').toLowerCase()===curName);
+    if(nameMatch) phoneEl.value = nameMatch.phone||'';
+  }
 }
 function fbNewBillReset(){
   fbEditingBillId = null;
@@ -20165,9 +20266,9 @@ function fbOpenStockValueReport(){
 }
 // ---- Stock Availability Report: quantities only (no rates/values), no admin lock.
 // Three views: Available (qty > low-alert level), Low Stock (qty>0 but <= min), Out of Stock (qty<=0).
-let fbStockAvailTab = 'available';
+let fbStockAvailTab = 'all';
 function fbOpenStockAvailReport(){
-  fbStockAvailTab = 'available';
+  fbStockAvailTab = 'all';
   openModal('fb-stock-avail-modal');
   fbRenderStockAvailReport();
 }
@@ -20183,20 +20284,43 @@ function fbGetStockAvailRows(tab){
   const available = fbStockItems.filter(s=>!lowIds.has(s.id) && !outIds.has(s.id));
   if(tab==='low') return low;
   if(tab==='out') return out;
+  if(tab==='all') return [...available, ...low, ...out]; // used for the combined "All" view/PDF
   return available;
 }
 function fbRenderStockAvailReport(){
-  const tabs = {available:'fb-stock-avail-tab-available', low:'fb-stock-avail-tab-low', out:'fb-stock-avail-tab-out'};
+  const tabs = {all:'fb-stock-avail-tab-all', available:'fb-stock-avail-tab-available', low:'fb-stock-avail-tab-low', out:'fb-stock-avail-tab-out'};
   Object.entries(tabs).forEach(([key,id])=>{
     const btn = document.getElementById(id);
     if(btn) btn.className = 'btn btn-sm' + (fbStockAvailTab===key ? ' btn-neon' : '');
   });
-  const rows = fbGetStockAvailRows(fbStockAvailTab).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const labels = {all:'All Items', available:'Available Stock', low:'Low Stock', out:'Out of Stock'};
   const countEl = document.getElementById('fb-stock-avail-count');
-  const labels = {available:'Available Stock', low:'Low Stock', out:'Out of Stock'};
-  if(countEl) countEl.textContent = `${rows.length} item(s) — ${labels[fbStockAvailTab]}`;
   const tableWrap = document.getElementById('fb-stock-avail-table');
   if(!tableWrap) return;
+  if(fbStockAvailTab==='all'){
+    // One combined view/PDF: three labelled sections instead of one flat list,
+    // so it still reads as Available/Low/Out at a glance, in a single click.
+    const available = fbGetStockAvailRows('available').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    const low = fbGetStockAvailRows('low').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    const out = fbGetStockAvailRows('out').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    if(countEl) countEl.textContent = `${available.length+low.length+out.length} item(s) total — ✅ ${available.length} Available, ⚠️ ${low.length} Low, ❌ ${out.length} Out`;
+    const section = (title, rows)=> !rows.length ? '' : `<div style="font-weight:700;margin:10px 0 4px;">${title} (${rows.length})</div>
+      <table class="items-table"><thead><tr><th>#</th><th>Item</th><th style="width:80px;">Unit</th><th style="width:110px;">Current Qty</th><th style="width:110px;">Low Alert At</th><th style="width:110px;">🏭 Location</th></tr></thead><tbody>
+      ${rows.map((s,i)=>`<tr>
+        <td style="color:var(--text3);">${i+1}</td>
+        <td>${(s.name||'').replace(/</g,'&lt;')}</td>
+        <td style="color:var(--text3);">${(s.unit||'').replace(/</g,'&lt;')}</td>
+        <td style="text-align:right;font-weight:700;color:${(s.currentQty||0)<=0?'var(--neon5)':((s.minQty||0)>0&&(s.currentQty||0)<=s.minQty?'#ff6a00':'var(--text2)')};">${s.currentQty||0}</td>
+        <td style="text-align:right;color:var(--text3);">${s.minQty||0}</td>
+        <td style="color:var(--text3);">${(s.location||'').replace(/</g,'&lt;')}</td>
+      </tr>`).join('')}
+      </tbody></table>`;
+    tableWrap.innerHTML = section('✅ Available Stock', available) + section('⚠️ Low Stock', low) + section('❌ Out of Stock', out)
+      || `<div style="color:var(--text3);font-size:12px;">No stock items yet.</div>`;
+    return;
+  }
+  const rows = fbGetStockAvailRows(fbStockAvailTab).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  if(countEl) countEl.textContent = `${rows.length} item(s) — ${labels[fbStockAvailTab]}`;
   if(!rows.length){ tableWrap.innerHTML = `<div style="color:var(--text3);font-size:12px;">No items in "${labels[fbStockAvailTab]}" right now.</div>`; return; }
   tableWrap.innerHTML = `<table class="items-table"><thead><tr><th>#</th><th>Item</th><th style="width:80px;">Unit</th><th style="width:110px;">Current Qty</th><th style="width:110px;">Low Alert At</th><th style="width:110px;">🏭 Location</th></tr></thead><tbody>
     ${rows.map((s,i)=>`<tr>
@@ -20210,7 +20334,36 @@ function fbRenderStockAvailReport(){
   </tbody></table>`;
 }
 function fbDownloadStockAvailPDF(){
-  const labels = {available:'Available Stock', low:'Low Stock', out:'Out of Stock'};
+  const labels = {all:'All Items', available:'Available Stock', low:'Low Stock', out:'Out of Stock'};
+  if(fbStockAvailTab==='all'){
+    // Single-click combined PDF: Available + Low + Out, each its own table,
+    // covering all 3 categories in one document instead of downloading 3 separately.
+    const available = fbGetStockAvailRows('available').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    const low = fbGetStockAvailRows('low').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    const out = fbGetStockAvailRows('out').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    if(!available.length && !low.length && !out.length){ toast('No stock items to export','warning'); return; }
+    const doc = new jspdf.jsPDF();
+    let y = pdfHeader(doc, 'Stock Availability Report — All');
+    const addSection = (title, rows)=>{
+      if(!rows.length) return;
+      doc.setFontSize(11); doc.setFont(undefined,'bold');
+      doc.text(`${title} (${rows.length})`, 14, y); y+=4;
+      doc.autoTable({
+        startY:y,
+        head:[['#','Item','Unit','Current Qty','Low Alert At','Location']],
+        body: rows.map((s,i)=>[i+1, s.name||'', s.unit||'', s.currentQty||0, s.minQty||0, s.location||'']),
+        styles:{fontSize:9}, headStyles:{fillColor:[20,20,40]}
+      });
+      y = doc.lastAutoTable.finalY + 8;
+    };
+    addSection('Available Stock', available);
+    addSection('Low Stock', low);
+    addSection('Out of Stock', out);
+    stampBrandLogoOnAllPages(doc);
+    doc.save(`Stock_All_${new Date().toISOString().slice(0,10)}.pdf`);
+    toast('Combined Stock Availability PDF generated','success');
+    return;
+  }
   const rows = fbGetStockAvailRows(fbStockAvailTab).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   if(!rows.length){ toast('No items to export in this list','warning'); return; }
   const doc = new jspdf.jsPDF();
@@ -20225,13 +20378,10 @@ function fbDownloadStockAvailPDF(){
   doc.save(`Stock_${fbStockAvailTab}_${new Date().toISOString().slice(0,10)}.pdf`);
   toast('Stock Availability PDF generated','success');
 }
-function fbRenderStockValueReport(){
-  const cardsWrap = document.getElementById('fb-stock-value-cards');
-  const tableWrap = document.getElementById('fb-stock-value-table');
-  const profitWrap = document.getElementById('fb-stock-value-profit');
-  if(!cardsWrap || !tableWrap) return;
-  const cur = settings.currency||'PKR';
-  const discPct = Math.max(0, Math.min(100, parseFloat(document.getElementById('fb-stock-value-discpct')?.value)||0));
+// Shared calculation used by both the on-screen Full Stock Value Report and
+// its one-click PDF export, so the two can never drift out of sync.
+function fbComputeStockValueRows(discPctOverride){
+  const discPct = Math.max(0, Math.min(100, discPctOverride!==undefined ? discPctOverride : (parseFloat(document.getElementById('fb-stock-value-discpct')?.value)||0)));
   let totalQty=0, totalRetailerValue=0, totalConsumerValue=0;
   const rows = fbStockItems.map(s=>{
     const desc = fbDescriptions.find(d=>(d.desc||'').trim().toLowerCase()===(s.name||'').trim().toLowerCase());
@@ -20244,12 +20394,23 @@ function fbRenderStockValueReport(){
     return {name:s.name, unit:s.unit, qty, retailerRate, consumerRate, retailerValue, consumerValue, hasRate: !!desc};
   }).sort((a,b)=>b.retailerValue-a.retailerValue);
   const distributorProfit = totalRetailerValue * (discPct/100);
+  const grossMargin = totalConsumerValue - totalRetailerValue;
+  const grossMarginPct = totalRetailerValue>0 ? (grossMargin/totalRetailerValue*100) : 0;
+  return {discPct, rows, totalQty, totalRetailerValue, totalConsumerValue, distributorProfit, grossMargin, grossMarginPct};
+}
+function fbRenderStockValueReport(){
+  const cardsWrap = document.getElementById('fb-stock-value-cards');
+  const tableWrap = document.getElementById('fb-stock-value-table');
+  const profitWrap = document.getElementById('fb-stock-value-profit');
+  if(!cardsWrap || !tableWrap) return;
+  const cur = settings.currency||'PKR';
+  const {discPct, rows, totalQty, totalRetailerValue, totalConsumerValue, distributorProfit, grossMarginPct} = fbComputeStockValueRows();
   cardsWrap.innerHTML = `
     <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">Stock Items</div><div style="font-size:16px;font-weight:800;">${fbStockItems.length}</div></div>
     <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">Total Qty (all items)</div><div style="font-size:16px;font-weight:800;">${fmt(totalQty)}</div></div>
     <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">Total Retailer Value</div><div style="font-size:16px;font-weight:800;color:var(--neon);">${cur} ${fmt(totalRetailerValue)}</div></div>
     <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">Total Consumer Value</div><div style="font-size:16px;font-weight:800;color:var(--neon5);">${cur} ${fmt(totalConsumerValue)}</div></div>`;
-  profitWrap.textContent = `Distributor Profit @ ${discPct}% discount on Retailer Price = ${cur} ${fmt(distributorProfit)}`;
+  profitWrap.textContent = `Distributor Profit @ ${discPct}% discount on Retailer Price = ${cur} ${fmt(distributorProfit)}  |  Gross Margin (Consumer − Retailer): ${grossMarginPct.toFixed(1)}%`;
   tableWrap.innerHTML = `<table class="items-table"><thead><tr><th>Item</th><th style="width:60px;">Unit</th><th style="width:80px;">Qty</th><th style="width:100px;">Retailer Rate</th><th style="width:110px;">Retailer Value</th><th style="width:100px;">Consumer Rate</th><th style="width:110px;">Consumer Value</th></tr></thead><tbody>
     ${rows.map(r=>`<tr>
       <td>${(r.name||'').replace(/</g,'&lt;')}${r.hasRate?'':' <span style="color:var(--text3);font-size:10px;">(no rate in Rate List)</span>'}</td>
@@ -20261,6 +20422,80 @@ function fbRenderStockValueReport(){
       <td style="text-align:right;font-weight:600;">${cur} ${fmt(r.consumerValue)}</td>
     </tr>`).join('')}
   </tbody></table>`;
+}
+// ---- One-click Full Stock Value PDF: item-by-item valuation table, then a
+// Profit & Loss summary, then a simple inventory Balance Sheet broken down
+// by Available/Low/Out — all in a single PDF, admin-gated the same as the
+// on-screen report. ----
+function fbDownloadFullStockValuePDF(){
+  const cur = settings.currency||'PKR';
+  const discPct = Math.max(0, Math.min(100, parseFloat(document.getElementById('fb-stock-value-discpct')?.value)||0));
+  const {rows, totalQty, totalRetailerValue, totalConsumerValue, distributorProfit, grossMargin, grossMarginPct} = fbComputeStockValueRows(discPct);
+  if(!rows.length){ toast('No stock items to export','warning'); return; }
+  const doc = new jspdf.jsPDF();
+  let y = pdfHeader(doc, 'Full Stock Value Report');
+
+  // ---- Section 1: item-by-item valuation ----
+  doc.setFontSize(11); doc.setFont(undefined,'bold');
+  doc.text('Item-wise Stock Valuation', 14, y); y+=4;
+  doc.autoTable({
+    startY:y,
+    head:[['Item','Unit','Qty','Retailer Rate','Retailer Value','Consumer Rate','Consumer Value']],
+    body: rows.map(r=>[r.name||'', r.unit||'', fmt(r.qty), cur+' '+fmt(r.retailerRate), cur+' '+fmt(r.retailerValue), cur+' '+fmt(r.consumerRate), cur+' '+fmt(r.consumerValue)]),
+    styles:{fontSize:8}, headStyles:{fillColor:[20,20,40]}
+  });
+  y = doc.lastAutoTable.finalY + 10;
+  if(y > doc.internal.pageSize.getHeight()-70){ doc.addPage(); y=15; }
+
+  // ---- Section 2: Profit & Loss sheet ----
+  doc.setFontSize(11); doc.setFont(undefined,'bold');
+  doc.text('Profit & Loss Sheet', 14, y); y+=4;
+  doc.autoTable({
+    startY:y,
+    head:[['Description','Amount']],
+    body:[
+      ['Total Stock Items', String(fbStockItems.length)],
+      ['Total Quantity (all items)', fmt(totalQty)],
+      ['Total Value at Retailer Price', cur+' '+fmt(totalRetailerValue)],
+      ['Total Value at Consumer Price', cur+' '+fmt(totalConsumerValue)],
+      ['Gross Margin (Consumer − Retailer)', cur+' '+fmt(grossMargin)],
+      ['Gross Margin %', grossMarginPct.toFixed(2)+' %'],
+      [`Distributor Discount Applied`, discPct+' %'],
+      [`Distributor Profit @ ${discPct}% on Retailer Price`, cur+' '+fmt(distributorProfit)]
+    ],
+    styles:{fontSize:9}, headStyles:{fillColor:[20,20,40]},
+    didParseCell:function(data){ if(data.row.index===5 || data.row.index===7){ data.cell.styles.fontStyle='bold'; } }
+  });
+  y = doc.lastAutoTable.finalY + 10;
+  if(y > doc.internal.pageSize.getHeight()-60){ doc.addPage(); y=15; }
+
+  // ---- Section 3: simple inventory Balance Sheet (Available/Low/Out split) ----
+  doc.setFontSize(11); doc.setFont(undefined,'bold');
+  doc.text('Inventory Balance Sheet', 14, y); y+=4;
+  const catValue = (items)=> items.reduce((sum,s)=>{
+    const desc = fbDescriptions.find(d=>(d.desc||'').trim().toLowerCase()===(s.name||'').trim().toLowerCase());
+    const rate = desc ? (parseFloat(desc.rate)||0) : 0;
+    return sum + (parseFloat(s.currentQty)||0)*rate;
+  },0);
+  const available = fbGetStockAvailRows('available'), low = fbGetStockAvailRows('low'), out = fbGetStockAvailRows('out');
+  const availVal = catValue(available), lowVal = catValue(low), outVal = catValue(out);
+  doc.autoTable({
+    startY:y,
+    head:[['Category','Items','Asset Value (Retailer Price)']],
+    body:[
+      ['✅ Available Stock', String(available.length), cur+' '+fmt(availVal)],
+      ['⚠️ Low Stock', String(low.length), cur+' '+fmt(lowVal)],
+      ['❌ Out of Stock', String(out.length), cur+' '+fmt(outVal)],
+      ['Total Inventory Asset Value', String(fbStockItems.length), cur+' '+fmt(availVal+lowVal+outVal)]
+    ],
+    styles:{fontSize:9}, headStyles:{fillColor:[20,20,40]},
+    didParseCell:function(data){ if(data.row.index===3){ data.cell.styles.fontStyle='bold'; } }
+  });
+
+  stampBrandLogoOnAllPages(doc);
+  doc.save(`Full_Stock_Value_Report_${new Date().toISOString().slice(0,10)}.pdf`);
+  logAudit && typeof logAudit==='function' && logAudit('download','Stock',`Full Stock Value Report PDF downloaded`, undefined, undefined);
+  toast('Full Stock Value Report PDF generated','success');
 }
 function fbRenderStock(){
   fbPopulateStockDatalist();
