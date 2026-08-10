@@ -192,6 +192,22 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
 #selection-bar{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(135deg,var(--bg4),#1a0a2e);border-top:2px solid var(--neon2);padding:10px 16px;display:none;align-items:center;gap:10px;z-index:2000;flex-wrap:wrap;}
 #selection-bar.visible{display:flex;}
 /* MISC */
+/* ===== ANIMATED NEON LOGIN BOX (closed pill -> hover/tap to expand) ===== */
+#login-screen{padding:16px;}
+.login-box{position:relative;container-type:size;width:240px;height:58px;max-width:92vw;transition:width .5s cubic-bezier(.65,0,.35,1),height .5s cubic-bezier(.65,0,.35,1);cursor:pointer;}
+.login-box.open,.login-box:hover{width:380px;height:530px;max-height:92vh;cursor:default;}
+.login-box::before{content:"";position:absolute;inset:50%;width:170cqmax;height:170cqmax;translate:-50% -50%;background:conic-gradient(from 0deg,transparent 0deg 36deg,var(--neon) 36deg 48deg,transparent 48deg 126deg,var(--neon3) 126deg 138deg,transparent 138deg 216deg,var(--neon) 216deg 228deg,transparent 228deg 306deg,var(--neon3) 306deg 318deg,transparent 318deg 360deg);filter:blur(1px) drop-shadow(0 0 12px var(--neon));animation:login-neon-rotate 5s linear infinite;z-index:0;pointer-events:none;}
+body.light-mode .login-box::before{filter:blur(1px) drop-shadow(0 0 7px var(--neon));}
+@keyframes login-neon-rotate{to{transform:rotate(360deg);}}
+.login-box-panel{position:absolute;inset:3px;background:var(--card2);border:1px solid var(--border2);border-radius:14px;z-index:1;overflow:hidden;transition:border-radius .5s;}
+.login-box.open .login-box-panel,.login-box:hover .login-box-panel{border-radius:18px;}
+.login-collapsed-content{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:10px;font-size:15px;font-weight:800;letter-spacing:2.5px;color:var(--text);opacity:1;transition:opacity .2s ease;}
+.login-box.open .login-collapsed-content,.login-box:hover .login-collapsed-content{opacity:0;pointer-events:none;}
+.login-expanded-content{position:absolute;inset:0;display:flex;flex-direction:column;padding:28px 26px 22px;opacity:0;pointer-events:none;transition:opacity .3s ease .12s;overflow-y:auto;}
+.login-box.open .login-expanded-content,.login-box:hover .login-expanded-content{opacity:1;pointer-events:auto;}
+.login-box-close{position:absolute;top:6px;right:8px;background:transparent;border:none;color:var(--text3);font-size:16px;cursor:pointer;z-index:2;display:none;padding:4px 8px;}
+.login-box.open .login-box-close{display:block;}
+.login-box-close:hover{color:var(--neon3);}
 .neon-text{color:var(--neon);text-shadow:0 0 8px rgba(0,245,255,.4);}
 .divider{height:1px;background:linear-gradient(90deg,transparent,var(--border2),transparent);margin:12px 0;}
 .text-right{text-align:right;}
@@ -345,25 +361,29 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
 <body>
 <!-- LOGIN SCREEN -->
 <div id="login-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:99999;align-items:center;justify-content:center;flex-direction:column;">
-  <div style="background:var(--card2);border:2px solid var(--neon2);border-radius:var(--radius);padding:40px;width:100%;max-width:400px;box-shadow:0 0 60px rgba(123,47,255,.4);">
-    <div style="text-align:center;margin-bottom:28px;">
-      <div style="font-size:40px;margin-bottom:8px;">🔐</div>
-      <h2 style="font-size:20px;font-weight:800;background:linear-gradient(90deg,var(--neon),var(--neon2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">SAU CORPORATION</h2>
-      <div style="font-size:13px;color:var(--text2);margin-top:4px;">Secure Login Required</div>
+  <div class="login-box" id="login-box" onclick="if(!this.classList.contains('open'))this.classList.add('open')">
+    <div class="login-box-panel">
+      <button class="login-box-close" onclick="event.stopPropagation();document.getElementById('login-box').classList.remove('open')" title="Close">✕</button>
+      <div class="login-collapsed-content">🔐&nbsp;LOGIN&nbsp;🔒</div>
+      <div class="login-expanded-content" onclick="event.stopPropagation()">
+        <div style="text-align:center;margin-bottom:22px;">
+          <div style="font-size:32px;margin-bottom:6px;">🔐</div>
+          <h2 style="font-size:19px;font-weight:800;background:linear-gradient(90deg,var(--neon),var(--neon2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">SAU CORPORATION</h2>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px;">Secure Login Required</div>
+        </div>
+        <div class="form-group"><label>Username</label><input type="text" id="login-username" placeholder="Enter username" onkeydown="if(event.key==='Enter')doLogin()"></div>
+        <div class="form-group"><label>Password</label><input type="password" id="login-password" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+        <div id="login-error" style="color:var(--neon3);font-size:12px;margin-bottom:8px;min-height:16px;"></div>
+        <button class="btn btn-purple" style="width:100%;padding:12px;font-size:14px;" onclick="doLogin()">🔓 Login</button>
+        <div style="display:flex;align-items:center;gap:8px;margin:14px 0;">
+          <div style="flex:1;height:1px;background:var(--border2);"></div>
+          <span style="font-size:10px;color:var(--text3);">OR</span>
+          <div style="flex:1;height:1px;background:var(--border2);"></div>
+        </div>
+        <button class="btn btn-sm" style="width:100%;background:var(--bg3);border:1px solid var(--neon4);color:var(--neon4);padding:10px 6px;" onclick="empLoginFromLock()" title="Employee login — see only your own dispatch/attendance/commission">👤 Employee Login</button>
+        <div style="text-align:center;margin-top:14px;font-size:10px;color:var(--text3);">MFS | FULL MANAGEMENT</div>
+      </div>
     </div>
-    <div class="form-group"><label>Username</label><input type="text" id="login-username" placeholder="Enter username" onkeydown="if(event.key==='Enter')doLogin()"></div>
-    <div class="form-group"><label>Password</label><input type="password" id="login-password" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()"></div>
-    <div id="login-error" style="color:var(--neon3);font-size:12px;margin-bottom:10px;min-height:18px;"></div>
-    <button class="btn btn-purple" style="width:100%;padding:12px;font-size:14px;" onclick="doLogin()">🔓 Login</button>
-    <div style="display:flex;align-items:center;gap:8px;margin:14px 0;">
-      <div style="flex:1;height:1px;background:var(--border2);"></div>
-      <span style="font-size:10px;color:var(--text3);">OR</span>
-      <div style="flex:1;height:1px;background:var(--border2);"></div>
-    </div>
-    <div style="display:flex;gap:8px;">
-      <button class="btn btn-sm" style="flex:1;background:var(--bg3);border:1px solid var(--neon4);color:var(--neon4);padding:10px 6px;" onclick="empLoginFromLock()" title="Employee login — see only your own dispatch/attendance/commission">👤 Employee Login</button>
-    </div>
-    <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--text3);">MFS | FULL MANAGEMENT</div>
   </div>
 </div>
 <!-- APP CONTENT -->
@@ -12373,6 +12393,7 @@ function showLoginScreen(){
   document.getElementById('login-error').textContent='';
   document.getElementById('login-username').value='';
   document.getElementById('login-password').value='';
+  const lb=document.getElementById('login-box'); if(lb) lb.classList.remove('open');
 }
 function hideLoginScreen(){
   document.getElementById('login-screen').style.display='none';
