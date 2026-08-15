@@ -3859,12 +3859,12 @@ Switch Socket"></textarea>
   <div class="modal-body">
     <input type="hidden" id="led-edit-idx">
     <div class="form-row">
-      <div class="form-group"><label>Party</label><select id="led-party"><option value="">Select...</option></select></div>
+      <div class="form-group"><label>Party</label><select id="led-party" onchange="renderInvoiceAllocation()"><option value="">Select...</option></select></div>
       <div class="form-group"><label>Date</label><input type="date" id="led-date"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Type</label>
-        <select id="led-type" onchange="togglePaymodeField()">
+        <select id="led-type" onchange="togglePaymodeField();renderInvoiceAllocation();">
           <option value="payment">Payment (Credit)</option>
           <option value="debit_note">Debit Note (Debit)</option>
           <option value="bill">Bill (Debit)</option>
@@ -3896,8 +3896,15 @@ Switch Socket"></textarea>
       </div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Linked Invoice Nos (optional, comma separated)</label><input type="text" id="led-inv" placeholder="e.g. 501,502,503 (optional)" oninput="renderInvoiceAllocation()" onblur="renderInvoiceAllocation()"></div>
-      <div class="form-group"><label>Total Amount</label><input type="number" id="led-amount" placeholder="0.00" oninput="renderInvoiceAllocation()"></div>
+      <div class="form-group" style="position:relative;">
+        <label>Linked Invoice Nos (optional, comma separated)</label>
+        <input type="text" id="led-inv" placeholder="e.g. 501,502,503 (optional)" autocomplete="off"
+          oninput="renderInvoiceAllocation();showLedInvSuggestions();"
+          onfocus="showLedInvSuggestions();"
+          onblur="setTimeout(function(){hideLedInvSuggestions();renderInvoiceAllocation();},150)">
+        <div id="led-inv-suggest" style="display:none;position:absolute;z-index:50;top:100%;left:0;right:0;background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;max-height:180px;overflow:auto;box-shadow:0 4px 12px rgba(0,0,0,.4);"></div>
+      </div>
+      <div class="form-group"><label>Total Amount <span style="font-weight:400;color:var(--text3);">(actual cheque / cash received)</span></label><input type="number" id="led-amount" placeholder="0.00" oninput="renderInvoiceAllocation()"></div>
     </div>
     <div id="led-alloc-wrap" style="display:none;background:var(--bg3);border-radius:8px;padding:10px;margin-bottom:10px;">
       <label style="display:block;margin-bottom:6px;">Split this amount across invoices:</label>
@@ -3905,7 +3912,11 @@ Switch Socket"></textarea>
       <div id="led-alloc-total" style="font-size:12px;margin-top:6px;"></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Deduction</label><input type="number" id="led-deduction" placeholder="0.00"></div>
+      <div class="form-group">
+        <label>Deduction <span style="font-weight:400;color:var(--text3);">(auto-suggested from linked invoice — editable)</span></label>
+        <input type="number" id="led-deduction" placeholder="0.00" oninput="markDedTouched()">
+        <div id="led-deduction-hint" style="font-size:11px;color:var(--text3);margin-top:4px;"></div>
+      </div>
     </div>
     <div class="form-group"><label>Description / Notes</label><input type="text" id="led-narration" placeholder="Description / notes..."></div>
     <div class="form-group">
@@ -7619,7 +7630,9 @@ function renderLedger(){
   ledgerData.filter(l=>l.partyName===party && l.type==='payment').forEach(l=>{
     const invoicesOfL = (l.invNo||'').split(',').map(s=>s.trim()).filter(Boolean);
     if(!invoicesOfL.length) return;
-    const net = (l.amount||0) - (l.deduction||0);
+    // Cheque/cash amount received PLUS deduction (WHT/discount/bank charges withheld) together
+    // count as "applied" to the invoice — the deduction is not still outstanding, it's settled.
+    const net = (l.amount||0) + (l.deduction||0);
     if(l.allocations && l.allocations.length){
       l.allocations.forEach(a=>{ paidAmountMap[a.invNo] = (paidAmountMap[a.invNo]||0) + (a.amount||0); });
     } else if(invoicesOfL.length>1){
@@ -7649,7 +7662,10 @@ function renderLedger(){
   const rows = entries.map(e=>{
     const isDebit = e.type==='bill'||e.type==='debit_note';
     const debit = isDebit?e.amount:0;
-    const credit = !isDebit?(e.amount-(e.deduction||0)):0;
+    // Credit column shows the actual cheque/cash amount received; the Deduction
+    // column (below) shows the separate withheld portion. Both together reduce
+    // the outstanding balance — see paidAmountMap note above.
+    const credit = !isDebit?e.amount:0;
     const ded = e.deduction||0;
     balance += debit-credit-ded;
     if(isDebit) totalBills+=e.amount;
@@ -7856,6 +7872,9 @@ function openNewLedgerEntry(){
   document.getElementById('led-edit-idx').value='';
   document.getElementById('ledgerModalTitle').textContent='📒 Add Ledger Entry';
   ['led-ref','led-inv','led-amount','led-deduction','led-narration','led-bank'].forEach(id=>document.getElementById(id).value='');
+  _dedManuallyEdited = false;
+  const dedHint=document.getElementById('led-deduction-hint'); if(dedHint) dedHint.textContent='';
+  hideLedInvSuggestions();
   const pd=document.getElementById('led-paymode'); if(pd) pd.value='cash';
   const st=document.getElementById('led-status'); if(st) st.value='cleared';
   const tp=document.getElementById('led-type'); if(tp) tp.value='payment';
@@ -7892,6 +7911,7 @@ function editLedgerEntry(id){
   if(document.getElementById('led-status')) document.getElementById('led-status').value=e.status||'cleared';
   if(document.getElementById('led-bank')) document.getElementById('led-bank').value=e.bankName||'';
   togglePaymodeField();
+  _dedManuallyEdited = true; // don't silently overwrite an already-saved deduction on open
   renderInvoiceAllocation(e.allocations||[]);
   _ledgerAttachment = e.attachment || null;
   document.getElementById('led-attach-file').value='';
@@ -8022,7 +8042,7 @@ function getInvoicePaidAmount(partyName, invNo){
       const a = l.allocations.find(x=>x.invNo===invNo);
       if(a) paid += a.amount||0;
     } else {
-      const net = (l.amount||0)-(l.deduction||0);
+      const net = (l.amount||0)+(l.deduction||0);
       paid += net/invoicesOfL.length;
     }
   });
@@ -8030,7 +8050,7 @@ function getInvoicePaidAmount(partyName, invNo){
 }
 function getPartyOutstandingBalance(partyName){
   const totalInv = db.filter(r=>r.partyName===partyName && r.invNo && !r.cancelled).reduce((s,r)=>s+getDCTotal(r),0);
-  const totalPaid = ledgerData.filter(l=>l.partyName===partyName && l.type==='payment').reduce((s,l)=>s+(l.amount||0)-(l.deduction||0),0);
+  const totalPaid = ledgerData.filter(l=>l.partyName===partyName && l.type==='payment').reduce((s,l)=>s+(l.amount||0)+(l.deduction||0),0);
   const opening = (partyOpeningBalances[partyName] && partyOpeningBalances[partyName].amount) || 0;
   return opening + totalInv - totalPaid;
 }
@@ -8418,7 +8438,7 @@ function showPartyChequeLedger(partyName){
   const partyLedger = ledgerData.filter(l=>l.partyName===partyName);
   const cur=settings.currency||'PKR';
   let totalBill=0, totalPaid=0;
-  partyLedger.forEach(l=>{ if(l.type==='bill') totalBill+=l.amount||0; else if(l.type==='payment') totalPaid+=(l.amount||0)-(l.deduction||0); });
+  partyLedger.forEach(l=>{ if(l.type==='bill') totalBill+=l.amount||0; else if(l.type==='payment') totalPaid+=(l.amount||0)+(l.deduction||0); });
   const balance = totalBill - totalPaid;
   let html = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">
     <div class="ledger-sum-card lsc1"><div style="font-weight:700;font-size:16px;">${cur} ${fmt(totalBill)}</div><div style="font-size:11px;color:var(--text2);">Total Billed</div></div>
@@ -8432,7 +8452,7 @@ function showPartyChequeLedger(partyName){
   allEntries.forEach(l=>{
     const isB=l.type==='bill', isPay=l.type==='payment';
     if(isB) runBal+=(l.amount||0);
-    else if(isPay) runBal-=((l.amount||0)-(l.deduction||0));
+    else if(isPay) runBal-=((l.amount||0)+(l.deduction||0));
     html+=`<tr>
       <td>${fmtDate(l.date)}</td>
       <td><span class="badge ${isB?'badge-pending':'badge-paid'}">${l.type}</span></td>
@@ -8948,7 +8968,7 @@ function generateLedgerPDF(party, detailMode, from, to){
     if(l.allocations && l.allocations.length){
       l.allocations.forEach(a=>{ paidAmountMap[a.invNo]=(paidAmountMap[a.invNo]||0)+(a.amount||0); });
     } else {
-      const net=(l.amount||0)-(l.deduction||0), share=net/invoicesOfL.length;
+      const net=(l.amount||0)+(l.deduction||0), share=net/invoicesOfL.length;
       invoicesOfL.forEach(no=>{ paidAmountMap[no]=(paidAmountMap[no]||0)+share; });
     }
   });
@@ -8956,7 +8976,7 @@ function generateLedgerPDF(party, detailMode, from, to){
   entries.forEach(e=>{
     const isDebit=e.type==='bill'||e.type==='debit_note';
     const debit=isDebit?e.amount:0;
-    const credit=!isDebit?(e.amount-(e.deduction||0)):0;
+    const credit=!isDebit?e.amount:0;
     balance+=debit-credit-(e.deduction||0);
     if(isDebit) totalBills+=e.amount; else { totalPaid+=e.amount; totalDed+=(e.deduction||0); }
     let desc = e.desc||e.narration||'';
@@ -14104,14 +14124,14 @@ function generateWaPreview(){
     else msg = `Dear ${party},\n\nNo recent invoice found. Please contact us for details.\n\nRegards,\n${settings.companyName||''}`;
   } else if(type==='ledger'){
     const totalInv = partyRecs.filter(r=>r.invNo).reduce((s,r)=>s+getDCTotal(r),0);
-    const totalPaid = ledgerData.filter(l=>l.partyName===party && l.type==='payment').reduce((s,l)=>s+(l.amount||0)-(l.deduction||0),0);
+    const totalPaid = ledgerData.filter(l=>l.partyName===party && l.type==='payment').reduce((s,l)=>s+(l.amount||0)+(l.deduction||0),0);
     const balance = totalInv - totalPaid;
     msg = `Dear ${party},\n\nYour current ledger summary:\nTotal Invoiced: ${cur} ${fmt(totalInv)}\nTotal Paid: ${cur} ${fmt(totalPaid)}\nOutstanding Balance: ${cur} ${fmt(balance)}\n\nRegards,\n${settings.companyName||''}`;
   } else if(type==='quotation'){
     msg = `Dear ${party},\n\nPlease find our quotation as discussed. Kindly review and confirm the order at your earliest convenience.\n\nRegards,\n${settings.companyName||''}`;
   } else if(type==='reminder'){
     const totalInv = partyRecs.filter(r=>r.invNo).reduce((s,r)=>s+getDCTotal(r),0);
-    const totalPaid = ledgerData.filter(l=>l.partyName===party && l.type==='payment').reduce((s,l)=>s+(l.amount||0)-(l.deduction||0),0);
+    const totalPaid = ledgerData.filter(l=>l.partyName===party && l.type==='payment').reduce((s,l)=>s+(l.amount||0)+(l.deduction||0),0);
     const balance = totalInv - totalPaid;
     msg = `Dear ${party},\n\nThis is a gentle reminder that your outstanding balance is ${cur} ${fmt(balance)}. Kindly arrange payment at your earliest convenience.\n\nRegards,\n${settings.companyName||''}`;
   } else if(type==='bilty'){
@@ -14559,13 +14579,85 @@ function deleteEmailTemplate(idx){
 const PAYMODE_LABELS = {cash:'💵 Cash', cheque:'🏦 Cheque', bank_transfer:'🏧 Bank Transfer', online:'📲 Online', other:'✏️ Other', '':'—'};
 function _allocKey(invNo){ return String(invNo).trim().replace(/[^a-zA-Z0-9]/g,'_'); }
 // Only shown when 2+ invoice numbers are typed — a single invoice gets 100% of the amount automatically.
+// Bill amount already invoiced for a given invoice number & party (summed — a few
+// invoice numbers appear against more than one DC, e.g. split deliveries).
+function getInvoiceBillTotal(partyName, invNo){
+  invNo = String(invNo).trim();
+  return ledgerData.filter(l=>l.type==='bill' && l.partyName===partyName && String(l.invNo||'').trim()===invNo)
+    .reduce((s,l)=>s+(l.amount||0),0);
+}
+// Once the person edits the Deduction box by hand, stop silently overwriting it.
+// Reset to false whenever the Add/Edit Ledger Entry modal is (re)opened.
+let _dedManuallyEdited = false;
+function markDedTouched(){ _dedManuallyEdited = true; }
+// Single-invoice case: cheque/cash amount + deduction should together cover the
+// invoice. If the amount entered is less than the invoice total, auto-suggest the
+// gap as the Deduction (still editable — this is a suggestion, not a lock).
+function autoFillDeduction(invoices){
+  const dedInput = document.getElementById('led-deduction');
+  const hintEl = document.getElementById('led-deduction-hint');
+  if(!dedInput || !hintEl) return;
+  const type = document.getElementById('led-type') ? document.getElementById('led-type').value : '';
+  const party = document.getElementById('led-party').value;
+  const amount = parseFloat(document.getElementById('led-amount').value)||0;
+  if(type!=='payment' || invoices.length!==1 || !party || !amount){ hintEl.textContent=''; return; }
+  const billTotal = getInvoiceBillTotal(party, invoices[0]);
+  if(!billTotal){ hintEl.textContent=''; return; }
+  const gap = billTotal - amount;
+  if(gap > 0.5){
+    hintEl.textContent = `Invoice #${invoices[0]} total: ${fmt(billTotal)} — suggested deduction: ${fmt(gap)}`;
+    if(!_dedManuallyEdited) dedInput.value = gap.toFixed(2);
+  } else {
+    hintEl.textContent = `Invoice #${invoices[0]} total: ${fmt(billTotal)}`;
+    if(!_dedManuallyEdited && parseFloat(dedInput.value)>0.5 && gap<=0.5) dedInput.value = '0';
+  }
+}
+// Shows a clickable list of this party's outstanding/partial invoices matching what's
+// typed after the last comma — click adds it to the comma-separated Linked Invoice field.
+function showLedInvSuggestions(){
+  const wrap = document.getElementById('led-inv-suggest');
+  if(!wrap) return;
+  const party = document.getElementById('led-party').value;
+  if(!party){ wrap.style.display='none'; return; }
+  const raw = document.getElementById('led-inv').value;
+  const parts = raw.split(',');
+  const frag = (parts[parts.length-1]||'').trim().toLowerCase();
+  const already = new Set(parts.slice(0,-1).map(s=>s.trim()).filter(Boolean));
+  const billTotals = {};
+  ledgerData.filter(l=>l.type==='bill' && l.partyName===party && l.invNo).forEach(l=>{
+    const k=String(l.invNo).trim(); billTotals[k]=(billTotals[k]||0)+(l.amount||0);
+  });
+  let list = Object.keys(billTotals).filter(no=>!already.has(no));
+  if(frag) list = list.filter(no=>no.toLowerCase().includes(frag));
+  list = list.slice(0,8);
+  if(!list.length){ wrap.style.display='none'; return; }
+  wrap.innerHTML = list.map(no=>{
+    const paid = getInvoicePaidAmount(party, no);
+    const bal = billTotals[no]-paid;
+    const tag = bal<=0.5 ? '✅ Paid' : (paid>0.5 ? '🟡 Partial' : '⏳ Unpaid');
+    return `<div style="padding:6px 8px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--bg3);" onmousedown="pickLedInvoice('${no.replace(/'/g,"\\'")}')">#${no} — ${fmt(billTotals[no])} <span style="color:var(--text3);">(${tag})</span></div>`;
+  }).join('');
+  wrap.style.display='';
+}
+function hideLedInvSuggestions(){ const wrap=document.getElementById('led-inv-suggest'); if(wrap) wrap.style.display='none'; }
+function pickLedInvoice(no){
+  const inp = document.getElementById('led-inv');
+  let parts = inp.value.split(',').map(s=>s.trim()).filter(Boolean);
+  if(!parts.includes(no)) parts.push(no);
+  inp.value = parts.join(',');
+  hideLedInvSuggestions();
+  renderInvoiceAllocation();
+  inp.focus();
+}
 function renderInvoiceAllocation(preset){
   const invRaw = document.getElementById('led-inv').value;
   const invoices = invRaw.split(',').map(s=>s.trim()).filter(Boolean);
   const wrap = document.getElementById('led-alloc-wrap');
   const rowsEl = document.getElementById('led-alloc-rows');
   const totalEl = document.getElementById('led-alloc-total');
-  if(invoices.length < 2){ wrap.style.display='none'; return; }
+  if(invoices.length < 2){ wrap.style.display='none'; autoFillDeduction(invoices); return; }
+  const hintEl = document.getElementById('led-deduction-hint');
+  if(hintEl) hintEl.textContent='';
   wrap.style.display='';
   const total = parseFloat(document.getElementById('led-amount').value)||0;
   const existing = {};
@@ -16717,7 +16809,7 @@ function runAiSearch(){
     const allParties = [...new Set(db.map(r=>r.partyName))].filter(Boolean);
     let balances = allParties.map(pt=>{
       const totalInv = db.filter(r=>r.partyName===pt && r.invNo && !r.cancelled).reduce((s,r)=>s+getDCTotal(r),0);
-      const totalPaid = ledgerData.filter(l=>l.partyName===pt && l.type==='payment').reduce((s,l)=>s+(l.amount||0)-(l.deduction||0),0);
+      const totalPaid = ledgerData.filter(l=>l.partyName===pt && l.type==='payment').reduce((s,l)=>s+(l.amount||0)+(l.deduction||0),0);
       return {party:pt, balance: totalInv-totalPaid};
     });
     balances = p.wantUnpaid ? balances.filter(b=>b.balance>1) : balances.filter(b=>b.balance<=1);
@@ -16790,7 +16882,7 @@ function renderAnalyticsTab(){
   const pendingTotal = pendingRecs.reduce((s,r)=>s+getDCTotal(r),0);
   const overdueParties = {};
   active.filter(r=>r.invNo).forEach(r=>{
-    const paid = ledgerData.filter(l=>l.type==='payment' && l.partyName===r.partyName).reduce((s,l)=>s+(l.amount||0)-(l.deduction||0),0);
+    const paid = ledgerData.filter(l=>l.type==='payment' && l.partyName===r.partyName).reduce((s,l)=>s+(l.amount||0)+(l.deduction||0),0);
     const billed = active.filter(x=>x.partyName===r.partyName && x.invNo).reduce((s,x)=>s+getDCTotal(x),0);
     overdueParties[r.partyName] = billed - paid;
   });
