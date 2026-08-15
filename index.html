@@ -654,12 +654,13 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
       <span style="font-size:12px;color:var(--text2);">📌 Previous Balance (opening balance before ledger entries start):</span>
       <input type="number" step="0.01" id="ledgerOpeningBalance" placeholder="0.00" style="width:150px;">
       <input type="date" id="ledgerOpeningDate" style="width:145px;" title="As of date (optional, used only for sorting)">
+      <input type="text" id="ledgerOpeningInvoices" placeholder="Linked Invoice Nos (optional, comma separated)" style="width:240px;" title="Agar ye opening balance kisi purani invoice/invoices se related hai, un k number yahan likhen — jab un invoices per payment aayegi to ye opening balance bhi Paid show hoga">
       <button class="btn btn-green btn-xs" onclick="saveLedgerOpeningBalance()">💾 Save</button>
     </div>
     <div id="ledger-summary" class="ledger-summary"></div>
     <div class="tbl-wrap">
       <table><thead><tr>
-        <th>Date</th><th>Type</th><th>Ref/Cheque</th><th>Invoice</th><th>Description</th><th>Debit</th><th>Credit</th><th>Deduction</th><th>Balance</th><th>Actions</th>
+        <th>Date</th><th>Type</th><th>Ref/Cheque</th><th>Invoice</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th><th>Actions</th>
       </tr></thead><tbody id="ledgerTbody"></tbody></table>
     </div>
     <div id="ledger-details-panel"></div>
@@ -7571,8 +7572,10 @@ function saveLedgerOpeningBalance(){
   if(!party){ toast('Select a party first','warning'); return; }
   const amt = parseFloat(document.getElementById('ledgerOpeningBalance').value)||0;
   const dt = document.getElementById('ledgerOpeningDate').value||'';
-  if(amt===0 && !dt){ delete partyOpeningBalances[party]; }
-  else { partyOpeningBalances[party] = { amount: amt, date: dt }; }
+  const invField = document.getElementById('ledgerOpeningInvoices');
+  const linkedInvoices = invField ? invField.value.trim() : '';
+  if(amt===0 && !dt && !linkedInvoices){ delete partyOpeningBalances[party]; }
+  else { partyOpeningBalances[party] = { amount: amt, date: dt, linkedInvoices: linkedInvoices }; }
   saveData();
   toast('Previous balance saved','success');
   renderLedger();
@@ -7585,16 +7588,19 @@ function renderLedger(){
   const party = document.getElementById('ledgerPartySelect').value;
   const obInput = document.getElementById('ledgerOpeningBalance');
   const obDateInput = document.getElementById('ledgerOpeningDate');
+  const obInvInput = document.getElementById('ledgerOpeningInvoices');
   if(!party){
-    document.getElementById('ledgerTbody').innerHTML='<tr><td colspan="10" class="text-center" style="padding:20px;color:var(--text3);">Select a party to view ledger</td></tr>';
+    document.getElementById('ledgerTbody').innerHTML='<tr><td colspan="9" class="text-center" style="padding:20px;color:var(--text3);">Select a party to view ledger</td></tr>';
     document.getElementById('ledger-summary').innerHTML='';
     if(obInput) obInput.value='';
     if(obDateInput) obDateInput.value='';
+    if(obInvInput) obInvInput.value='';
     return;
   }
   const ob = partyOpeningBalances[party] || {amount:0, date:''};
   if(obInput) obInput.value = ob.amount || '';
   if(obDateInput) obDateInput.value = ob.date || '';
+  if(obInvInput) obInvInput.value = ob.linkedInvoices || '';
   const from = document.getElementById('ledgerFrom').value;
   const to = document.getElementById('ledgerTo').value;
   const search = document.getElementById('ledgerSearch').value.toLowerCase();
@@ -7651,11 +7657,31 @@ function renderLedger(){
     }
   });
   // "Previous Balance" always shows first, above every other row, regardless of date/search filters
+  // If the opening balance has Linked Invoice Nos set (old/pre-system invoices this
+  // balance represents), check whether payments against those invoice numbers have
+  // since covered it — so a legacy opening balance can show Paid/Partial like any
+  // other invoice once it's actually settled.
+  const obLinkedInvoices = (ob.linkedInvoices||'').split(',').map(s=>s.trim()).filter(Boolean);
+  let obPaidSoFar = 0;
+  if(obLinkedInvoices.length){
+    ledgerData.filter(l=>l.partyName===party && l.type==='payment').forEach(l=>{
+      const invoicesOfL = (l.invNo||'').split(',').map(s=>s.trim()).filter(Boolean);
+      const matched = invoicesOfL.filter(no=>obLinkedInvoices.includes(no));
+      if(matched.length){
+        const net = (l.amount||0)+(l.deduction||0);
+        obPaidSoFar += net * (matched.length/invoicesOfL.length);
+      }
+    });
+  }
+  const obBadge = !obLinkedInvoices.length ? '' :
+    (obPaidSoFar >= (ob.amount||0)-0.5 ? ' <span style="color:#1fbf75;font-weight:800;" title="Fully paid">✅ Paid</span>'
+    : (obPaidSoFar>0.5 ? ` <span style="color:#f5a623;font-weight:800;" title="Partially paid">🟡 Partial (${fmt(obPaidSoFar)}/${fmt(ob.amount)})</span>` : ''));
+  const obDesc = 'Opening balance carried forward' + (obLinkedInvoices.length ? `<div style="font-size:10px;color:var(--text3);">🔗 Linked: ${obLinkedInvoices.join(', ')}</div>` : '');
   const openingRow = (ob.amount) ? `<tr style="background:var(--bg3);font-style:italic;">
       <td>${ob.date?fmtDate(ob.date):'-'}</td>
-      <td colspan="3">Previous Balance</td>
-      <td>Opening balance carried forward</td>
-      <td></td><td></td><td></td>
+      <td colspan="3">Previous Balance${obBadge}</td>
+      <td>${obDesc}</td>
+      <td></td><td></td>
       <td style="text-align:right;font-weight:700;color:${balance<0?'var(--neon4)':'var(--neon3)'};">${fmt(Math.abs(balance))} ${balance<0?'CR':'DR'}</td>
       <td></td>
     </tr>` : '';
@@ -7674,6 +7700,24 @@ function renderLedger(){
     let descCell = e.desc||e.narration||'';
     if(e.type==='bill' && e.dcNo) descCell = `<strong>DC:${e.dcNo}</strong>${e.poNo?' | PO:'+e.poNo:''}`;
     if(e.type==='payment' && e.bankName) descCell += `<div style="font-size:10px;color:var(--text3);">🏦 ${e.bankName}</div>`;
+    // Auto-description: how much (if any) % was cut on this payment, worked out
+    // against the linked invoice's actual bill total where possible (falls back to
+    // amount+deduction when there's no single linked invoice to compare against).
+    if(e.type==='payment'){
+      const paymodeLabel={cash:'💵 Cash',cheque:'🏦 Cheque',bank_transfer:'🏧 Bank Transfer',online:'📲 Online',other:'✏️ Other'}[e.paymode]||'';
+      const invoicesOfE=(e.invNo||'').split(',').map(s=>s.trim()).filter(Boolean);
+      let base = (e.amount||0)+ded;
+      if(invoicesOfE.length===1){
+        const billTotal=getInvoiceBillTotal(e.partyName, invoicesOfE[0]);
+        if(billTotal>0) base = billTotal;
+      }
+      if(ded>0.5 && base>0){
+        const pct=(ded/base*100);
+        descCell += `<div style="font-size:10px;color:var(--neon5);">✂️ ${pct.toFixed(2)}% cut (${fmt(ded)}) — ${fmt(e.amount)} received${paymodeLabel?' via '+paymodeLabel:''}</div>`;
+      } else if(base>0){
+        descCell += `<div style="font-size:10px;color:#1fbf75;">✅ Full amount received${paymodeLabel?' via '+paymodeLabel:''} — no deduction</div>`;
+      }
+    }
     const paidAmt = (e.type==='bill' && e.invNo) ? (paidAmountMap[String(e.invNo).trim()]||0) : 0;
     let invCell = e.invNo||'-';
     if(e.type==='bill' && e.invNo){
@@ -7689,8 +7733,7 @@ function renderLedger(){
       <td>${invCell}</td>
       <td style="max-width:220px;">${descCell}</td>
       <td style="text-align:right;">${debit>0?fmt(debit):''}</td>
-      <td style="text-align:right;color:var(--neon4);">${credit>0?fmt(credit):''}</td>
-      <td style="text-align:right;color:var(--neon5);">${ded>0?fmt(ded):''}</td>
+      <td style="text-align:right;color:var(--neon4);">${credit>0?fmt(credit):''}${ded>0?`<div style="font-size:10px;color:var(--neon5);font-weight:400;">➖ Ded: ${fmt(ded)}</div>`:''}</td>
       <td style="text-align:right;font-weight:700;color:${balance<0?'var(--neon4)':'var(--neon3)'};">${fmt(Math.abs(balance))} ${balance<0?'CR':'DR'}</td>
       <td style="white-space:nowrap;">
         ${e.type==='bill'?`<button class="btn btn-neon btn-xs" onclick="viewLedgerInvoice('${e.id}')" title="View Invoice Details">🔍</button>`:''}
@@ -7699,7 +7742,7 @@ function renderLedger(){
       </td>
     </tr>`;
   });
-  document.getElementById('ledgerTbody').innerHTML = (openingRow + rows.join('')) || '<tr><td colspan="10" class="text-center" style="padding:20px;color:var(--text3);">No ledger entries found</td></tr>';
+  document.getElementById('ledgerTbody').innerHTML = (openingRow + rows.join('')) || '<tr><td colspan="9" class="text-center" style="padding:20px;color:var(--text3);">No ledger entries found</td></tr>';
   const filtersActive = typeFilter || paymodeFilter || !isNaN(amtMin) || !isNaN(amtMax);
   let filterWarnEl = document.getElementById('ledgerFilterWarn');
   if(!filterWarnEl){
