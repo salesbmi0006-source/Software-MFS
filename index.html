@@ -1440,6 +1440,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
       <div class="card-title">📄 Item Descriptions Master List</div>
       <div class="flex-gap">
         <button class="btn btn-green btn-sm" onclick="openAddDescModal()">➕ Add Description</button>
+        <button class="btn btn-purple btn-sm" onclick="openHsCodeGroupedView()">🏷️ View by HS Code</button>
         <button class="btn btn-yellow btn-sm" onclick="openDescMergeTool()">🔀 Merge Duplicates</button>
       </div>
     </div>
@@ -4086,6 +4087,121 @@ Switch Socket"></textarea>
 </div>
 </div>
 
+<!-- HS CODE GROUPED VIEW MODAL -->
+<div class="modal-overlay" id="hsGroupedModal">
+<div class="modal modal-lg">
+  <div class="modal-header"><h3>🏷️ Descriptions Grouped by HS Code</h3><button class="close-btn" onclick="closeModal('hsGroupedModal')">✕</button></div>
+  <div class="modal-body">
+    <div class="form-group">
+      <input type="text" id="hsGroupedSearch" placeholder="🔍 Search HS Code or description..." oninput="renderHsCodeGroupedView()">
+    </div>
+    <div id="hsGroupedBody"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-neon" onclick="closeModal('hsGroupedModal')">Close</button>
+  </div>
+</div>
+</div>
+
+<!-- RATE LIST VIEWER MODAL -->
+<div class="modal-overlay" id="rateListViewerModal">
+<div class="modal modal-lg">
+  <div class="modal-header"><h3 id="rl-viewer-title">📋 Rate List</h3><button class="close-btn" onclick="closeModal('rateListViewerModal')">✕</button></div>
+  <div class="modal-body">
+    <div id="rl-basket-summary" style="margin-bottom:12px;padding:10px;background:var(--bg2);border-radius:8px;"></div>
+    <div class="form-group">
+      <label>Search Item (description or cat no)</label>
+      <input type="text" id="rl-search" placeholder="Type at least 2 characters to search..." oninput="searchRateList()" autofocus>
+    </div>
+    <div id="rl-search-results"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-neon" onclick="openAddRateItemModal()">➕ Add Custom Item</button>
+    <button class="btn btn-neon" onclick="closeModal('rateListViewerModal')">Close</button>
+  </div>
+</div>
+</div>
+
+<!-- BASKET / QUOTATION MODAL -->
+<div class="modal-overlay" id="basketModal">
+<div class="modal modal-lg">
+  <div class="modal-header"><h3>🛒 Quotation Basket</h3><button class="close-btn" onclick="closeModal('basketModal')">✕</button></div>
+  <div class="modal-body">
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Sr#</th><th>Description</th><th>Qty</th><th>List Price</th><th>Discount %</th><th>Final Price</th><th>Line Total</th><th>Action</th></tr></thead>
+        <tbody id="basket-tbody"></tbody>
+      </table>
+    </div>
+    <div style="text-align:right;margin-top:10px;font-size:15px;font-weight:700;">
+      Total: <span class="neon-text" id="basket-total">0.00</span>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-red" onclick="clearBasket()">🗑️ Clear Basket</button>
+    <button class="btn btn-green" onclick="openQuotationCustomerForm()">📄 Make Quotation</button>
+    <button class="btn btn-neon" onclick="closeModal('basketModal')">Close</button>
+  </div>
+</div>
+</div>
+
+<!-- QUOTATION CUSTOMER MODAL -->
+<div class="modal-overlay" id="quotationCustomerModal">
+<div class="modal modal-sm">
+  <div class="modal-header"><h3>📄 Quotation Details</h3><button class="close-btn" onclick="closeModal('quotationCustomerModal')">✕</button></div>
+  <div class="modal-body">
+    <div class="form-group"><label>Customer / Party Name *</label><input type="text" id="quote-customer-name" list="party-list3" placeholder="Customer name"><datalist id="party-list3"></datalist></div>
+    <div class="form-group"><label>Address</label><input type="text" id="quote-customer-address" placeholder="Optional address"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="generateQuotationPDF()">📄 Generate PDF</button>
+    <button class="btn btn-neon" onclick="closeModal('quotationCustomerModal')">Cancel</button>
+  </div>
+</div>
+</div>
+
+<!-- ADD RATE ITEM MODAL -->
+<div class="modal-overlay" id="addRateItemModal">
+<div class="modal modal-sm">
+  <div class="modal-header"><h3>➕ Add Custom Rate Item</h3><button class="close-btn" onclick="closeModal('addRateItemModal')">✕</button></div>
+  <div class="modal-body">
+    <div class="form-group"><label>Rate List</label><select id="ari-list-select"></select></div>
+    <div class="form-group"><label>Brand</label><input type="text" id="ari-brand" placeholder="e.g. Clipsal"></div>
+    <div class="form-group"><label>Cat No</label><input type="text" id="ari-cat" placeholder="Optional catalogue number"></div>
+    <div class="form-group"><label>Description *</label><input type="text" id="ari-desc" placeholder="Item description"></div>
+    <div class="form-group"><label>Price *</label><input type="number" id="ari-price" placeholder="0.00"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="saveNewRateItem()">💾 Save Item</button>
+    <button class="btn btn-neon" onclick="closeModal('addRateItemModal')">Cancel</button>
+  </div>
+</div>
+</div>
+
+<!-- IMPORT PDF REVIEW MODAL -->
+<div class="modal-overlay" id="importPdfReviewModal">
+<div class="modal modal-lg">
+  <div class="modal-header"><h3>📥 Import Rate List from PDF</h3><button class="close-btn" onclick="closeModal('importPdfReviewModal')">✕</button></div>
+  <div class="modal-body">
+    <div class="form-group">
+      <label>Extracted Text (edit if needed, then click Parse)</label>
+      <textarea id="import-pdf-preview" rows="8" style="width:100%;font-family:monospace;font-size:11px;"></textarea>
+    </div>
+    <button class="btn btn-neon btn-sm" onclick="parseImportedPdfText()">🔍 Parse Items</button>
+    <div id="import-preview-count" style="margin:10px 0;color:var(--text2);font-size:12px;"></div>
+    <div id="import-items-list" style="max-height:260px;overflow-y:auto;"></div>
+    <div class="form-group" style="margin-top:12px;">
+      <label>Import Into</label>
+      <select id="import-pdf-target-list"></select>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="confirmImportPdfItems()">✅ Import Selected</button>
+    <button class="btn btn-neon" onclick="closeModal('importPdfReviewModal')">Cancel</button>
+  </div>
+</div>
+</div>
+
 <!-- SETTINGS MODAL (Header Quick) -->
 <div class="modal-overlay" id="settingsModal">
 <div class="modal modal-sm">
@@ -6559,7 +6675,7 @@ function addItemRow(it=null){
   const rowId = uid();
   tr.dataset.rowid = rowId;
   tr.innerHTML = `
-    <td><input type="text" value="${desc}" placeholder="Description" list="desc-master-list" oninput="updateGrandTotal()" style="min-width:180px;"></td>
+    <td><input type="text" value="${desc}" placeholder="Description" list="desc-master-list" oninput="updateGrandTotal();dcAutoFillHsCode(this)" onchange="dcAutoFillHsCode(this)" style="min-width:180px;"></td>
     <td><input type="text" value="${hscode}" placeholder="HS Code" oninput="formatHsCodeInput(this)" style="width:110px;"></td>
     <td><select onchange="updateGrandTotal()" style="width:70px;">
       ${['Pcs','Nos','Sets','Kg','Mtr','Box','Rolls','Lot','Units','Ltr','Bags','Sheets'].map(u=>`<option ${u===uom?'selected':''}>${u}</option>`).join('')}
@@ -6574,6 +6690,60 @@ function addItemRow(it=null){
     <td><button type="button" class="btn btn-red btn-xs" onclick="removeItemRow(this)">✕</button></td>
   `;
   tbody.appendChild(tr);
+}
+// ==================== AUTO HS-CODE SYNC (Description -> HS Code) ====================
+// When the user types/picks a Description in a DC item row, this looks up the
+// HS Code that was used for that exact description before, in this order:
+//   1) Same party's own history (their most recent DC using this description)
+//   2) Any party's history (most recent DC anywhere using this description)
+//   3) The Descriptions master list (Descriptions tab settings)
+// This only overwrites the HS Code box when a match is found — if the user has
+// already typed something into HS Code themselves for this row and it doesn't
+// match what history/master would suggest, we still sync it (per user request)
+// so the two never drift apart silently. It never invents a code from thin air.
+function findHsCodeForDesc(desc, partyName){
+  const n = normDesc(desc);
+  if(!n) return '';
+  // 1) Same party's history - most recent match wins
+  if(partyName){
+    let best=null;
+    (db||[]).forEach(rec=>{
+      if(rec.partyName!==partyName) return;
+      (rec.items||[]).forEach(it=>{
+        if(it && normDesc(it.desc)===n && it.hscode){
+          if(!best || (rec.date||'') > (best.date||'')) best={hscode:it.hscode, date:rec.date||''};
+        }
+      });
+    });
+    if(best) return best.hscode;
+  }
+  // 2) Any party's history - most recent match wins
+  let best=null;
+  (db||[]).forEach(rec=>{
+    (rec.items||[]).forEach(it=>{
+      if(it && normDesc(it.desc)===n && it.hscode){
+        if(!best || (rec.date||'') > (best.date||'')) best={hscode:it.hscode, date:rec.date||''};
+      }
+    });
+  });
+  if(best) return best.hscode;
+  // 3) Descriptions master list (Settings -> Descriptions tab)
+  const master = typeof findDescInMaster==='function' ? findDescInMaster(desc) : null;
+  if(master && master.hscode) return master.hscode;
+  return '';
+}
+// Called from the DC item row's Description field (oninput + onchange) to keep
+// the HS Code box in sync automatically as the user types or picks a suggestion.
+function dcAutoFillHsCode(inputEl){
+  const tr = inputEl.closest('tr');
+  if(!tr) return;
+  const desc = inputEl.value.trim();
+  if(!desc) return;
+  const hscodeInput = tr.querySelectorAll('td')[1]?.querySelector('input');
+  if(!hscodeInput) return;
+  const partyName = (document.getElementById('dc-party')?.value||'').trim();
+  const found = findHsCodeForDesc(desc, partyName);
+  if(found) hscodeInput.value = found;
 }
 function calcRow(inp){
   const tr = inp.closest('tr');
@@ -9526,6 +9696,61 @@ function deleteDescription(idx){
   descMaster.splice(idx,1);
   saveData(); populateDescList(); renderDescriptions();
   toast('Description removed','warning');
+}
+
+// ---- View Descriptions grouped by HS Code ----
+// Shows every HS Code that's been used, with every description attached to it
+// listed underneath. Lets the person add another description straight under a
+// given HS Code without hunting for it in the flat list.
+function openHsCodeGroupedView(){
+  rebuildDescMasterFromDC();
+  renderHsCodeGroupedView();
+  openModal('hsGroupedModal');
+}
+function renderHsCodeGroupedView(){
+  const q = (document.getElementById('hsGroupedSearch')?.value||'').trim().toLowerCase();
+  const wrap = document.getElementById('hsGroupedBody');
+  if(!wrap) return;
+  const groups = {};
+  descMaster.forEach(d=>{
+    const code = (d.hscode||'').trim() || '(No HS Code)';
+    if(!groups[code]) groups[code]=[];
+    groups[code].push(d);
+  });
+  let codes = Object.keys(groups).sort((a,b)=> a==='(No HS Code)'?1 : b==='(No HS Code)'?-1 : a.localeCompare(b));
+  if(q){
+    codes = codes.filter(code =>
+      code.toLowerCase().includes(q) ||
+      groups[code].some(d=>(d.desc||'').toLowerCase().includes(q))
+    );
+  }
+  wrap.innerHTML = codes.map(code=>{
+    const items = groups[code];
+    return `<div class="card" style="margin-bottom:10px;">
+      <div class="card-header">
+        <div class="card-title" style="font-size:13px;">🏷️ ${code}</div>
+        <span style="font-size:11px;color:var(--text3);">${items.length} description(s)</span>
+      </div>
+      <div class="tbl-wrap"><table><tbody>
+        ${items.map(d=>{
+          const idx = descMaster.indexOf(d);
+          return `<tr>
+            <td>${d.desc}</td>
+            <td style="width:70px;">${d.uom||'-'}</td>
+            <td style="width:70px;text-align:right;">
+              <button class="btn btn-neon btn-xs" onclick="closeModal('hsGroupedModal');editDescription(${idx})">✏️</button>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody></table></div>
+      <button class="btn btn-green btn-xs" style="margin-top:6px;" onclick="openAddDescUnderHsCode('${code==='(No HS Code)'?'':code.replace(/'/g,"\\'")}')">➕ Add Description Under This HS Code</button>
+    </div>`;
+  }).join('') || `<div style="color:var(--text3);text-align:center;padding:20px;">No descriptions found.</div>`;
+}
+function openAddDescUnderHsCode(hscode){
+  closeModal('hsGroupedModal');
+  openAddDescModal();
+  document.getElementById('desc-hscode').value = hscode||'';
 }
 
 // ---- Merge Duplicate Descriptions ----
