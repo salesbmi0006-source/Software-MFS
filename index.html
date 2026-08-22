@@ -457,6 +457,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
     <div class="tab" onclick="showTab('crm')" id="tab-crm">🤝 CRM</div>
     <div class="tab" onclick="showTab('sendcenter')" id="tab-sendcenter">📤 Send Center</div>
     <div class="tab" onclick="showTab('dispatch')" id="tab-dispatch">🚚 Dispatch</div>
+    <div class="tab" onclick="showTab('courierrates')" id="tab-courierrates">🚚 Courier Rates</div>
 
     <div class="tab-group-label">Operations</div>
     <div class="tab" onclick="showTab('employees')" id="tab-employees">👔 Employees</div>
@@ -1581,6 +1582,74 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
     <button class="btn btn-neon" onclick="closeModal('envelopeModal')">Cancel</button>
   </div>
 </div>
+</div>
+
+<!-- ====== COURIER RATES TAB ====== -->
+<div class="tab-panel" id="panel-courierrates">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">🚚 Courier Rate Cards</div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">
+      Define a rate card per Courier + Service Type (Overnight / Overland / Same Day...) + Sector/Zone (Within City / Same Zone / Different Zone...). Enter each weight-tier's base rate and "Each Additional KG" base rate, plus the multiplier chain applied to get the final billable rate (e.g. base 120 × 1.30 fuel × 1.16 tax = 181.32). When you fill Weight in a DC's "Dispatch / Courier Info" section, this saved data auto-picks the matching card and fills Freight Charges automatically — and it remembers the last Service/Sector used per party.
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Courier</label>
+        <select id="cr-courier">
+          <option value="leopards">🐆 Leopards Courier</option>
+          <option value="tcs">📦 TCS</option>
+          <option value="mnp">📦 M&P</option>
+          <option value="trax">📦 Trax</option>
+          <option value="postex">📦 PostEx</option>
+          <option value="bilty">🚛 Bilty / Cargo Adda</option>
+          <option value="other">✏️ Other Courier</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Service Type</label>
+        <input type="text" id="cr-service" list="cr-service-list" placeholder="e.g. Overnight">
+        <datalist id="cr-service-list"><option value="Overnight"><option value="Overland"><option value="Same Day"></datalist>
+      </div>
+      <div class="form-group"><label>Sector / Zone</label>
+        <input type="text" id="cr-sector" list="cr-sector-list" placeholder="e.g. Different Zone">
+        <datalist id="cr-sector-list"><option value="Within City"><option value="Same Zone"><option value="Different Zone"></datalist>
+      </div>
+    </div>
+    <div style="margin:12px 0 6px;font-size:12px;font-weight:700;color:var(--neon2);">Weight Tiers (base rate, before multipliers)</div>
+    <div id="cr-tiers-list"></div>
+    <button class="btn btn-neon btn-xs" type="button" onclick="addCourierTierRow()">➕ Add Tier</button>
+    <div class="form-row" style="margin-top:12px;">
+      <div class="form-group"><label>Each Additional KG (base rate)</label><input type="number" step="0.01" id="cr-additional-perkg" placeholder="0.00" oninput="renderCourierLivePreview()"></div>
+    </div>
+    <div style="margin:12px 0 6px;font-size:12px;font-weight:700;color:var(--neon2);">Multiplier Chain (applied in order to every base rate — e.g. fuel surcharge, then tax)</div>
+    <div id="cr-multipliers-list"></div>
+    <button class="btn btn-neon btn-xs" type="button" onclick="addCourierMultiplierRow()">➕ Add Multiplier</button>
+    <div id="cr-live-preview" style="margin-top:14px;font-size:12px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px;"></div>
+    <div class="modal-footer" style="padding:14px 0 0;border:none;">
+      <input type="hidden" id="cr-edit-idx" value="-1">
+      <button class="btn btn-green" onclick="saveCourierRateCard()">💾 Save Rate Card</button>
+      <button class="btn btn-neon" onclick="resetCourierRateForm()">🔄 New / Clear</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title" style="margin-bottom:10px;">📋 Saved Rate Cards</div>
+    <div style="overflow-x:auto;">
+      <table class="items-table">
+        <thead><tr><th>Courier</th><th>Service</th><th>Sector</th><th>Tiers (final rate)</th><th>Extra/KG (final)</th><th></th></tr></thead>
+        <tbody id="cr-cards-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title" style="margin-bottom:10px;">🧪 Test Calculator</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Pick a courier/service/sector combination and enter a weight to see exactly what rate the DC dispatch section would auto-fill.</div>
+    <div class="form-row">
+      <div class="form-group"><label>Courier</label><select id="cr-test-courier" onchange="onCourierTestCourierChanged()"><option value="">-- Select --</option></select></div>
+      <div class="form-group"><label>Service Type</label><select id="cr-test-service" onchange="onCourierTestServiceChanged()"><option value="">-- Select --</option></select></div>
+      <div class="form-group"><label>Sector / Zone</label><select id="cr-test-sector" onchange="runCourierRateTest()"><option value="">-- Select --</option></select></div>
+      <div class="form-group"><label>Weight (KG)</label><input type="number" step="0.01" id="cr-test-weight" placeholder="0.00" oninput="runCourierRateTest()"></div>
+    </div>
+    <div id="cr-test-result" style="margin-top:8px;font-size:13px;"></div>
+  </div>
 </div>
 
 <!-- ====== EMPLOYEES TAB (Module 4) ====== -->
@@ -3718,6 +3787,7 @@ Switch Socket"></textarea>
           <option value="tcs">📦 TCS</option>
           <option value="mnp">📦 M&P</option>
           <option value="trax">📦 Trax</option>
+          <option value="postex">📦 PostEx</option>
           <option value="bilty">🚛 Bilty / Cargo Adda</option>
           <option value="other">✏️ Other Courier</option>
         </select>
@@ -3731,6 +3801,21 @@ Switch Socket"></textarea>
         <input type="text" id="dc-dispatch-num" placeholder="Enter tracking / bilty number">
       </div>
     </div>
+    <div class="form-row" id="dc-dispatch-rate-row" style="display:none;">
+      <div class="form-group">
+        <label>Courier Service Type</label>
+        <select id="dc-dispatch-service" onchange="onDispatchServiceChanged()">
+          <option value="">-- Select --</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Sector / Zone</label>
+        <select id="dc-dispatch-sector" onchange="onDispatchRateInputsChanged()">
+          <option value="">-- Select --</option>
+        </select>
+      </div>
+    </div>
+    <div id="dc-dispatch-rate-preview" style="display:none;font-size:11px;color:var(--text3);margin:-6px 0 10px;padding:6px 8px;background:var(--bg3);border-radius:6px;border:1px solid var(--border2);"></div>
     <div class="form-row" id="dc-dispatch-row2" style="display:none;">
       <div class="form-group">
         <label>Tracking Link</label>
@@ -3754,7 +3839,7 @@ Switch Socket"></textarea>
       <input type="text" id="dc-dispatch-adda" placeholder="e.g. Daewoo, New Ittefaq Cargo">
     </div>
     <div class="form-row" id="dc-dispatch-row3" style="display:none;">
-      <div class="form-group"><label>Weight (kg)</label><input type="number" step="0.01" id="dc-dispatch-weight" placeholder="0.00"></div>
+      <div class="form-group"><label>Weight (kg)</label><input type="number" step="0.01" id="dc-dispatch-weight" placeholder="0.00" oninput="onDispatchRateInputsChanged()"></div>
       <div class="form-group"><label>Cartons</label><input type="number" id="dc-dispatch-cartons" placeholder="0"></div>
       <div class="form-group"><label>Packages</label><input type="number" id="dc-dispatch-packages" placeholder="0"></div>
       <div class="form-group">
@@ -6120,6 +6205,7 @@ function renderTabContent(id){
   if(id==='descriptions') renderDescriptions();
   if(id==='partylookup') renderPartyLookup();
   if(id==='dispatch') { renderDispatchTab(); renderEnvelopeDispatchTab(); }
+  if(id==='courierrates') { renderCourierRatesTab(); }
   if(id==='employees') { renderEmployees(); renderAttendanceDashboard(); renderSalarySlipsTable(); }
   if(id==='docmanager') renderDocManager();
   if(id==='crm') renderCrmTab();
@@ -6180,7 +6266,8 @@ const MOBILE_MORE_GROUPS = [
   ]},
   {label:'Parties & Communication', tabs:[
     {id:'partylookup',label:'Party Lookup',icon:'📨'},{id:'crm',label:'CRM',icon:'🤝'},
-    {id:'sendcenter',label:'Send Center',icon:'📤'},{id:'dispatch',label:'Dispatch',icon:'🚚'}
+    {id:'sendcenter',label:'Send Center',icon:'📤'},{id:'dispatch',label:'Dispatch',icon:'🚚'},
+    {id:'courierrates',label:'Courier Rates',icon:'🚚'}
   ]},
   {label:'Operations', tabs:[
     {id:'employees',label:'Employees',icon:'👔'},{id:'stock',label:'Stock',icon:'📦'},
@@ -6844,9 +6931,12 @@ function toggleDispatchFields(){
   const row5 = document.getElementById('dc-dispatch-row5');
   const remarksWrap = document.getElementById('dc-dispatch-remarks-wrap');
   const podWrap = document.getElementById('dc-dispatch-pod-wrap');
+  const rateRow = document.getElementById('dc-dispatch-rate-row');
   [row2,row3,row4,row5,remarksWrap,picWrap].forEach(el=>{ if(el) el.style.display = show?'':'none'; });
+  if(rateRow) rateRow.style.display = show?'':'none';
+  if(show) populateDispatchServiceSectorOptions(); else { const pv=document.getElementById('dc-dispatch-rate-preview'); if(pv) pv.style.display='none'; }
   courierNameWrap.style.display = (method==='other') ? '' : 'none';
-  if(method==='leopards'||method==='tcs'||method==='mnp'||method==='trax'){
+  if(method==='leopards'||method==='tcs'||method==='mnp'||method==='trax'||method==='postex'){
     trackWrap.style.display=''; biltyWrap.style.display='none';
     numLabel.textContent='Tracking Number';
   } else if(method==='bilty'){
@@ -6883,7 +6973,7 @@ async function getDispatchPodBase64(){
 function clearDispatchFields(){
   document.getElementById('dc-dispatch-method').value='';
   document.getElementById('dc-dispatch-num').value='';
-  const ids=['dc-dispatch-courier-name','dc-dispatch-adda','dc-dispatch-track-link','dc-dispatch-date','dc-dispatch-time','dc-dispatch-by','dc-dispatch-weight','dc-dispatch-cartons','dc-dispatch-packages','dc-dispatch-packtype','dc-dispatch-freight','dc-dispatch-freight-by','dc-dispatch-delivery-date','dc-dispatch-recv-name','dc-dispatch-recv-cnic','dc-dispatch-recv-mobile','dc-dispatch-remarks'];
+  const ids=['dc-dispatch-courier-name','dc-dispatch-adda','dc-dispatch-track-link','dc-dispatch-date','dc-dispatch-time','dc-dispatch-by','dc-dispatch-weight','dc-dispatch-cartons','dc-dispatch-packages','dc-dispatch-packtype','dc-dispatch-freight','dc-dispatch-freight-by','dc-dispatch-delivery-date','dc-dispatch-recv-name','dc-dispatch-recv-cnic','dc-dispatch-recv-mobile','dc-dispatch-remarks','dc-dispatch-service','dc-dispatch-sector'];
   ids.forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
   document.getElementById('dc-dispatch-pod').checked=false;
   document.getElementById('dc-dispatch-pic').value='';
@@ -6918,6 +7008,17 @@ function loadDispatchIntoModal(rec){
   document.getElementById('dc-dispatch-pic-preview').innerHTML = d.picBase64 ? `<img src="${d.picBase64}" style="max-width:200px;max-height:120px;border-radius:6px;border:1px solid var(--border2);">` : '';
   document.getElementById('dc-dispatch-pod-preview').innerHTML = d.podBase64 ? `<img src="${d.podBase64}" style="max-width:200px;max-height:120px;border-radius:6px;border:1px solid var(--border2);">` : '';
   toggleDispatchFields();
+  // Restore the saved service-type/sector (overriding whatever
+  // populateDispatchServiceSectorOptions() may have auto-picked above),
+  // since an existing record's own values should win over a party's
+  // remembered preference.
+  if(d.method){
+    const svcSel = document.getElementById('dc-dispatch-service');
+    if(svcSel && d.serviceType){ svcSel.value = d.serviceType; onDispatchServiceChanged(true); }
+    const sectorSel = document.getElementById('dc-dispatch-sector');
+    if(sectorSel && d.sector) sectorSel.value = d.sector;
+    updateDispatchRatePreviewAndFreight();
+  }
 }
 async function saveDC(){
   const date = document.getElementById('dc-date').value;
@@ -6985,6 +7086,8 @@ async function saveDC(){
       dispatchTime: gv('dc-dispatch-time'),
       dispatchBy: gv('dc-dispatch-by'),
       addaName: gv('dc-dispatch-adda'),
+      serviceType: gv('dc-dispatch-service'),
+      sector: gv('dc-dispatch-sector'),
       weight: gv('dc-dispatch-weight'),
       cartons: gv('dc-dispatch-cartons'),
       packages: gv('dc-dispatch-packages'),
@@ -7001,6 +7104,9 @@ async function saveDC(){
       podBase64: podB64 || ((editingDcIdx!==null && db[editingDcIdx]?.dispatch?.podBase64) ? db[editingDcIdx].dispatch.podBase64 : null)
     };
     dispatchInfo.status = computeDispatchStatus(dispatchInfo);
+    // Remember this party's courier/service/sector choice so next time a DC
+    // is created for them with the same courier, it gets auto-picked.
+    if(dispatchInfo.serviceType || dispatchInfo.sector) saveCourierPref(party, dispatchMethod, dispatchInfo.serviceType, dispatchInfo.sector);
   }
   const rec = {
     date, dcNo, invNo:document.getElementById('dc-invno').value.trim(),
@@ -7029,6 +7135,272 @@ async function saveDC(){
   if(document.getElementById('panel-dispatch')?.classList.contains('active')) renderDispatchTab();
   if(typeof renderStockTab==='function') renderStockTab();
   if(rec.poNo && typeof renderPOTab==='function') renderPOTab();
+}
+
+// ==================== COURIER RATE CARDS ====================
+// Lets the office define per-courier rate cards (service type + sector +
+// weight-tier base rates + a chain of multipliers such as fuel surcharge/tax)
+// once, then have the DC "Dispatch / Courier Info" section auto-pick the
+// matching card (remembered per party) and auto-calculate the Freight
+// Charges the moment weight is typed in.
+let courierRateCards = [];
+let courierPartyPrefs = {};
+const COURIER_LABELS = {leopards:'🐆 Leopards Courier',tcs:'📦 TCS',mnp:'📦 M&P',trax:'📦 Trax',postex:'📦 PostEx',bilty:'🚛 Bilty / Cargo Adda',other:'✏️ Other Courier'};
+function loadCourierRates(){
+  try{ const d = localStorage.getItem('sau_courier_rates'); courierRateCards = d ? JSON.parse(d) : []; }catch(e){ courierRateCards = []; }
+  try{ const p = localStorage.getItem('sau_courier_party_prefs'); courierPartyPrefs = p ? JSON.parse(p) : {}; }catch(e){ courierPartyPrefs = {}; }
+}
+function saveCourierRatesData(){ safeSetItem('sau_courier_rates', JSON.stringify(courierRateCards)); }
+function getCourierPref(party, courier){
+  if(!party || !courier) return null;
+  return courierPartyPrefs[party+'||'+courier] || null;
+}
+function saveCourierPref(party, courier, service, sector){
+  if(!party || !courier) return;
+  courierPartyPrefs[party+'||'+courier] = {service:service||'', sector:sector||''};
+  safeSetItem('sau_courier_party_prefs', JSON.stringify(courierPartyPrefs));
+}
+function crRound2(n){ return Math.round((parseFloat(n)||0)*100)/100; }
+function crHtmlEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// base rate -> final rate, applying every multiplier in order
+// e.g. computeFinalRate(120, [1.30, 1.16]) => 120*1.30*1.16 = 181.32
+function computeFinalRate(base, multipliers){
+  let v = parseFloat(base)||0;
+  (multipliers||[]).forEach(m=>{ v = v * (parseFloat(m)||1); });
+  return v;
+}
+function findCourierRateCard(courier, service, sector){
+  return courierRateCards.find(c=>c.courier===courier && c.service===service && c.sector===sector);
+}
+// Works out the total bilty rate for a given weight against a rate card:
+// picks the smallest weight-tier that covers the weight, or — if the weight
+// exceeds every tier — takes the largest tier's final rate plus the extra
+// kilos at the (also multiplier-adjusted) "each additional KG" rate.
+function computeShipmentCharge(card, weightKg){
+  weightKg = parseFloat(weightKg)||0;
+  if(!card || !card.tiers || !card.tiers.length) return null;
+  const tiers = card.tiers.map(t=>({upToKg:parseFloat(t.upToKg)||0, baseRate:parseFloat(t.baseRate)||0})).sort((a,b)=>a.upToKg-b.upToKg);
+  const mult = (card.multipliers||[]).length ? card.multipliers : [1];
+  const matched = tiers.find(t=>weightKg <= t.upToKg);
+  if(matched){
+    const finalRate = crRound2(computeFinalRate(matched.baseRate, mult));
+    return {tier:matched, extraKg:0, extraPerKgFinal:0, total:finalRate,
+      breakdown:`Upto ${matched.upToKg}KG slab (base ${fmt(matched.baseRate)} → final ${fmt(finalRate)})`};
+  }
+  const lastTier = tiers[tiers.length-1];
+  const baseFinal = crRound2(computeFinalRate(lastTier.baseRate, mult));
+  const extraKg = crRound2(Math.max(0, weightKg - lastTier.upToKg));
+  const addPerKgFinal = crRound2(computeFinalRate(card.additionalPerKgBase||0, mult));
+  const total = crRound2(baseFinal + (extraKg*addPerKgFinal));
+  return {tier:lastTier, extraKg, extraPerKgFinal:addPerKgFinal, total,
+    breakdown:`Upto ${lastTier.upToKg}KG slab (${fmt(baseFinal)}) + ${extraKg}KG extra @ ${fmt(addPerKgFinal)}/KG`};
+}
+
+// ---- DC modal integration: dispatch section Service Type / Sector selects ----
+function populateDispatchServiceSectorOptions(){
+  const method = document.getElementById('dc-dispatch-method').value;
+  const svcSel = document.getElementById('dc-dispatch-service');
+  if(!svcSel) return;
+  const services = [...new Set(courierRateCards.filter(c=>c.courier===method).map(c=>c.service).filter(Boolean))];
+  svcSel.innerHTML = '<option value="">-- Select --</option>' + services.map(s=>`<option value="${crHtmlEsc(s)}">${crHtmlEsc(s)}</option>`).join('');
+  const partyEl = document.getElementById('dc-party');
+  const party = partyEl ? partyEl.value.trim() : '';
+  const pref = getCourierPref(party, method);
+  if(pref && pref.service && services.includes(pref.service)) svcSel.value = pref.service;
+  else if(services.length===1) svcSel.value = services[0];
+  onDispatchServiceChanged(pref);
+}
+function onDispatchServiceChanged(pref){
+  const method = document.getElementById('dc-dispatch-method').value;
+  const service = document.getElementById('dc-dispatch-service').value;
+  const sectorSel = document.getElementById('dc-dispatch-sector');
+  if(sectorSel){
+    const sectors = [...new Set(courierRateCards.filter(c=>c.courier===method && c.service===service).map(c=>c.sector).filter(Boolean))];
+    sectorSel.innerHTML = '<option value="">-- Select --</option>' + sectors.map(s=>`<option value="${crHtmlEsc(s)}">${crHtmlEsc(s)}</option>`).join('');
+    if(!pref){
+      const partyEl = document.getElementById('dc-party');
+      const party = partyEl ? partyEl.value.trim() : '';
+      pref = getCourierPref(party, method);
+    }
+    if(pref && pref.sector && sectors.includes(pref.sector)) sectorSel.value = pref.sector;
+    else if(sectors.length===1) sectorSel.value = sectors[0];
+  }
+  updateDispatchRatePreviewAndFreight();
+}
+function onDispatchRateInputsChanged(){ updateDispatchRatePreviewAndFreight(); }
+function updateDispatchRatePreviewAndFreight(){
+  const previewEl = document.getElementById('dc-dispatch-rate-preview');
+  if(!previewEl) return;
+  const method = document.getElementById('dc-dispatch-method').value;
+  const service = document.getElementById('dc-dispatch-service').value;
+  const sector = document.getElementById('dc-dispatch-sector').value;
+  const weight = document.getElementById('dc-dispatch-weight').value;
+  if(!method || !service || !sector || !weight){ previewEl.style.display='none'; return; }
+  const card = findCourierRateCard(method, service, sector);
+  const result = card ? computeShipmentCharge(card, weight) : null;
+  if(!result){ previewEl.style.display='none'; return; }
+  previewEl.style.display='';
+  previewEl.innerHTML = `💰 Auto-calculated bilty rate: <strong style="color:var(--neon);">${fmt(result.total)}</strong> <span style="opacity:.75;">(${result.breakdown})</span> — Freight Charges below is filled automatically, edit it if you need to override.`;
+  const freightEl = document.getElementById('dc-dispatch-freight');
+  if(freightEl) freightEl.value = result.total;
+}
+
+// ---- Courier Rates tab: rate-card CRUD form ----
+let crWorkingTiers = [{upToKg:0.5,baseRate:''},{upToKg:1,baseRate:''},{upToKg:3,baseRate:''}];
+let crWorkingMultipliers = [1.30, 1.16];
+function renderCourierTierRows(){
+  const el = document.getElementById('cr-tiers-list');
+  if(!el) return;
+  el.innerHTML = crWorkingTiers.map((t,i)=>`
+    <div class="form-row" style="align-items:flex-end;margin-bottom:6px;">
+      <div class="form-group"><label>Upto (KG)</label><input type="number" step="0.01" value="${t.upToKg}" onchange="crWorkingTiers[${i}].upToKg=this.value;renderCourierLivePreview();"></div>
+      <div class="form-group"><label>Base Rate</label><input type="number" step="0.01" value="${t.baseRate}" onchange="crWorkingTiers[${i}].baseRate=this.value;renderCourierLivePreview();"></div>
+      <button class="btn btn-neon3 btn-xs" type="button" style="margin-bottom:14px;" onclick="removeCourierTierRow(${i})">✕</button>
+    </div>`).join('');
+  renderCourierLivePreview();
+}
+function addCourierTierRow(){ crWorkingTiers.push({upToKg:'',baseRate:''}); renderCourierTierRows(); }
+function removeCourierTierRow(i){ crWorkingTiers.splice(i,1); renderCourierTierRows(); }
+function renderCourierMultiplierRows(){
+  const el = document.getElementById('cr-multipliers-list');
+  if(!el) return;
+  el.innerHTML = crWorkingMultipliers.map((m,i)=>`
+    <div class="form-row" style="align-items:flex-end;margin-bottom:6px;">
+      <div class="form-group"><label>Multiplier ${i+1}</label><input type="number" step="0.0001" value="${m}" onchange="crWorkingMultipliers[${i}]=this.value;renderCourierLivePreview();"></div>
+      <button class="btn btn-neon3 btn-xs" type="button" style="margin-bottom:14px;" onclick="removeCourierMultiplierRow(${i})">✕</button>
+    </div>`).join('');
+  renderCourierLivePreview();
+}
+function addCourierMultiplierRow(){ crWorkingMultipliers.push(1); renderCourierMultiplierRows(); }
+function removeCourierMultiplierRow(i){ crWorkingMultipliers.splice(i,1); renderCourierMultiplierRows(); }
+function renderCourierLivePreview(){
+  const el = document.getElementById('cr-live-preview');
+  if(!el) return;
+  const mult = crWorkingMultipliers.map(m=>parseFloat(m)||1);
+  const rows = crWorkingTiers.map(t=>{
+    const base = parseFloat(t.baseRate)||0;
+    const final = crRound2(computeFinalRate(base, mult));
+    return `<tr><td>Upto ${t.upToKg||'-'}KG</td><td>${fmt(base)}</td><td style="font-weight:700;color:var(--neon);">${fmt(final)}</td></tr>`;
+  }).join('');
+  const addBase = parseFloat(document.getElementById('cr-additional-perkg')?.value)||0;
+  const addFinal = crRound2(computeFinalRate(addBase, mult));
+  el.innerHTML = `<div style="font-weight:700;margin-bottom:6px;color:var(--neon2);">Live Preview (base → final rate after multipliers)</div>
+    <table class="items-table"><thead><tr><th>Tier</th><th>Base Rate</th><th>Final Rate</th></tr></thead><tbody>${rows}
+    <tr><td>Each Additional KG</td><td>${fmt(addBase)}</td><td style="font-weight:700;color:var(--neon);">${fmt(addFinal)}</td></tr>
+    </tbody></table>`;
+}
+function resetCourierRateForm(){
+  document.getElementById('cr-edit-idx').value = '-1';
+  document.getElementById('cr-courier').value = 'leopards';
+  document.getElementById('cr-service').value = '';
+  document.getElementById('cr-sector').value = '';
+  document.getElementById('cr-additional-perkg').value = '';
+  crWorkingTiers = [{upToKg:0.5,baseRate:''},{upToKg:1,baseRate:''},{upToKg:3,baseRate:''}];
+  crWorkingMultipliers = [1.30, 1.16];
+  renderCourierTierRows(); renderCourierMultiplierRows();
+}
+function editCourierRateCard(idx){
+  const c = courierRateCards[idx];
+  if(!c) return;
+  document.getElementById('cr-edit-idx').value = idx;
+  document.getElementById('cr-courier').value = c.courier;
+  document.getElementById('cr-service').value = c.service;
+  document.getElementById('cr-sector').value = c.sector;
+  document.getElementById('cr-additional-perkg').value = c.additionalPerKgBase||'';
+  crWorkingTiers = (c.tiers||[]).map(t=>({...t}));
+  crWorkingMultipliers = (c.multipliers||[1]).slice();
+  renderCourierTierRows(); renderCourierMultiplierRows();
+  toast('Editing rate card — change fields and click Save.','info');
+}
+function deleteCourierRateCard(idx){
+  const c = courierRateCards[idx];
+  if(!c) return;
+  if(!confirm(`Delete rate card: ${COURIER_LABELS[c.courier]||c.courier} / ${c.service} / ${c.sector}?`)) return;
+  courierRateCards.splice(idx,1);
+  saveCourierRatesData(); renderCourierRatesTab();
+  toast('Rate card deleted.','success');
+}
+function saveCourierRateCard(){
+  const courier = document.getElementById('cr-courier').value;
+  const service = document.getElementById('cr-service').value.trim();
+  const sector = document.getElementById('cr-sector').value.trim();
+  if(!courier || !service || !sector){ toast('Courier, Service Type, and Sector are required!','warning'); return; }
+  const tiers = crWorkingTiers.filter(t=>t.upToKg!=='' && t.upToKg!=null).map(t=>({upToKg:parseFloat(t.upToKg)||0, baseRate:parseFloat(t.baseRate)||0}));
+  if(!tiers.length){ toast('Add at least one weight tier!','warning'); return; }
+  const additionalPerKgBase = parseFloat(document.getElementById('cr-additional-perkg').value)||0;
+  const multipliers = crWorkingMultipliers.map(m=>parseFloat(m)||1);
+  const idx = parseInt(document.getElementById('cr-edit-idx').value);
+  const card = {courier, service, sector, tiers, additionalPerKgBase, multipliers};
+  if(idx>=0 && courierRateCards[idx]) courierRateCards[idx] = card;
+  else courierRateCards.push(card);
+  saveCourierRatesData();
+  toast('Courier rate card saved!','success');
+  resetCourierRateForm();
+  renderCourierRatesTab();
+}
+function renderCourierRatesTab(){
+  if(!document.getElementById('cr-tiers-list')) return;
+  if(!document.getElementById('cr-tiers-list').innerHTML) renderCourierTierRows();
+  if(!document.getElementById('cr-multipliers-list').innerHTML) renderCourierMultiplierRows();
+  const tbody = document.getElementById('cr-cards-tbody');
+  if(tbody){
+    tbody.innerHTML = courierRateCards.length ? courierRateCards.map((c,i)=>{
+      const mult = c.multipliers||[1];
+      const tiersStr = (c.tiers||[]).map(t=>`Upto ${t.upToKg}KG: ${fmt(crRound2(computeFinalRate(t.baseRate,mult)))}`).join('<br>');
+      const addFinal = fmt(crRound2(computeFinalRate(c.additionalPerKgBase||0, mult)));
+      return `<tr>
+        <td>${COURIER_LABELS[c.courier]||c.courier}</td><td>${crHtmlEsc(c.service)}</td><td>${crHtmlEsc(c.sector)}</td>
+        <td style="font-size:11px;">${tiersStr}</td><td>${addFinal}</td>
+        <td><button class="btn btn-neon btn-xs" onclick="editCourierRateCard(${i})">✏️</button>
+        <button class="btn btn-neon3 btn-xs" onclick="deleteCourierRateCard(${i})">🗑️</button></td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="6" style="text-align:center;color:var(--text3);">No rate cards yet — add one above.</td></tr>`;
+  }
+  populateCourierTestDropdowns();
+}
+
+// ---- Courier Rates tab: test calculator ----
+function populateCourierTestDropdowns(){
+  const courierSel = document.getElementById('cr-test-courier');
+  if(!courierSel) return;
+  const couriers = [...new Set(courierRateCards.map(c=>c.courier))];
+  const cur = courierSel.value;
+  courierSel.innerHTML = '<option value="">-- Select --</option>' + couriers.map(c=>`<option value="${c}">${COURIER_LABELS[c]||c}</option>`).join('');
+  if(couriers.includes(cur)) courierSel.value = cur;
+  onCourierTestCourierChanged();
+}
+function onCourierTestCourierChanged(){
+  const courier = document.getElementById('cr-test-courier').value;
+  const svcSel = document.getElementById('cr-test-service');
+  const services = [...new Set(courierRateCards.filter(c=>c.courier===courier).map(c=>c.service))];
+  const cur = svcSel.value;
+  svcSel.innerHTML = '<option value="">-- Select --</option>' + services.map(s=>`<option value="${crHtmlEsc(s)}">${crHtmlEsc(s)}</option>`).join('');
+  if(services.includes(cur)) svcSel.value = cur;
+  onCourierTestServiceChanged();
+}
+function onCourierTestServiceChanged(){
+  const courier = document.getElementById('cr-test-courier').value;
+  const service = document.getElementById('cr-test-service').value;
+  const sectorSel = document.getElementById('cr-test-sector');
+  const sectors = [...new Set(courierRateCards.filter(c=>c.courier===courier && c.service===service).map(c=>c.sector))];
+  const cur = sectorSel.value;
+  sectorSel.innerHTML = '<option value="">-- Select --</option>' + sectors.map(s=>`<option value="${crHtmlEsc(s)}">${crHtmlEsc(s)}</option>`).join('');
+  if(sectors.includes(cur)) sectorSel.value = cur;
+  runCourierRateTest();
+}
+function runCourierRateTest(){
+  const resEl = document.getElementById('cr-test-result');
+  if(!resEl) return;
+  const courier = document.getElementById('cr-test-courier').value;
+  const service = document.getElementById('cr-test-service').value;
+  const sector = document.getElementById('cr-test-sector').value;
+  const weight = document.getElementById('cr-test-weight').value;
+  if(!courier || !service || !sector || !weight){ resEl.innerHTML = '<span style="color:var(--text3);">Select courier, service, sector and enter a weight to test.</span>'; return; }
+  const card = findCourierRateCard(courier, service, sector);
+  if(!card){ resEl.innerHTML = '<span style="color:var(--neon3);">No rate card saved for this combination.</span>'; return; }
+  const result = computeShipmentCharge(card, weight);
+  if(!result){ resEl.innerHTML = '<span style="color:var(--neon3);">Could not compute — check the rate card.</span>'; return; }
+  resEl.innerHTML = `<div class="accent-box"><div style="font-size:11px;color:var(--text3);">Computed Bilty Rate for ${weight}KG</div><div style="font-size:22px;font-weight:700;color:var(--neon);">${fmt(result.total)}</div><div style="font-size:11px;color:var(--text3);margin-top:4px;">${result.breakdown}</div></div>`;
 }
 
 function addAutoLedger(rec, idx){
@@ -9389,6 +9761,7 @@ function init(){
   loadRateLists();
   loadPartyDispatchData();
   loadEnvelopeDispatches();
+  loadCourierRates();
   loadSavedQuotations();
   loadQuotSettings();
   loadSearchFreq();
