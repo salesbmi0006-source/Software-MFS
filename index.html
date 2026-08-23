@@ -29,6 +29,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/JsBarcode/3.11.5/JsBarcode.all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -3049,6 +3050,15 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
       <span id="fb-rl-count" style="font-size:11px;color:var(--text3);"></span>
       <button type="button" class="btn btn-neon btn-sm" onclick="fbImportDefaultRateList(true)">📥 Import/Refresh Default 110 Items</button>
     </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">🧭 Step-by-step filter: pehle Category chunein, phir uske andar Model, phir Watt, Colour, Size — har selection ke baad agli list khud narrow ho jayegi.</div>
+    <div class="form-row" style="align-items:flex-end;margin-bottom:10px;">
+      <div class="form-group"><label>1️⃣ Category</label><select id="fb-rl-facet-0" onchange="fbRlFacetChange(0,this.value)"></select></div>
+      <div class="form-group"><label>2️⃣ Model / Brand</label><select id="fb-rl-facet-1" onchange="fbRlFacetChange(1,this.value)"></select></div>
+      <div class="form-group"><label>3️⃣ Watt</label><select id="fb-rl-facet-2" onchange="fbRlFacetChange(2,this.value)"></select></div>
+      <div class="form-group"><label>4️⃣ Colour</label><select id="fb-rl-facet-3" onchange="fbRlFacetChange(3,this.value)"></select></div>
+      <div class="form-group"><label>5️⃣ Size / Cut</label><select id="fb-rl-facet-4" onchange="fbRlFacetChange(4,this.value)"></select></div>
+      <div class="form-group" style="align-self:flex-end;"><button type="button" class="btn btn-neon btn-sm" onclick="fbClearRlFacets()">🔄 Clear Filters</button></div>
+    </div>
     <div id="fb-descriptions-list"></div>
     <button type="button" class="btn btn-green btn-sm" style="margin-top:10px;" onclick="fbAddDescriptionRow()">➕ Add Item</button>
   </div>
@@ -3206,6 +3216,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
     <div id="fb-stock-summary-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px;"></div>
     <button type="button" class="btn btn-purple btn-sm" style="margin-bottom:14px;" onclick="fbOpenStockValueReport()">🔒 Full Stock Value Report (Admin)</button>
     <button type="button" class="btn btn-neon btn-sm" style="margin-bottom:14px;margin-left:8px;" onclick="fbOpenStockAvailReport()">📋 Stock Availability Report</button>
+    <button type="button" class="btn btn-green btn-sm" style="margin-bottom:14px;margin-left:8px;" onclick="fbOpenMasterStockReport()">📊 Master Stock Report (PDF + Excel)</button>
 
     <div class="form-row" style="align-items:flex-end;">
       <div class="form-group" style="flex:2;"><label>Search Item</label><input type="text" id="fb-stock-search" placeholder="🔍 e.g. spot 12w (any word, any order)" oninput="fbRenderStock()"></div>
@@ -3306,6 +3317,33 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
       <button type="button" class="btn btn-purple btn-sm" onclick="fbDownloadStockAvailPDF()">📄 Download PDF</button>
     </div>
     <div id="fb-stock-avail-table" style="max-height:420px;overflow:auto;"></div>
+  </div>
+</div>
+</div>
+
+<!-- MASTER STOCK REPORT MODAL (Fast Billing: All Items + Available + Low Alert, optionally + Movement History — one click PDF or Excel) -->
+<div class="modal-overlay" id="fb-master-stock-modal">
+<div class="modal" style="max-width:860px;">
+  <div class="modal-header">
+    <h3>📊 Master Stock Report</h3>
+    <button class="close-btn" onclick="closeModal('fb-master-stock-modal')">✕</button>
+  </div>
+  <div class="modal-body">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Ek hi report me Available Stock, All Items, aur Low Stock Alert — download PDF ya Excel dono me. Chahen to Stock Movement History bhi is report ke sath shamil karen (PDF ke last page par, Excel ki Sheet 2 me).</div>
+    <div id="fb-master-stock-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px;"></div>
+
+    <div class="toggle-wrap" style="margin-bottom:14px;">
+      <label class="toggle"><input type="checkbox" id="fb-master-stock-include-history" checked onchange="fbToggleMasterStockHistory(this)"><span class="toggle-slider"></span></label>
+      <span style="font-size:12px;">📜 Include Stock Movement History <span style="color:var(--text3);">(PDF: last page &nbsp;|&nbsp; Excel: Sheet 2)</span></span>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+      <button type="button" class="btn btn-purple btn-sm" onclick="fbDownloadMasterStockPDF()">📄 Download PDF</button>
+      <button type="button" class="btn btn-green btn-sm" onclick="fbDownloadMasterStockExcel()">📊 Download Excel</button>
+    </div>
+
+    <div class="divider"></div>
+    <div id="fb-master-stock-preview"></div>
   </div>
 </div>
 </div>
@@ -20841,15 +20879,78 @@ function fbAddCustomerRow(){
   fbRenderCustomersSettings();
 }
 
+// ---- Rate List: step-by-step cascading filters (Category -> Model/Brand -> Watt ----
+// -> Colour -> Size/Cut). Since items are just free-text descriptions, each level's
+// dropdown is built from the actual words present in the descriptions that already
+// matched the search box + every filter level before it — so picking "Downlight"
+// in level 1 narrows level 2's options to only what appears among Downlight items,
+// picking a model there narrows level 3 to only that model's wattages, and so on.
+let fbRlFacets = ['','','','',''];
+function fbRlTokenize(desc){
+  return (desc||'').split(/[\s,\/]+/).map(t=>t.trim()).filter(Boolean);
+}
+// Items matching the search box + facet selections at levels [0..uptoLevel-1].
+function fbRlFacetDomain(uptoLevel){
+  const search = (document.getElementById('fb-rl-search')?.value||'').trim();
+  let list = fbDescriptions.slice();
+  if(search) list = list.filter(d=>fbFuzzyMatch(d.desc, search));
+  for(let i=0;i<uptoLevel;i++){
+    const val = fbRlFacets[i];
+    if(val) list = list.filter(d=>fbRlTokenize(d.desc).some(t=>t.toLowerCase()===val.toLowerCase()));
+  }
+  return list;
+}
+// Candidate words (with item counts) for one filter level, excluding words already
+// picked at earlier levels so the same word doesn't show up twice down the chain.
+function fbRlFacetOptions(level){
+  const domain = fbRlFacetDomain(level);
+  const usedWords = new Set(fbRlFacets.slice(0,level).filter(Boolean).map(w=>w.toLowerCase()));
+  const counts = new Map();
+  domain.forEach(d=>{
+    const seenInThisItem = new Set();
+    fbRlTokenize(d.desc).forEach(t=>{
+      const key = t.toLowerCase();
+      if(usedWords.has(key) || seenInThisItem.has(key)) return;
+      seenInThisItem.add(key);
+      if(!counts.has(key)) counts.set(key, {label:t, count:0});
+      counts.get(key).count++;
+    });
+  });
+  return Array.from(counts.values()).sort((a,b)=> b.count-a.count || a.label.localeCompare(b.label, undefined, {numeric:true}));
+}
+function fbRenderRlFacets(){
+  const placeholders = ['All Categories','Any Model/Brand','Any Watt','Any Colour','Any Size/Cut'];
+  for(let level=0; level<5; level++){
+    const sel = document.getElementById('fb-rl-facet-'+level);
+    if(!sel) continue;
+    const opts = fbRlFacetOptions(level);
+    const current = fbRlFacets[level];
+    sel.innerHTML = `<option value="">${placeholders[level]}</option>` +
+      opts.map(o=>`<option value="${o.label.replace(/"/g,'&quot;')}" ${o.label.toLowerCase()===current.toLowerCase()?'selected':''}>${o.label.replace(/</g,'&lt;')} (${o.count})</option>`).join('');
+  }
+}
+// Selecting a level clears every level after it (its old picks may no longer apply)
+// and re-renders the whole chain + the filtered item list below it.
+function fbRlFacetChange(level, value){
+  fbRlFacets[level] = value;
+  for(let i=level+1;i<5;i++) fbRlFacets[i]='';
+  fbRenderDescriptionsSettings();
+}
+function fbClearRlFacets(){
+  fbRlFacets = ['','','','',''];
+  fbRenderDescriptionsSettings();
+}
 // ---- Rate List (saved item descriptions + Retailer/Consumer price + Units per Carton, editable/deletable) ----
 function fbRenderDescriptionsSettings(){
   const wrap = document.getElementById('fb-descriptions-list');
   const countEl = document.getElementById('fb-rl-count');
   if(!wrap) return;
+  fbRenderRlFacets();
   if(!fbDescriptions.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">Rate List khali hai — "📥 Import/Refresh Default 110 Items" button se apni list load karein, ya neeche "➕ Add Item" se manually shuru karein.</div>'; if(countEl) countEl.textContent=''; return; }
   const search = (document.getElementById('fb-rl-search')?.value||'').trim();
   let list = fbDescriptions.map((d,i)=>({...d,_idx:i}));
   if(search) list = list.filter(d=>fbFuzzyMatch(d.desc, search));
+  fbRlFacets.forEach(val=>{ if(val) list = list.filter(d=>fbRlTokenize(d.desc).some(t=>t.toLowerCase()===val.toLowerCase())); });
   if(countEl) countEl.textContent = `${list.length} of ${fbDescriptions.length} item(s)`;
   if(!list.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No items match this search.</div>'; return; }
   wrap.innerHTML = `<table class="items-table"><thead><tr><th>#</th><th>Description</th><th style="width:110px;">Retailer Price</th><th style="width:110px;">Consumer Price</th><th style="width:100px;">Units/Carton</th><th style="width:90px;">Order</th><th></th></tr></thead><tbody>
@@ -21168,6 +21269,152 @@ function fbDownloadStockAvailPDF(){
   stampBrandLogoOnAllPages(doc);
   doc.save(`Stock_${fbStockAvailTab}_${new Date().toISOString().slice(0,10)}.pdf`);
   toast('Stock Availability PDF generated','success');
+}
+// ==================== MASTER STOCK REPORT (Available + All + Low Alert, ====================
+// optionally + Stock Movement History) — one combined report exportable as
+// both PDF and Excel. The "include history" toggle is remembered in fbSettings
+// so the shop's preference sticks between visits.
+function fbMasterStockIncludeHistory(){
+  return fbSettings && fbSettings.masterStockIncludeHistory !== false; // default ON
+}
+function fbToggleMasterStockHistory(el){
+  fbSettings.masterStockIncludeHistory = !!el.checked;
+  saveFbSettings();
+}
+function fbOpenMasterStockReport(){
+  openModal('fb-master-stock-modal');
+  const cb = document.getElementById('fb-master-stock-include-history');
+  if(cb) cb.checked = fbMasterStockIncludeHistory();
+  fbRenderMasterStockReport();
+}
+function fbRenderMasterStockReport(){
+  const cardsWrap = document.getElementById('fb-master-stock-cards');
+  const previewWrap = document.getElementById('fb-master-stock-preview');
+  if(!cardsWrap || !previewWrap) return;
+  const all = fbGetStockAvailRows('all');
+  const available = fbGetStockAvailRows('available');
+  const low = fbGetStockAvailRows('low');
+  const out = fbGetStockAvailRows('out');
+  cardsWrap.innerHTML = `
+    <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">All Items</div><div style="font-size:18px;font-weight:800;">${all.length}</div></div>
+    <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">✅ Available Stock</div><div style="font-size:18px;font-weight:800;color:var(--neon4);">${available.length}</div></div>
+    <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">⚠️ Low Stock Alert</div><div style="font-size:18px;font-weight:800;color:${low.length?'#ff6a00':'var(--text2)'};">${low.length}</div></div>
+    <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">❌ Out of Stock</div><div style="font-size:18px;font-weight:800;color:${out.length?'var(--neon5)':'var(--text2)'};">${out.length}</div></div>
+    <div class="settings-section" style="margin:0;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--text3);">📜 Movements Logged</div><div style="font-size:18px;font-weight:800;">${fbStockMovements.length}</div></div>`;
+  if(!all.length){ previewWrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No stock items yet — add items in the Stock tab first.</div>'; return; }
+  const statusOf = (s)=> (s.currentQty||0)<=0 ? '❌ Out' : ((s.minQty||0)>0 && (s.currentQty||0)<=s.minQty ? '⚠️ Low' : '✅ Available');
+  previewWrap.innerHTML = `<div style="font-weight:700;margin-bottom:4px;">All Items (${all.length})</div>
+    <table class="items-table"><thead><tr><th>#</th><th>Item</th><th style="width:70px;">Unit</th><th style="width:100px;">Qty</th><th style="width:100px;">Low Alert At</th><th style="width:100px;">Status</th></tr></thead><tbody>
+    ${all.map((s,i)=>`<tr>
+      <td style="color:var(--text3);">${i+1}</td>
+      <td>${(s.name||'').replace(/</g,'&lt;')}</td>
+      <td style="color:var(--text3);">${(s.unit||'').replace(/</g,'&lt;')}</td>
+      <td style="text-align:right;font-weight:700;">${s.currentQty||0}</td>
+      <td style="text-align:right;color:var(--text3);">${s.minQty||0}</td>
+      <td>${statusOf(s)}</td>
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+// ---- PDF: All Items -> Available -> Low Alert -> (optional) Stock Movement History as its own final page(s) ----
+function fbDownloadMasterStockPDF(){
+  const all = fbGetStockAvailRows('all').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const available = fbGetStockAvailRows('available').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const low = fbGetStockAvailRows('low').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  if(!all.length){ toast('No stock items to export','warning'); return; }
+  const includeHistory = fbMasterStockIncludeHistory();
+  const doc = new jspdf.jsPDF();
+  let y = pdfHeader(doc, 'Master Stock Report');
+
+  const addSection = (title, rows)=>{
+    if(!rows.length) return;
+    if(y > doc.internal.pageSize.getHeight()-40){ doc.addPage(); y=15; }
+    doc.setFontSize(11); doc.setFont(undefined,'bold');
+    doc.text(`${title} (${rows.length})`, 14, y); y+=4;
+    doc.autoTable({
+      startY:y,
+      head:[['#','Item','Unit','Current Qty','Low Alert At','Location']],
+      body: rows.map((s,i)=>[i+1, s.name||'', s.unit||'', s.currentQty||0, s.minQty||0, s.location||'']),
+      styles:{fontSize:9}, headStyles:{fillColor:[20,20,40]}
+    });
+    y = doc.lastAutoTable.finalY + 8;
+  };
+  addSection('All Items', all);
+  addSection('Available Stock', available);
+  addSection('Low Stock Alert', low);
+
+  if(includeHistory && fbStockMovements.length){
+    // Always start Stock Movement History on a fresh page so it reads as the
+    // report's closing section, per shop's request.
+    doc.addPage(); y = 15;
+    doc.setFontSize(12); doc.setFont(undefined,'bold');
+    doc.text('📜 Stock Movement History', 14, y); y+=6;
+    const typeLabel = {purchase:'Purchase', sale:'Sale (Bill)', adjustment_add:'Correction (+)', adjustment_remove:'Correction (-)', reversal:'Reversal', return:'Customer Return'};
+    const list = fbStockMovements.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'') || (b.time||'').localeCompare(a.time||''));
+    doc.autoTable({
+      startY:y,
+      head:[['Date','Item','Type','Qty','Note / Ref']],
+      body: list.map(m=>{
+        const item = fbStockItems.find(s=>s.id===m.stockItemId);
+        return [fmtDate(m.date), item?item.name:'(deleted item)', typeLabel[m.type]||m.type, (m.qty>0?'+':'')+m.qty, [m.note, m.ref?('Ref: '+m.ref):''].filter(Boolean).join(' — ')];
+      }),
+      styles:{fontSize:8}, headStyles:{fillColor:[20,20,40]}
+    });
+  }
+
+  stampBrandLogoOnAllPages(doc);
+  doc.save(`Master_Stock_Report_${new Date().toISOString().slice(0,10)}.pdf`);
+  logAudit && typeof logAudit==='function' && logAudit('download','Stock',`Master Stock Report PDF downloaded${includeHistory?' (with movement history)':''}`, undefined, undefined);
+  toast('Master Stock Report PDF generated','success');
+}
+// ---- Excel: Sheet 1 = All Items + Available + Low Alert (stacked blocks), Sheet 2 = Stock Movement History (optional) ----
+function fbDownloadMasterStockExcel(){
+  if(typeof XLSX==='undefined'){ toast('Excel library failed to load — check your internet connection and try again','error'); return; }
+  const all = fbGetStockAvailRows('all').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const available = fbGetStockAvailRows('available').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const low = fbGetStockAvailRows('low').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  if(!all.length){ toast('No stock items to export','warning'); return; }
+  const includeHistory = fbMasterStockIncludeHistory();
+  const statusOf = (s)=> (s.currentQty||0)<=0 ? 'Out of Stock' : ((s.minQty||0)>0 && (s.currentQty||0)<=s.minQty ? 'Low Stock' : 'Available');
+
+  const aoa = [];
+  aoa.push(['MASTER STOCK REPORT']);
+  aoa.push([`Generated: ${new Date().toLocaleString('en-PK')}`]);
+  aoa.push([]);
+  aoa.push([`ALL ITEMS (${all.length})`]);
+  aoa.push(['#','Item','Unit','Current Qty','Low Alert At','Location','Status']);
+  all.forEach((s,i)=> aoa.push([i+1, s.name||'', s.unit||'', s.currentQty||0, s.minQty||0, s.location||'', statusOf(s)]));
+  aoa.push([]);
+  aoa.push([`AVAILABLE STOCK (${available.length})`]);
+  aoa.push(['#','Item','Unit','Current Qty','Low Alert At','Location']);
+  available.forEach((s,i)=> aoa.push([i+1, s.name||'', s.unit||'', s.currentQty||0, s.minQty||0, s.location||'']));
+  aoa.push([]);
+  aoa.push([`LOW STOCK ALERT (${low.length})`]);
+  aoa.push(['#','Item','Unit','Current Qty','Low Alert At','Location']);
+  low.forEach((s,i)=> aoa.push([i+1, s.name||'', s.unit||'', s.currentQty||0, s.minQty||0, s.location||'']));
+
+  const wb = XLSX.utils.book_new();
+  const ws1 = XLSX.utils.aoa_to_sheet(aoa);
+  ws1['!cols'] = [{wch:5},{wch:28},{wch:10},{wch:12},{wch:13},{wch:16},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Stock Report');
+
+  if(includeHistory){
+    const typeLabel = {purchase:'Purchase', sale:'Sale (Bill)', adjustment_add:'Correction (+)', adjustment_remove:'Correction (-)', reversal:'Reversal', return:'Customer Return'};
+    const list = fbStockMovements.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'') || (b.time||'').localeCompare(a.time||''));
+    const aoa2 = [['📜 STOCK MOVEMENT HISTORY'], []];
+    aoa2.push(['Date','Item','Type','Qty','Note','Ref']);
+    list.forEach(m=>{
+      const item = fbStockItems.find(s=>s.id===m.stockItemId);
+      aoa2.push([fmtDate(m.date), item?item.name:'(deleted item)', typeLabel[m.type]||m.type, m.qty, m.note||'', m.ref||'']);
+    });
+    if(list.length===0) aoa2.push(['No stock movements yet.']);
+    const ws2 = XLSX.utils.aoa_to_sheet(aoa2);
+    ws2['!cols'] = [{wch:14},{wch:28},{wch:16},{wch:10},{wch:24},{wch:16}];
+    XLSX.utils.book_append_sheet(wb, ws2, 'Stock Movement History'); // Sheet 2
+  }
+
+  XLSX.writeFile(wb, `Master_Stock_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+  logAudit && typeof logAudit==='function' && logAudit('download','Stock',`Master Stock Report Excel downloaded${includeHistory?' (with movement history)':''}`, undefined, undefined);
+  toast('Master Stock Report Excel generated','success');
 }
 // Shared calculation used by both the on-screen Full Stock Value Report and
 // its one-click PDF export, so the two can never drift out of sync.
