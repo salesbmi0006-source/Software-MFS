@@ -20583,7 +20583,19 @@ function fbGetFilteredBillsList(){
   const q = searchEl ? (searchEl.value||'').trim().toLowerCase() : '';
   const from = fromEl ? fromEl.value : '';
   const to = toEl ? toEl.value : '';
-  let list = fbBills.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')||String(b.billNo).localeCompare(String(a.billNo)));
+  let list = fbBills.slice().sort((a,b)=>{
+    // Sort strictly by Bill No, newest (highest number) first, so the list
+    // always reads in clean numeric sequence — 5,4,3,2,1 — regardless of the
+    // order bills were saved/edited in. Numeric compare (not string compare)
+    // so "10" correctly sorts above "9" instead of before it.
+    const an = parseFloat(a.billNo), bn = parseFloat(b.billNo);
+    if(!isNaN(an) && !isNaN(bn) && an!==bn) return bn - an;
+    // Fallback for non-numeric/alphanumeric bill numbers (e.g. "12A") — plain
+    // descending string compare, then date as a final tiebreaker.
+    const strCmp = String(b.billNo).localeCompare(String(a.billNo), undefined, {numeric:true});
+    if(strCmp) return strCmp;
+    return (b.date||'').localeCompare(a.date||'');
+  });
   if(q){
     list = list.filter(b=> (b.customerName||'').toLowerCase().includes(q) || (b.shopName||'').toLowerCase().includes(q) || String(b.billNo).toLowerCase().includes(q) || (b.phone||'').toLowerCase().includes(q));
   }
@@ -20599,7 +20611,7 @@ function fbRenderAllBills(){
   if(!list.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No bills found.</div>'; if(totalBox) totalBox.textContent=''; return; }
   const grandTotal = list.reduce((s,b)=>s+(b.isSample?0:(b.total||0)),0);
   if(totalBox) totalBox.textContent = `Showing ${list.length} bill(s) — Total (excluding samples): ${fmt(grandTotal)}`;
-  wrap.innerHTML = `<table class="items-table"><thead><tr><th>Bill #</th><th>Date</th><th>Customer</th><th>Shop</th><th style="text-align:right;">Total</th><th>Status</th><th></th></tr></thead><tbody>
+  wrap.innerHTML = `<table class="items-table"><thead><tr><th>Bill #</th><th>Date</th><th>Customer</th><th>Shop</th><th>Ref #</th><th style="text-align:right;">Total</th><th>Status</th><th></th></tr></thead><tbody>
     ${list.map(b=>{
       const paidAmt = b.paidAmount||0;
       const returnedAmt = fbBillReturnedAmount(b);
@@ -20613,6 +20625,7 @@ function fbRenderAllBills(){
       <td>${fmtDate(b.date)}</td>
       <td>${b.customerName||''}</td>
       <td style="font-size:11px;color:var(--text3);">${b.shopName||''}</td>
+      <td style="font-size:11px;color:var(--text3);">${b.refNo||''}</td>
       <td style="text-align:right;">${fmt(b.total)}</td>
       <td>${paidBadge}${returnBadge}</td>
       <td style="white-space:nowrap;">
