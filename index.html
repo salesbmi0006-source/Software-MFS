@@ -19792,7 +19792,7 @@ function fbRenderItemsTable(){
   const d = fbCurrentDiscount || {type:'flat',value:0};
   wrap.innerHTML = `<table class="items-table"><thead><tr><th>Description</th><th style="width:70px;">Qty</th><th style="width:100px;">Rate</th><th style="width:110px;">Amount</th><th style="width:36px;"></th></tr></thead><tbody>
     ${fbCurrentItems.map((it,i)=>`<tr>
-      <td><input type="text" autocomplete="off" value="${(it.desc||'').replace(/"/g,'&quot;')}" oninput="fbDescSuggestInput(this,${i},'bill')" onfocus="fbDescSuggestInput(this,${i},'bill')" onkeydown="fbDescSuggestKeydown(event,this,${i},'bill')" onblur="fbUpdateItemField(${i},'desc',this.value);fbDescSuggestHideSoon()" placeholder="Item description (advanced search)" style="width:100%;">${fbCartonHint(it.desc)}</td>
+      <td><input type="text" autocomplete="off" value="${(it.desc||'').replace(/"/g,'&quot;')}" oninput="fbDescSuggestInput(this,${i},'bill')" onfocus="fbDescSuggestInput(this,${i},'bill')" onkeydown="fbDescSuggestKeydown(event,this,${i},'bill')" onblur="fbDescCommitOnBlur(this,${i},'bill');fbDescSuggestHideSoon()" placeholder="Item description (advanced search)" style="width:100%;">${fbCartonHint(it.desc)}</td>
       <td><input type="number" value="${it.qty}" onchange="fbUpdateItemField(${i},'qty',this.value)" style="width:100%;"></td>
       <td><input type="number" value="${it.rate}" onchange="fbUpdateItemField(${i},'rate',this.value)" style="width:100%;"></td>
       <td style="text-align:right;">${fmt((parseFloat(it.qty)||0)*(parseFloat(it.rate)||0))}</td>
@@ -19897,12 +19897,18 @@ function fbDescSuggestKeydown(ev, inputEl, idx, mode){
 function fbDescSuggestPick(ev, name){
   if(ev){ ev.preventDefault(); ev.stopPropagation(); }
   if(!fbDescSuggestActive) return;
-  const {idx, mode, inputEl} = fbDescSuggestActive;
+  const {idx, mode} = fbDescSuggestActive;
   if(mode==='bill') fbUpdateItemField(idx,'desc',name);
   else fbQuotUpdateItemField(idx,'desc',name);
   fbDescSuggestHide();
-  // keep focus on the field the person was typing in so they can keep tabbing/typing
-  if(inputEl && inputEl.isConnected) inputEl.focus();
+  // The items table just re-rendered (fbUpdateItemField -> fbRenderItemsTable),
+  // so the input the user was typing in has been replaced by a brand new node
+  // with the same row index — look that fresh node up and refocus it, rather
+  // than the old (now-detached) element, so typing/tabbing continues normally.
+  const wrapId = mode==='bill' ? 'fb-items-table' : 'fb-quot-items-table';
+  const wrap = document.getElementById(wrapId);
+  const freshInput = wrap ? wrap.querySelectorAll('tbody tr td:first-child input')[idx] : null;
+  if(freshInput){ freshInput.focus(); const v=freshInput.value; freshInput.setSelectionRange(v.length, v.length); }
 }
 function fbDescSuggestHide(){
   const box = document.getElementById('fb-desc-suggest-box');
@@ -19911,6 +19917,21 @@ function fbDescSuggestHide(){
 }
 function fbDescSuggestHideSoon(){
   setTimeout(fbDescSuggestHide, 180);
+}
+// Commits a description on blur — but ONLY if this exact input element is
+// still actually attached to the page. When a suggestion is picked, the whole
+// items table re-renders (old row nodes get destroyed and replaced by new
+// ones with the correct value already baked in). If the browser then fires a
+// deferred/late 'blur' on that now-removed OLD node, its onblur would
+// otherwise fire with the stale, pre-selection text still in `this.value` and
+// silently overwrite the just-picked item with raw search text. Skipping the
+// write once the node is detached (isConnected === false) makes that stale
+// blur a no-op, while a genuine blur (user tabs/clicks away with no re-render
+// in between) still commits normally.
+function fbDescCommitOnBlur(inputEl, idx, mode){
+  if(!inputEl || !inputEl.isConnected) return;
+  if(mode==='bill') fbUpdateItemField(idx,'desc',inputEl.value);
+  else fbQuotUpdateItemField(idx,'desc',inputEl.value);
 }
 // Remembers each description's rate (globally, and per shop) so it can auto-fill next time.
 function fbRememberDescription(desc, rate, shopName){
@@ -20106,7 +20127,7 @@ function fbRenderQuotItemsTable(){
   const d = fbQuotCurrentDiscount || {type:'flat',value:0};
   wrap.innerHTML = `<table class="items-table"><thead><tr><th>Description</th><th style="width:70px;">Qty</th><th style="width:100px;">Rate</th><th style="width:110px;">Amount</th><th style="width:36px;"></th></tr></thead><tbody>
     ${fbQuotCurrentItems.map((it,i)=>`<tr>
-      <td><input type="text" autocomplete="off" value="${(it.desc||'').replace(/"/g,'&quot;')}" oninput="fbDescSuggestInput(this,${i},'quot')" onfocus="fbDescSuggestInput(this,${i},'quot')" onkeydown="fbDescSuggestKeydown(event,this,${i},'quot')" onblur="fbQuotUpdateItemField(${i},'desc',this.value);fbDescSuggestHideSoon()" placeholder="Item description (advanced search)" style="width:100%;">${fbCartonHint(it.desc)}</td>
+      <td><input type="text" autocomplete="off" value="${(it.desc||'').replace(/"/g,'&quot;')}" oninput="fbDescSuggestInput(this,${i},'quot')" onfocus="fbDescSuggestInput(this,${i},'quot')" onkeydown="fbDescSuggestKeydown(event,this,${i},'quot')" onblur="fbDescCommitOnBlur(this,${i},'quot');fbDescSuggestHideSoon()" placeholder="Item description (advanced search)" style="width:100%;">${fbCartonHint(it.desc)}</td>
       <td><input type="number" value="${it.qty}" onchange="fbQuotUpdateItemField(${i},'qty',this.value)" style="width:100%;"></td>
       <td><input type="number" value="${it.rate}" onchange="fbQuotUpdateItemField(${i},'rate',this.value)" style="width:100%;"></td>
       <td style="text-align:right;">${fmt((parseFloat(it.qty)||0)*(parseFloat(it.rate)||0))}</td>
