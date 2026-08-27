@@ -2965,6 +2965,9 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
       <div class="form-group"><label>Customer Name</label><input type="text" id="fb-cust-name" list="fb-party-list" oninput="fbOnCustomerNameInput()" placeholder="Type customer name..."><datalist id="fb-party-list"></datalist></div>
       <div class="form-group"><label>Phone</label><input type="text" id="fb-cust-phone" placeholder="Phone number"></div>
     </div>
+    <div class="form-row">
+      <div class="form-group"><label>Ref Num</label><input type="text" id="fb-refno" placeholder="Reference number (optional)"></div>
+    </div>
     <datalist id="fb-desc-list"></datalist>
     <div id="fb-desc-suggest-box" style="display:none;position:fixed;z-index:9999;background:var(--card2);border:1px solid var(--border2);border-radius:8px;max-height:220px;overflow:auto;box-shadow:0 8px 24px rgba(0,0,0,.4);"></div>
     <div class="divider"></div>
@@ -4613,7 +4616,16 @@ function loadData(){
   const c = localStorage.getItem('sau_cheques');
   const l = localStorage.getItem('sau_ledger');
   const p = localStorage.getItem('fbr_parties');
-  if(d) db = JSON.parse(d); else restoreEmbedded(true);
+  // IMPORTANT: if a previous save hit the localStorage quota, saveData() removes
+  // 'dcrecords' and splits the database into 'dcrecords_chunk0/1/2' instead. This
+  // load must check for those chunks BEFORE falling back to the embedded sample
+  // backup — otherwise every DC/invoice edited since the split (ready/invoiced
+  // status, invoice numbers, etc.) silently reverts to old embedded data on the
+  // next page load, which is exactly the "records went back to pending" bug.
+  const chunked = loadChunkedDb();
+  if(d) db = JSON.parse(d);
+  else if(chunked) db = chunked;
+  else restoreEmbedded(true);
   if(c) cheques = JSON.parse(c); else cheques = [];
   if(l) ledgerData = JSON.parse(l); else ledgerData = [];
   dedupeDuplicateLedgerPaymentEntries();
@@ -4644,6 +4656,13 @@ function saveData(){
     const dbMB = (dbStr.length/1024/1024).toFixed(1);
     try {
       localStorage.setItem('dcrecords', dbStr);
+      // A direct save succeeded, so clear out any leftover chunked copy from an
+      // earlier quota-exceeded save — otherwise it's just stale duplicate data.
+      if(localStorage.getItem('dcrecords_chunks')){
+        const n = parseInt(localStorage.getItem('dcrecords_chunks'))||0;
+        for(let i=0;i<n;i++) localStorage.removeItem('dcrecords_chunk'+i);
+        localStorage.removeItem('dcrecords_chunks');
+      }
     } catch(quotaErr) {
       // localStorage quota exceeded - try splitting db
       console.warn('localStorage quota exceeded for db ('+dbMB+'MB), trying chunks...');
@@ -19665,6 +19684,7 @@ function fbNewBillReset(){
   const nameEl = document.getElementById('fb-cust-name'); if(nameEl) nameEl.value = '';
   const shopEl = document.getElementById('fb-cust-shop'); if(shopEl) shopEl.value = '';
   const phoneEl = document.getElementById('fb-cust-phone'); if(phoneEl) phoneEl.value = '';
+  const refNoEl = document.getElementById('fb-refno'); if(refNoEl) refNoEl.value = '';
   const statusEl = document.getElementById('fb-bill-status'); if(statusEl) statusEl.value = 'unpaid';
   fbPopulatePartyDatalist();
   fbRenderItemsTable();
@@ -19772,7 +19792,7 @@ function fbRenderItemsTable(){
   const d = fbCurrentDiscount || {type:'flat',value:0};
   wrap.innerHTML = `<table class="items-table"><thead><tr><th>Description</th><th style="width:70px;">Qty</th><th style="width:100px;">Rate</th><th style="width:110px;">Amount</th><th style="width:36px;"></th></tr></thead><tbody>
     ${fbCurrentItems.map((it,i)=>`<tr>
-      <td><input type="text" autocomplete="off" value="${(it.desc||'').replace(/"/g,'&quot;')}" oninput="fbDescSuggestInput(this,${i},'bill')" onfocus="fbDescSuggestInput(this,${i},'bill')" onblur="fbUpdateItemField(${i},'desc',this.value);fbDescSuggestHideSoon()" placeholder="Item description (advanced search)" style="width:100%;">${fbCartonHint(it.desc)}</td>
+      <td><input type="text" autocomplete="off" value="${(it.desc||'').replace(/"/g,'&quot;')}" oninput="fbDescSuggestInput(this,${i},'bill')" onfocus="fbDescSuggestInput(this,${i},'bill')" onkeydown="fbDescSuggestKeydown(event,this,${i},'bill')" onblur="fbUpdateItemField(${i},'desc',this.value);fbDescSuggestHideSoon()" placeholder="Item description (advanced search)" style="width:100%;">${fbCartonHint(it.desc)}</td>
       <td><input type="number" value="${it.qty}" onchange="fbUpdateItemField(${i},'qty',this.value)" style="width:100%;"></td>
       <td><input type="number" value="${it.rate}" onchange="fbUpdateItemField(${i},'rate',this.value)" style="width:100%;"></td>
       <td style="text-align:right;">${fmt((parseFloat(it.qty)||0)*(parseFloat(it.rate)||0))}</td>
@@ -19822,30 +19842,67 @@ function fbFuzzyMatch(text, query){
 // ---- Custom fuzzy-search suggestion dropdown for the Description field in
 // New Bill / New Quotation item rows (replaces the plain native datalist,
 // which can only match one exact contiguous substring). ----
-let fbDescSuggestActive = null; // {idx, mode}
+let fbDescSuggestActive = null; // {idx, mode, matches, highlight, inputEl}
 function fbDescSuggestInput(inputEl, idx, mode){
   const box = document.getElementById('fb-desc-suggest-box');
   if(!box) return;
-  fbDescSuggestActive = {idx, mode};
   const q = (inputEl.value||'').trim();
   const names = fbGetAllDescNames();
   let matches = q ? names.filter(n=>fbFuzzyMatch(n,q)) : names;
   matches = matches.slice(0,30);
+  fbDescSuggestActive = {idx, mode, matches, highlight: matches.length?0:-1, inputEl};
   if(!matches.length){ box.style.display='none'; return; }
-  box.innerHTML = matches.map(n=>`<div style="padding:7px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''" onmousedown="fbDescSuggestPick(event,'${n.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;')}')">${n.replace(/</g,'&lt;')}</div>`).join('');
+  fbDescSuggestRenderBox();
   const rect = inputEl.getBoundingClientRect();
   box.style.left = rect.left+'px';
   box.style.top = (rect.bottom+2)+'px';
   box.style.width = Math.max(rect.width,240)+'px';
   box.style.display = 'block';
 }
+function fbDescSuggestRenderBox(){
+  const box = document.getElementById('fb-desc-suggest-box');
+  if(!box || !fbDescSuggestActive) return;
+  const {matches, highlight} = fbDescSuggestActive;
+  box.innerHTML = matches.map((n,i)=>`<div data-idx="${i}" style="padding:7px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);${i===highlight?"background:var(--bg3);":""}" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='${i===highlight?"var(--bg3)":""}'" onmousedown="fbDescSuggestPick(event,'${n.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;')}')">${n.replace(/</g,'&lt;')}</div>`).join('');
+  // keep the highlighted row scrolled into view
+  const rows = box.children;
+  if(highlight>=0 && rows[highlight] && rows[highlight].scrollIntoView) rows[highlight].scrollIntoView({block:'nearest'});
+}
+// Handles ArrowUp/ArrowDown to move the highlight, Enter/Tab to pick the
+// highlighted suggestion, and Escape to close the dropdown — without this,
+// keyboard-only users can't select a suggestion at all (only mouse clicks worked).
+function fbDescSuggestKeydown(ev, inputEl, idx, mode){
+  const box = document.getElementById('fb-desc-suggest-box');
+  if(!box || box.style.display==='none' || !fbDescSuggestActive || fbDescSuggestActive.idx!==idx || fbDescSuggestActive.mode!==mode) return;
+  const {matches} = fbDescSuggestActive;
+  if(!matches.length) return;
+  if(ev.key==='ArrowDown'){
+    ev.preventDefault();
+    fbDescSuggestActive.highlight = (fbDescSuggestActive.highlight+1) % matches.length;
+    fbDescSuggestRenderBox();
+  } else if(ev.key==='ArrowUp'){
+    ev.preventDefault();
+    fbDescSuggestActive.highlight = (fbDescSuggestActive.highlight-1+matches.length) % matches.length;
+    fbDescSuggestRenderBox();
+  } else if(ev.key==='Enter' || ev.key==='Tab'){
+    const h = fbDescSuggestActive.highlight;
+    if(h>=0 && matches[h]){
+      if(ev.key==='Enter') ev.preventDefault();
+      fbDescSuggestPick(null, matches[h]);
+    }
+  } else if(ev.key==='Escape'){
+    fbDescSuggestHide();
+  }
+}
 function fbDescSuggestPick(ev, name){
   if(ev){ ev.preventDefault(); ev.stopPropagation(); }
   if(!fbDescSuggestActive) return;
-  const {idx, mode} = fbDescSuggestActive;
+  const {idx, mode, inputEl} = fbDescSuggestActive;
   if(mode==='bill') fbUpdateItemField(idx,'desc',name);
   else fbQuotUpdateItemField(idx,'desc',name);
   fbDescSuggestHide();
+  // keep focus on the field the person was typing in so they can keep tabbing/typing
+  if(inputEl && inputEl.isConnected) inputEl.focus();
 }
 function fbDescSuggestHide(){
   const box = document.getElementById('fb-desc-suggest-box');
@@ -19873,6 +19930,8 @@ function fbSaveBill(){
   const shopName = (document.getElementById('fb-cust-shop').value||'').trim();
   const name = (document.getElementById('fb-cust-name').value||'').trim();
   const phone = (document.getElementById('fb-cust-phone').value||'').trim();
+  const refNoEl = document.getElementById('fb-refno');
+  const refNo = refNoEl ? (refNoEl.value||'').trim() : '';
   const statusEl = document.getElementById('fb-bill-status');
   const status = statusEl ? statusEl.value : 'unpaid'; // 'unpaid' | 'paid' | 'sample'
   const isSample = status === 'sample';
@@ -19911,7 +19970,7 @@ function fbSaveBill(){
     if(!bill){ toast('Bill not found — cannot update','error'); fbNewBillReset(); return; }
     const prevItemsForStock = bill.items;
     bill.billNo = billNo; bill.date = date; bill.time = bill.time||time; bill.customerId = cust.id; bill.customerName = cust.name;
-    bill.shopName = shopName||cust.shopName||''; bill.phone = phone||cust.phone||'';
+    bill.shopName = shopName||cust.shopName||''; bill.phone = phone||cust.phone||''; bill.refNo = refNo;
     bill.items = items; bill.subtotal = subtotal; bill.discount = discount; bill.total = total; bill.isSample = isSample;
     fbSyncStockForBill(bill.id, prevItemsForStock, items, date, billNo);
     if(isSample && !bill.sampleStatus) bill.sampleStatus = 'pending';
@@ -19941,7 +20000,7 @@ function fbSaveBill(){
   } else {
     // ---- CREATE new bill ----
     const bill = { id: fbUid(), billNo, date, time, customerId: cust.id, customerName: cust.name,
-      shopName: shopName||cust.shopName||'', phone: phone||cust.phone||'', items, subtotal, discount, total, paidAmount: markPaidNow?total:0, isSample };
+      shopName: shopName||cust.shopName||'', phone: phone||cust.phone||'', refNo, items, subtotal, discount, total, paidAmount: markPaidNow?total:0, isSample };
     if(isSample) bill.sampleStatus = 'pending';
     fbBills.push(bill);
     fbSyncStockForBill(bill.id, [], items, date, billNo);
@@ -20047,7 +20106,7 @@ function fbRenderQuotItemsTable(){
   const d = fbQuotCurrentDiscount || {type:'flat',value:0};
   wrap.innerHTML = `<table class="items-table"><thead><tr><th>Description</th><th style="width:70px;">Qty</th><th style="width:100px;">Rate</th><th style="width:110px;">Amount</th><th style="width:36px;"></th></tr></thead><tbody>
     ${fbQuotCurrentItems.map((it,i)=>`<tr>
-      <td><input type="text" autocomplete="off" value="${(it.desc||'').replace(/"/g,'&quot;')}" oninput="fbDescSuggestInput(this,${i},'quot')" onfocus="fbDescSuggestInput(this,${i},'quot')" onblur="fbQuotUpdateItemField(${i},'desc',this.value);fbDescSuggestHideSoon()" placeholder="Item description (advanced search)" style="width:100%;">${fbCartonHint(it.desc)}</td>
+      <td><input type="text" autocomplete="off" value="${(it.desc||'').replace(/"/g,'&quot;')}" oninput="fbDescSuggestInput(this,${i},'quot')" onfocus="fbDescSuggestInput(this,${i},'quot')" onkeydown="fbDescSuggestKeydown(event,this,${i},'quot')" onblur="fbQuotUpdateItemField(${i},'desc',this.value);fbDescSuggestHideSoon()" placeholder="Item description (advanced search)" style="width:100%;">${fbCartonHint(it.desc)}</td>
       <td><input type="number" value="${it.qty}" onchange="fbQuotUpdateItemField(${i},'qty',this.value)" style="width:100%;"></td>
       <td><input type="number" value="${it.rate}" onchange="fbQuotUpdateItemField(${i},'rate',this.value)" style="width:100%;"></td>
       <td style="text-align:right;">${fmt((parseFloat(it.qty)||0)*(parseFloat(it.rate)||0))}</td>
@@ -20559,6 +20618,7 @@ function fbEditBill(billId){
   const nameEl = document.getElementById('fb-cust-name'); if(nameEl) nameEl.value = bill.customerName || '';
   const shopEl = document.getElementById('fb-cust-shop'); if(shopEl) shopEl.value = bill.shopName || '';
   const phoneEl = document.getElementById('fb-cust-phone'); if(phoneEl) phoneEl.value = bill.phone || '';
+  const refNoEl = document.getElementById('fb-refno'); if(refNoEl) refNoEl.value = bill.refNo || '';
   const statusEl = document.getElementById('fb-bill-status');
   if(statusEl) statusEl.value = bill.isSample ? 'sample' : (((bill.paidAmount||0) >= bill.total && bill.total>0) ? 'paid' : 'unpaid');
   fbPopulatePartyDatalist();
@@ -21559,15 +21619,17 @@ function fbRenderStock(){
   if(filter==='low') list = list.filter(s=>(s.minQty||0)>0 && (s.currentQty||0)<=s.minQty);
   if(!fbStockItems.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No stock items yet. Add one below, or matching item names on bills won\'t affect stock.</div>'; return; }
   if(!list.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No items match this filter.</div>'; return; }
-  wrap.innerHTML = `<table class="items-table"><thead><tr><th>#</th><th>Item Name</th><th style="width:80px;">Unit</th><th style="width:110px;">Current Qty</th><th style="width:90px;">Low Alert At</th><th style="width:90px;">Units/Carton</th><th style="width:110px;">🏭 Rack/Location</th><th>Notes</th><th></th></tr></thead><tbody>
+  wrap.innerHTML = `<table class="items-table"><thead><tr><th>#</th><th>Item Name</th><th style="width:80px;">Unit</th><th style="width:110px;">Current Qty</th><th style="width:100px;">Rate</th><th style="width:90px;">Low Alert At</th><th style="width:90px;">Units/Carton</th><th style="width:110px;">🏭 Rack/Location</th><th>Notes</th><th></th></tr></thead><tbody>
     ${list.map((s,rowIdx)=>{
       const i = s._idx;
       const low = (s.minQty||0)>0 && (s.currentQty||0)<=s.minQty;
+      const rate = fbGetItemRate(s.name);
       return `<tr>
       <td style="color:var(--text3);">${rowIdx+1}</td>
       <td><input type="text" value="${(s.name||'').replace(/"/g,'&quot;')}" onchange="fbUpdateStockItemField(${i},'name',this.value)" style="width:100%;"></td>
       <td><input type="text" value="${(s.unit||'').replace(/"/g,'&quot;')}" onchange="fbUpdateStockItemField(${i},'unit',this.value)" style="width:100%;" placeholder="Pcs"></td>
       <td style="text-align:right;font-weight:700;color:${low?'var(--neon5)':(s.currentQty<0?'var(--neon5)':'var(--text2)')};">${s.currentQty||0}${low?' ⚠️':''}</td>
+      <td style="text-align:right;" title="From Rate List (fb-desc-list). Edit rates from the Description field in New Bill/Quotation, or the Rate List.">${rate!=null ? fmt(rate) : '<span style="color:var(--text3);">—</span>'}</td>
       <td><input type="number" min="0" value="${s.minQty||0}" onchange="fbUpdateStockItemField(${i},'minQty',this.value)" style="width:100%;"></td>
       <td><input type="text" value="${(s.cartonQty||'').toString().replace(/"/g,'&quot;')}" onchange="fbUpdateStockItemField(${i},'cartonQty',this.value)" style="width:100%;" placeholder="e.g. 100"></td>
       <td><input type="text" value="${(s.location||'').replace(/"/g,'&quot;')}" onchange="fbUpdateStockItemField(${i},'location',this.value)" style="width:100%;" placeholder="e.g. Rack A-3"></td>
@@ -21577,6 +21639,15 @@ function fbRenderStock(){
     }).join('')}
   </tbody></table>`;
   fbRenderStockMovements();
+}
+// Looks up a stock item's current rate from the Rate List (fbDescriptions),
+// matched by name (case-insensitive) — same matching used for stock deduction,
+// so the rate shown here always lines up with what New Bill will auto-fill.
+function fbGetItemRate(name){
+  const n = (name||'').trim().toLowerCase();
+  if(!n) return null;
+  const d = fbDescriptions.find(x=>(x.desc||'').trim().toLowerCase()===n);
+  return d && d.rate ? d.rate : null;
 }
 function fbPopulateStockDatalist(){
   const dl = document.getElementById('fb-stockitem-list');
@@ -21912,6 +21983,7 @@ function fbPrintThermalDoc(docId, docType){
     <div class="meta">Customer: ${bill.customerName||''}</div>
     ${bill.shopName ? `<div class="meta">Shop: ${bill.shopName}</div>` : ''}
     ${bill.phone ? `<div class="meta">Ph: ${bill.phone}</div>` : ''}
+    ${bill.refNo ? `<div class="meta">Ref#: ${bill.refNo}</div>` : ''}
     ${(isQuot && bill.validTill) ? `<div class="meta" style="font-weight:700;">Valid Till: ${fmtDate(bill.validTill)}</div>` : ''}
     <hr>
     <table>
@@ -22152,7 +22224,7 @@ function fbPrintA4Doc(docId, docType){
     </div>
     <div class="doctype">${docWord}</div>
     <div class="metarow">
-      <div><strong>${noWord}:</strong> ${docNo}<br><strong>Date:</strong> ${fmtDate(bill.date)}${(isQuot && bill.validTill) ? `<br><strong>Valid Till:</strong> ${fmtDate(bill.validTill)}` : ''}${flagged ? `<br><span class="flag-tag">${flagWord}</span>` : ''}</div>
+      <div><strong>${noWord}:</strong> ${docNo}<br><strong>Date:</strong> ${fmtDate(bill.date)}${bill.refNo ? `<br><strong>Ref#:</strong> ${bill.refNo}` : ''}${(isQuot && bill.validTill) ? `<br><strong>Valid Till:</strong> ${fmtDate(bill.validTill)}` : ''}${flagged ? `<br><span class="flag-tag">${flagWord}</span>` : ''}</div>
       <div style="text-align:right;"><strong>Customer:</strong> ${bill.customerName}<br>${bill.shopName?('<strong>Shop:</strong> '+bill.shopName+'<br>'):''}${bill.phone?('<strong>Ph:</strong> '+bill.phone):''}</div>
     </div>
     <table><thead><tr><th>Sr#</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead>
