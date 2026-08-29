@@ -90,6 +90,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 #clock{font-family:monospace;color:var(--neon);font-size:13px;font-weight:700;}
 #operator-name{color:var(--neon4);font-weight:700;font-size:13px;animation:blink 2s infinite;}
 #autosave-dot{width:8px;height:8px;border-radius:50%;background:var(--success);animation:pulse 2s infinite;}
+#save-status-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:12px;white-space:nowrap;transition:opacity .3s ease;}
+#save-status-badge.badge-saving{background:rgba(255,176,32,.16);color:#ffb020;animation:pulse-badge 1.1s infinite;}
+#save-status-badge.badge-saved{background:rgba(0,255,157,.16);color:var(--success);}
+#save-status-badge.badge-error{background:rgba(244,68,68,.16);color:#f44;}
+#save-status-badge.badge-offline{background:rgba(150,150,150,.18);color:var(--text2);}
+@keyframes pulse-badge{0%,100%{opacity:1;}50%{opacity:.55;}}
 @keyframes blink{0%,100%{opacity:1;}50%{opacity:0.5;}}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,255,157,0.4);}50%{box-shadow:0 0 0 6px rgba(0,255,157,0);}}
 /* BUTTONS */
@@ -417,6 +423,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
     <span id="header-buttons-wrap"></span>
   </div>
   <div id="header-right">
+    <span id="save-status-badge" style="display:none;"></span>
     <div id="autosave-dot" title="Auto-save active"></div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;line-height:1.2;">
       <span id="operator-name">LOADING...</span>
@@ -3220,6 +3227,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
     <button type="button" class="btn btn-purple btn-sm" style="margin-bottom:14px;" onclick="fbOpenStockValueReport()">🔒 Full Stock Value Report (Admin)</button>
     <button type="button" class="btn btn-neon btn-sm" style="margin-bottom:14px;margin-left:8px;" onclick="fbOpenStockAvailReport()">📋 Stock Availability Report</button>
     <button type="button" class="btn btn-green btn-sm" style="margin-bottom:14px;margin-left:8px;" onclick="fbOpenMasterStockReport()">📊 Master Stock Report (PDF + Excel)</button>
+    <button type="button" class="btn btn-purple btn-sm" style="margin-bottom:14px;margin-left:8px;" onclick="fbOpenItemLedgerReport()">📅 Item-wise Stock In/Out Ledger (PDF)</button>
 
     <div class="form-row" style="align-items:flex-end;">
       <div class="form-group" style="flex:2;"><label>Search Item</label><input type="text" id="fb-stock-search" placeholder="🔍 e.g. spot 12w (any word, any order)" oninput="fbRenderStock()"></div>
@@ -3347,6 +3355,28 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
 
     <div class="divider"></div>
     <div id="fb-master-stock-preview"></div>
+  </div>
+</div>
+</div>
+
+<!-- ITEM-WISE STOCK IN/OUT LEDGER REPORT MODAL (Fast Billing: per-item, date-wise IN/OUT history with running & final balance) -->
+<div class="modal-overlay" id="fb-item-ledger-modal">
+<div class="modal" style="max-width:900px;">
+  <div class="modal-header">
+    <h3>📅 Item-wise Stock In/Out Ledger</h3>
+    <button class="close-btn" onclick="closeModal('fb-item-ledger-modal')">✕</button>
+  </div>
+  <div class="modal-body">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Har item jo IN ya OUT hua ho, uska naam, phir total IN / total OUT / final bacha hua stock, uske baad us item ki poori date-wise history (kab kab in hua, kab out hua) — 1 line 1 record.</div>
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="form-group"><label>From Date (optional)</label><input type="date" id="fb-item-ledger-from" onchange="fbRenderItemLedgerReport()"></div>
+      <div class="form-group"><label>To Date (optional)</label><input type="date" id="fb-item-ledger-to" onchange="fbRenderItemLedgerReport()"></div>
+      <div class="form-group" style="flex:2;"><label>Search Item</label><input type="text" id="fb-item-ledger-search" placeholder="🔍 filter by item name..." oninput="fbRenderItemLedgerReport()"></div>
+      <div class="form-group" style="align-self:flex-end;"><button type="button" class="btn" onclick="document.getElementById('fb-item-ledger-from').value='';document.getElementById('fb-item-ledger-to').value='';document.getElementById('fb-item-ledger-search').value='';fbRenderItemLedgerReport();">✖️ Clear Filters</button></div>
+    </div>
+    <div style="margin:10px 0 14px;"><button type="button" class="btn btn-purple btn-sm" onclick="fbDownloadItemLedgerPDF()">📄 Download PDF</button></div>
+    <div class="divider"></div>
+    <div id="fb-item-ledger-preview" style="max-height:520px;overflow:auto;"></div>
   </div>
 </div>
 </div>
@@ -4675,6 +4705,13 @@ function saveData(){
       }
       toast('⚠️ Large data split into chunks for storage ('+dbMB+'MB). Use JSON Backup for full backup.','warning');
     }
+    // Explicit trigger (belt-and-suspenders): the line above saves 'dcrecords'
+    // directly via localStorage.setItem, not safeSetItem, so it wouldn't by
+    // itself schedule a cloud push. In practice the safeSetItem calls just
+    // below always fire too and cover it — but call this directly as well so
+    // DC/invoice changes are guaranteed to trigger the save indicator and
+    // cloud sync even if this function is ever changed later.
+    if(typeof scheduleCloudPush==='function') scheduleCloudPush();
     safeSetItem('sau_cheques', JSON.stringify(cheques));
     safeSetItem('sau_ledger', JSON.stringify(ledgerData));
     safeSetItem('fbr_parties', JSON.stringify(fbrParties));
@@ -4942,6 +4979,39 @@ let cloudDbRef = null;               // Firebase ref, set once connected
 let cloudSyncReady = false;          // true once the real-time listener is attached
 let cloudLastAppliedUpdatedAt = null;// the updatedAt of the data currently reflected on screen
 let cloudApplyingRemote = false;     // true while we're writing an incoming remote update into our own arrays (prevents a push-pull-push loop)
+// Visible "Saving…" indicator (2026-08-27): the small colored dot alone was
+// too easy to miss, especially on mobile, which is how edits (e.g. an
+// invoice number) could get closed/refreshed away before actually reaching
+// the cloud without anyone noticing. This makes the save state impossible
+// to miss: an amber "💾 Saving…" pill appears the instant a change is made
+// and stays up until the cloud confirms it (green "✅ Saved", auto-fades),
+// or turns red if it fails, so the user knows to wait / not close the tab.
+function setSaveBadge(state, text){
+  const badge = document.getElementById('save-status-badge');
+  if(!badge) return;
+  clearTimeout(badge._hideTimer);
+  badge.classList.remove('badge-saving','badge-saved','badge-error','badge-offline');
+  badge.style.display = 'inline-block';
+  badge.style.opacity = '1';
+  if(state==='saving'){
+    badge.textContent = text || '💾 Saving…';
+    badge.classList.add('badge-saving');
+  } else if(state==='saved'){
+    badge.textContent = text || '✅ Saved';
+    badge.classList.add('badge-saved');
+    // Don't clutter the header once it's confirmed safe — fade out shortly after.
+    badge._hideTimer = setTimeout(()=>{
+      badge.style.opacity = '0';
+      setTimeout(()=>{ if(badge.style.opacity==='0') badge.style.display='none'; }, 300);
+    }, 2200);
+  } else if(state==='error'){
+    badge.textContent = text || '⚠️ Not saved — retrying';
+    badge.classList.add('badge-error');
+  } else if(state==='offline'){
+    badge.textContent = text || '📴 Not synced (offline)';
+    badge.classList.add('badge-offline');
+  }
+}
 let cloudPushDebounceTimer = null;
 let cloudFirstEmptyReadAt = null;    // timestamp of the first "cloud looks empty" read, used to debounce against transient glitches
 let cloudEmptyRetryCount = 0;        // how many silent empty-cloud retries we've done since the first empty read
@@ -5262,6 +5332,7 @@ function scheduleCloudPush(){
     // doesn't spam while several offline edits happen back to back.
     pendingCloudSyncDirty = true;
     setCloudStatus('📴 Offline — changes saved on this device, will sync automatically once internet is back');
+    setSaveBadge('offline');
     const now = Date.now();
     if(now - lastOfflineToastAt > 20000){
       lastOfflineToastAt = now;
@@ -5270,9 +5341,37 @@ function scheduleCloudPush(){
     retryCloudConnectionIfNeeded();
     return;
   }
+  setSaveBadge('saving');
   clearTimeout(cloudPushDebounceTimer);
   cloudPushDebounceTimer = setTimeout(pushLocalDataToCloud, 1200);
 }
+// BUGFIX (2026-08-27): saves only reach the cloud after a 1.2s debounce
+// (scheduleCloudPush above). Since this file keeps nothing on local disk
+// (see "NO LOCAL STORAGE" note near the top), any edit made right before the
+// tab is closed, refreshed, or backgrounded — e.g. setting a DC's Invoice
+// No — was being silently lost forever if that 1.2s window never completed.
+// Fix: the moment the tab is hidden/closing, flush any pending push
+// immediately instead of waiting out the debounce, and warn the user if a
+// push is still in flight so they don't navigate away mid-save.
+function flushPendingCloudPushNow(){
+  if(cloudPushDebounceTimer){
+    clearTimeout(cloudPushDebounceTimer);
+    cloudPushDebounceTimer = null;
+    pushLocalDataToCloud();
+  }
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='hidden') flushPendingCloudPushNow();
+});
+window.addEventListener('pagehide', flushPendingCloudPushNow);
+window.addEventListener('beforeunload', function(e){
+  if(cloudPushDebounceTimer || pendingCloudSyncDirty){
+    flushPendingCloudPushNow();
+    e.preventDefault();
+    e.returnValue = 'Kuch changes abhi cloud par save ho rahe hain — is page ko band na karein.';
+    return e.returnValue;
+  }
+});
 // DATA-LOSS GUARD (2026-07-14): before ever overwriting the cloud, compare
 // how many records we're about to write against the last snapshot we know
 // was actually on the cloud. If a core list (DC records, Purchase Orders,
@@ -5312,6 +5411,7 @@ function looksLikeDangerousDataLoss(data){
 }
 async function pushLocalDataToCloud(forceOverride){
   if(!cloudDbRef) return;
+  setSaveBadge('saving', '☁️ Saving…');
   try{
     const data = buildCloudSyncData();
     const danger = !forceOverride && looksLikeDangerousDataLoss(data);
@@ -5321,17 +5421,26 @@ async function pushLocalDataToCloud(forceOverride){
       // is. This device will simply pick up the correct data automatically
       // via the normal live listener, and future saves will sync normally
       // once that's happened. No popup, no interruption.
+      //
+      // BUGFIX (2026-08-27): this used to report status as "🟢 Live sync"
+      // even though the push above was just skipped — i.e. whatever the user
+      // just typed/edited on THIS device was NOT actually saved anywhere,
+      // but everything looked fine. Now it's flagged honestly so the user
+      // knows to wait/retry instead of assuming it's already safe.
       console.warn('Cloud push silently skipped (protecting existing data):', danger);
-      setCloudStatus('🟢 Live sync — syncing…');
+      setCloudStatus('⚠️ Your last change was NOT synced yet (waiting for a safety check) — please wait, do not close this tab');
+      setSaveBadge('error', '⚠️ Not saved yet');
       return;
     }
     await cloudDbRef.ref(CLOUD_DATA_NODE).set(sanitizeForFirebase(data));
     cloudLastAppliedUpdatedAt = data.updatedAt;
     lastKnownGoodCloudCounts = { db:(data.db||[]).length, purchaseOrders:(data.purchaseOrders||[]).length, employees:(data.employees||[]).length, ledgerData:(data.ledgerData||[]).length };
     setCloudStatus('🟢 Live sync — last update: '+new Date(data.updatedAt).toLocaleString()+' (you)');
+    setSaveBadge('saved');
   }catch(err){
     console.error('Auto cloud push failed:', err);
     setCloudStatus('⚠️ Cloud push failed: '+err.message);
+    setSaveBadge('error', '⚠️ Save failed');
   }
 }
 
@@ -21510,6 +21619,109 @@ function fbDownloadMasterStockExcel(){
   logAudit && typeof logAudit==='function' && logAudit('download','Stock',`Master Stock Report Excel downloaded${includeHistory?' (with movement history)':''}`, undefined, undefined);
   toast('Master Stock Report Excel generated','success');
 }
+
+// ==================== ITEM-WISE STOCK IN/OUT LEDGER (2026-08-27) ====================
+// Groups every stock movement by item (not one flat list like the Master
+// Stock Report's history page). For each item that had any IN or OUT during
+// the chosen date range: item name, total IN, total OUT, final balance —
+// then that item's own movements listed one per line, oldest first, with a
+// running balance so you can see stock building up/depleting over time.
+const FB_LEDGER_TYPE_LABEL = {purchase:'IN — Purchase', sale:'OUT — Sale (Bill)', adjustment_add:'IN — Correction', adjustment_remove:'OUT — Correction', reversal:'IN — Reversal', return:'IN — Customer Return', opening:'IN — Opening Balance'};
+function fbIsInMovement(type){ return type==='purchase' || type==='adjustment_add' || type==='reversal' || type==='return' || type==='opening'; }
+// Builds the grouped, date-wise ledger. fromDate/toDate are 'YYYY-MM-DD' or ''/null for no bound.
+function fbComputeItemLedgerData(fromDate, toDate, searchTerm){
+  const search = (searchTerm||'').trim().toLowerCase();
+  const inRange = (d)=>{
+    if(!d) return true; // undated movements aren't excluded by a date filter — better to show than silently hide
+    if(fromDate && d < fromDate) return false;
+    if(toDate && d > toDate) return false;
+    return true;
+  };
+  const byItem = new Map(); // stockItemId -> {item, moves:[]}
+  fbStockMovements.forEach(m=>{
+    if(!inRange(m.date)) return;
+    const item = fbStockItems.find(s=>s.id===m.stockItemId);
+    const name = item ? item.name : '(deleted item)';
+    if(search && !name.toLowerCase().includes(search)) return;
+    if(!byItem.has(m.stockItemId)) byItem.set(m.stockItemId, {item, name, unit: item?item.unit:'', moves:[]});
+    byItem.get(m.stockItemId).moves.push(m);
+  });
+  const groups = Array.from(byItem.values()).map(g=>{
+    const moves = g.moves.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||''));
+    let totalIn=0, totalOut=0, running=0;
+    const rows = moves.map(m=>{
+      const qty = parseFloat(m.qty)||0;
+      if(qty>0) totalIn += qty; else totalOut += Math.abs(qty);
+      running += qty;
+      return {date:m.date, type:m.type, qty, note:m.note||'', ref:m.ref||'', runningBalance:running};
+    });
+    return {name:g.name, unit:g.unit, totalIn, totalOut, finalBalance: totalIn-totalOut, rows};
+  }).sort((a,b)=>a.name.localeCompare(b.name));
+  return groups;
+}
+function fbOpenItemLedgerReport(){
+  openModal('fb-item-ledger-modal');
+  fbRenderItemLedgerReport();
+}
+function fbRenderItemLedgerReport(){
+  const wrap = document.getElementById('fb-item-ledger-preview');
+  if(!wrap) return;
+  const from = document.getElementById('fb-item-ledger-from')?.value || '';
+  const to = document.getElementById('fb-item-ledger-to')?.value || '';
+  const search = document.getElementById('fb-item-ledger-search')?.value || '';
+  const groups = fbComputeItemLedgerData(from, to, search);
+  if(!groups.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">Is filter ke mutabiq koi stock movement nahi mili.</div>'; return; }
+  wrap.innerHTML = groups.map(g=>`
+    <div class="settings-section" style="margin-bottom:14px;">
+      <div style="font-weight:800;font-size:14px;color:var(--neon);margin-bottom:6px;">${g.name.replace(/</g,'&lt;')}${g.unit?' <span style="font-size:11px;color:var(--text3);font-weight:400;">('+g.unit.replace(/</g,'&lt;')+')</span>':''}</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;margin-bottom:8px;">
+        <span>📥 Total IN: <b style="color:var(--neon4);">${g.totalIn}</b></span>
+        <span>📤 Total OUT: <b style="color:var(--neon5);">${g.totalOut}</b></span>
+        <span>⚖️ Final Balance: <b>${g.finalBalance}</b></span>
+      </div>
+      <table class="items-table"><thead><tr><th>Date</th><th>In / Out</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Balance</th><th>Note / Ref</th></tr></thead><tbody>
+        ${g.rows.map(r=>`<tr>
+          <td style="white-space:nowrap;">${fmtDate(r.date)}</td>
+          <td>${FB_LEDGER_TYPE_LABEL[r.type]||r.type}</td>
+          <td style="text-align:right;color:${r.qty<0?'var(--neon5)':'var(--neon4)'};font-weight:700;">${r.qty>0?'+':''}${r.qty}</td>
+          <td style="text-align:right;">${r.runningBalance}</td>
+          <td style="font-size:11px;color:var(--text3);">${[r.note, r.ref?('Ref: '+r.ref):''].filter(Boolean).join(' — ').replace(/</g,'&lt;')}</td>
+        </tr>`).join('')}
+      </tbody></table>
+    </div>`).join('');
+}
+function fbDownloadItemLedgerPDF(){
+  const from = document.getElementById('fb-item-ledger-from')?.value || '';
+  const to = document.getElementById('fb-item-ledger-to')?.value || '';
+  const search = document.getElementById('fb-item-ledger-search')?.value || '';
+  const groups = fbComputeItemLedgerData(from, to, search);
+  if(!groups.length){ toast('No stock movements to export for this filter','warning'); return; }
+  const doc = new jspdf.jsPDF();
+  let y = pdfHeader(doc, 'Item-wise Stock In/Out Ledger');
+  if(from || to){
+    doc.setFontSize(9); doc.setFont(undefined,'normal');
+    doc.text(`Period: ${from?fmtDate(from):'Start'} to ${to?fmtDate(to):'Today'}`, 14, y); y += 6;
+  }
+  groups.forEach((g, idx)=>{
+    if(y > doc.internal.pageSize.getHeight()-60){ doc.addPage(); y=15; }
+    doc.setFontSize(12); doc.setFont(undefined,'bold');
+    doc.text(`${g.name}${g.unit?' ('+g.unit+')':''}`, 14, y); y += 6;
+    doc.setFontSize(10); doc.setFont(undefined,'normal');
+    doc.text(`Total IN: ${g.totalIn}     Total OUT: ${g.totalOut}     Final Balance: ${g.finalBalance}`, 14, y); y += 4;
+    doc.autoTable({
+      startY:y,
+      head:[['Date','In / Out','Qty','Balance','Note / Ref']],
+      body: g.rows.map(r=>[fmtDate(r.date), FB_LEDGER_TYPE_LABEL[r.type]||r.type, (r.qty>0?'+':'')+r.qty, r.runningBalance, [r.note, r.ref?('Ref: '+r.ref):''].filter(Boolean).join(' — ')]),
+      styles:{fontSize:9}, headStyles:{fillColor:[20,20,40]}
+    });
+    y = doc.lastAutoTable.finalY + 10;
+  });
+  stampBrandLogoOnAllPages(doc);
+  doc.save(`Item_Stock_Ledger_${new Date().toISOString().slice(0,10)}.pdf`);
+  logAudit && typeof logAudit==='function' && logAudit('download','Stock','Item-wise Stock In/Out Ledger PDF downloaded', undefined, undefined);
+  toast('Item-wise Stock Ledger PDF generated','success');
+}
+
 // Shared calculation used by both the on-screen Full Stock Value Report and
 // its one-click PDF export, so the two can never drift out of sync.
 function fbComputeStockValueRows(discPctOverride){
