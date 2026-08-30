@@ -2291,6 +2291,9 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
       <div id="empid-name" style="font-weight:700;font-size:15px;"></div>
       <div id="empid-designation" style="font-size:12px;color:#555;margin-bottom:8px;"></div>
       <div id="empid-qr-canvas" style="display:flex;justify-content:center;margin-bottom:8px;background:#fff;padding:10px;border:1px solid #eee;"></div>
+      <div style="background:#fff;padding:6px 4px;margin-bottom:8px;">
+        <svg id="empid-barcode-svg"></svg>
+      </div>
       <div id="empid-code" style="font-size:11px;color:#555;"></div>
       <div id="empid-phone" style="font-size:11px;color:#555;"></div>
     </div>
@@ -14079,6 +14082,9 @@ function openEmployeeIdCard(idx){
     try{
       new QRCode(qrEl, {text: JSON.stringify({type:'attendance', empId:e.id}), width:180, height:180, colorDark:'#000000', colorLight:'#ffffff', correctLevel:QRCode.CorrectLevel.H});
     }catch(err){ console.error('QR render failed', err); }
+    try{
+      JsBarcode('#empid-barcode-svg', e.id, {format:'CODE128', width:2, height:45, displayValue:true, fontSize:11, margin:6});
+    }catch(err){ console.error('Barcode render failed', err); }
   }, 50);
 }
 function printEmployeeIdCard(){
