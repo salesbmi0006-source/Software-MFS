@@ -3114,7 +3114,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
     <div class="flex-gap" style="margin-bottom:10px;align-items:center;">
       <input type="text" id="fb-rl-search" placeholder="🔍 e.g. spot 12w 30 (any word, any order)" oninput="fbRenderDescriptionsSettings()" style="max-width:340px;">
       <span id="fb-rl-count" style="font-size:11px;color:var(--text3);"></span>
-      <button type="button" class="btn btn-neon btn-sm" onclick="fbImportDefaultRateList(true)">📥 Import/Refresh Default 110 Items</button>
+      <button type="button" class="btn btn-neon btn-sm" onclick="fbImportDefaultRateList(true)" title="Sirf missing default items add karta hai — kabhi kisi maujooda item ka price ya count wapis/remove nahi karta">📥 Import Missing Default Items</button>
     </div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">🧭 Step-by-step filter: pehle Category chunein, phir uske andar Model, phir Watt, Colour, Size — har selection ke baad agli list khud narrow ho jayegi.</div>
     <div class="form-row" style="align-items:flex-end;margin-bottom:10px;">
@@ -3283,7 +3283,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
     <button type="button" class="btn btn-purple btn-sm" style="margin-bottom:14px;" onclick="fbOpenStockValueReport()">🔒 Full Stock Value Report (Admin)</button>
     <button type="button" class="btn btn-neon btn-sm" style="margin-bottom:14px;margin-left:8px;" onclick="fbOpenStockAvailReport()">📋 Stock Availability Report</button>
     <button type="button" class="btn btn-green btn-sm" style="margin-bottom:14px;margin-left:8px;" onclick="fbOpenMasterStockReport()">📊 Master Stock Report (PDF + Excel)</button>
-    <button type="button" class="btn btn-purple btn-sm" style="margin-bottom:14px;margin-left:8px;" onclick="fbOpenItemLedgerReport()">📅 Item-wise Stock In/Out Ledger (PDF)</button>
+    <button type="button" class="btn btn-purple btn-sm" style="margin-bottom:14px;margin-left:8px;" onclick="fbOpenItemLedgerReport()">📅 Item-wise Stock In/Out Ledger (PDF/Excel)</button>
 
     <div class="form-row" style="align-items:flex-end;">
       <div class="form-group" style="flex:2;"><label>Search Item</label><input type="text" id="fb-stock-search" placeholder="🔍 e.g. spot 12w (any word, any order)" oninput="fbRenderStock()"></div>
@@ -3381,7 +3381,10 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
       <div id="fb-stock-avail-count" style="font-size:12px;color:var(--text3);"></div>
-      <button type="button" class="btn btn-purple btn-sm" onclick="fbDownloadStockAvailPDF()">📄 Download PDF</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="btn btn-purple btn-sm" onclick="fbDownloadStockAvailPDF()">📄 Download PDF</button>
+        <button type="button" class="btn btn-green btn-sm" onclick="fbDownloadStockAvailExcel()">📊 Download Excel</button>
+      </div>
     </div>
     <div id="fb-stock-avail-table" style="max-height:420px;overflow:auto;"></div>
   </div>
@@ -3428,9 +3431,23 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
       <div class="form-group"><label>From Date (optional)</label><input type="date" id="fb-item-ledger-from" onchange="fbRenderItemLedgerReport()"></div>
       <div class="form-group"><label>To Date (optional)</label><input type="date" id="fb-item-ledger-to" onchange="fbRenderItemLedgerReport()"></div>
       <div class="form-group" style="flex:2;"><label>Search Item</label><input type="text" id="fb-item-ledger-search" placeholder="🔍 filter by item name..." oninput="fbRenderItemLedgerReport()"></div>
-      <div class="form-group" style="align-self:flex-end;"><button type="button" class="btn" onclick="document.getElementById('fb-item-ledger-from').value='';document.getElementById('fb-item-ledger-to').value='';document.getElementById('fb-item-ledger-search').value='';fbRenderItemLedgerReport();">✖️ Clear Filters</button></div>
     </div>
-    <div style="margin:10px 0 14px;"><button type="button" class="btn btn-purple btn-sm" onclick="fbDownloadItemLedgerPDF()">📄 Download PDF</button></div>
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="form-group"><label>Status</label>
+        <select id="fb-item-ledger-status" onchange="fbRenderItemLedgerReport()" style="width:auto;">
+          <option value="all">📋 All</option>
+          <option value="available">✅ Available Stock</option>
+          <option value="low">⚠️ Low Stock</option>
+          <option value="out">❌ Out Of Stock</option>
+        </select>
+      </div>
+      <div class="form-group" style="align-self:flex-end;"><button type="button" class="btn" onclick="document.getElementById('fb-item-ledger-from').value='';document.getElementById('fb-item-ledger-to').value='';document.getElementById('fb-item-ledger-search').value='';document.getElementById('fb-item-ledger-status').value='all';fbRenderItemLedgerReport();">✖️ Clear Filters</button></div>
+    </div>
+    <div style="margin:10px 0 14px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button type="button" class="btn btn-purple btn-sm" onclick="fbDownloadItemLedgerPDF()">📄 Download PDF</button>
+      <button type="button" class="btn btn-green btn-sm" onclick="fbDownloadItemLedgerExcel()">📊 Download Excel (date-wise table)</button>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin:-6px 0 10px;">Excel: har item ki row, phir har date ka apna column (jaisa aapke sheet mein hota hai). From/To khali chhoren to poori (full) sheet download hogi, warna sirf wahi date range.</div>
     <div class="divider"></div>
     <div id="fb-item-ledger-preview" style="max-height:520px;overflow:auto;"></div>
   </div>
@@ -16480,6 +16497,7 @@ function onPOPartyChange(){
   }
 }
 function openPOModal(idx){
+  poEditingItemIdx = null;
   document.getElementById('po-edit-idx').value = idx!==undefined ? idx : -1;
   document.getElementById('poModalTitle').textContent = idx!==undefined ? '✏️ Edit Purchase Order' : '➕ New Purchase Order';
   document.getElementById('po-no').value=''; document.getElementById('po-supplier').value='';
@@ -16520,16 +16538,56 @@ function addPOItemRow(){
   renderPOItemsTable();
 }
 function removePOItemRow(i){ poTempItems.splice(i,1); renderPOItemsTable(); }
+// Inline edit for an already-added PO item row — Admin only. Everyone else
+// still sees the row as before (with just the ✕ remove button); to change an
+// item's qty/rate/etc without Admin access, remove it and re-add it.
+let poEditingItemIdx = null;
+function editPOItemRow(i){
+  if(!fbIsAdmin()){ toast('Sirf Admin hi Purchase Order ka item edit kar sakta hai','warning'); return; }
+  poEditingItemIdx = i;
+  renderPOItemsTable();
+}
+function cancelEditPOItemRow(){
+  poEditingItemIdx = null;
+  renderPOItemsTable();
+}
+function savePOItemRowEdit(i, name, hscode, qty, rate, tax){
+  if(!fbIsAdmin()){ toast('Sirf Admin hi edit kar sakta hai','warning'); return; }
+  if(!poTempItems[i]) return;
+  const n = (name||'').trim();
+  const q = parseFloat(qty)||0;
+  if(!n || !q){ toast('Item name aur qty required hain','warning'); return; }
+  poTempItems[i] = { ...poTempItems[i], name:n, hscode:(hscode||'').trim(), qty:q, rate: parseFloat(rate)||0, tax: parseFloat(tax)||0 };
+  poEditingItemIdx = null;
+  renderPOItemsTable();
+  toast('✅ Item updated — "💾 Save PO" dabana na bhoolein','success');
+}
 function renderPOItemsTable(){
   const tbody = document.getElementById('po-items-tbody');
   const cur = settings.currency||'PKR';
+  const admin = fbIsAdmin();
   // Everything after qty/rate/tax is computed automatically: Gross = qty*rate,
   // Tax Amt = Gross * tax%, Total = Gross + Tax Amt — nothing here is manually typed.
   tbody.innerHTML = poTempItems.map((it,i)=>{
+    if(admin && poEditingItemIdx===i){
+      const nid='po-ei-name-'+i, hid='po-ei-hs-'+i, qid='po-ei-qty-'+i, rid='po-ei-rate-'+i, tid='po-ei-tax-'+i;
+      return `<tr style="background:rgba(0,255,200,0.05);">
+        <td><input type="text" id="${nid}" value="${(it.name||'').replace(/"/g,'&quot;')}" style="width:120px;"></td>
+        <td><input type="text" id="${hid}" value="${(it.hscode||'').replace(/"/g,'&quot;')}" style="width:80px;" oninput="formatHsCodeInput(this)"></td>
+        <td><input type="number" id="${qid}" value="${it.qty}" style="width:70px;"></td>
+        <td><input type="number" step="0.01" id="${rid}" value="${it.rate}" style="width:80px;"></td>
+        <td><select id="${tid}" style="width:70px;"><option value="18" ${it.tax==18?'selected':''}>18%</option><option value="25" ${it.tax==25?'selected':''}>25%</option></select></td>
+        <td colspan="2" style="color:var(--text3);font-size:11px;">Save karne par dobara calculate ho jayega</td>
+        <td style="white-space:nowrap;">
+          <button type="button" class="btn btn-xs btn-green" title="Save" onclick="savePOItemRowEdit(${i}, document.getElementById('${nid}').value, document.getElementById('${hid}').value, document.getElementById('${qid}').value, document.getElementById('${rid}').value, document.getElementById('${tid}').value)">💾</button>
+          <button type="button" class="btn btn-xs" title="Cancel" onclick="cancelEditPOItemRow()">✖️</button>
+        </td>
+      </tr>`;
+    }
     const gross = (parseFloat(it.qty)||0)*(parseFloat(it.rate)||0);
     const taxAmt = gross*(parseFloat(it.tax)||0)/100;
     const total = gross+taxAmt;
-    return `<tr><td>${it.name}</td><td>${it.hscode||'-'}</td><td>${it.qty}</td><td>${cur} ${fmt(it.rate)}</td><td>${it.tax||0}%</td><td>${cur} ${fmt(taxAmt)}</td><td><strong>${cur} ${fmt(total)}</strong></td><td><button type="button" class="btn btn-xs btn-red" onclick="removePOItemRow(${i})">✕</button></td></tr>`;
+    return `<tr><td>${it.name}</td><td>${it.hscode||'-'}</td><td>${it.qty}</td><td>${cur} ${fmt(it.rate)}</td><td>${it.tax||0}%</td><td>${cur} ${fmt(taxAmt)}</td><td><strong>${cur} ${fmt(total)}</strong></td><td style="white-space:nowrap;">${admin?`<button type="button" class="btn btn-xs" title="Edit (Admin)" onclick="editPOItemRow(${i})">✏️</button> `:''}<button type="button" class="btn btn-xs btn-red" onclick="removePOItemRow(${i})">✕</button></td></tr>`;
   }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text3);">No items added</td></tr>';
 }
 function savePO(){
@@ -21432,7 +21490,7 @@ function fbRenderDescriptionsSettings(){
   const countEl = document.getElementById('fb-rl-count');
   if(!wrap) return;
   fbRenderRlFacets();
-  if(!fbDescriptions.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">Rate List khali hai — "📥 Import/Refresh Default 110 Items" button se apni list load karein, ya neeche "➕ Add Item" se manually shuru karein.</div>'; if(countEl) countEl.textContent=''; return; }
+  if(!fbDescriptions.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">Rate List khali hai — "📥 Import Missing Default Items" button se apni list load karein, ya neeche "➕ Add Item" se manually shuru karein.</div>'; if(countEl) countEl.textContent=''; return; }
   const search = (document.getElementById('fb-rl-search')?.value||'').trim();
   let list = fbDescriptions.map((d,i)=>({...d,_idx:i}));
   if(search) list = list.filter(d=>fbFuzzyMatch(d.desc, search));
@@ -21456,9 +21514,10 @@ function fbRenderDescriptionsSettings(){
 }
 function fbUpdateDescriptionField(idx, field, val){
   if(!fbDescriptions[idx]) return;
+  let oldDesc = '';
   if(field==='desc'){
     const newDesc = (val||'').trim();
-    const oldDesc = (fbDescriptions[idx].desc||'').trim();
+    oldDesc = (fbDescriptions[idx].desc||'').trim();
     if(newDesc && newDesc.toLowerCase()!==oldDesc.toLowerCase()){
       const dup = fbDescriptions.find((d,i)=>i!==idx && (d.desc||'').trim().toLowerCase()===newDesc.toLowerCase());
       if(dup){
@@ -21475,6 +21534,14 @@ function fbUpdateDescriptionField(idx, field, val){
   fbPopulateDescDatalist();
   fbRenderItemsTable();
   fbRenderQuotItemsTable();
+  // Keep Stock in sync automatically: renaming an item's description renames
+  // its matching stock item too (instead of orphaning it), and any brand-new
+  // description always gets a stock item created for it right away — no need
+  // to remember to add it separately in the Stock tab.
+  if(field==='desc'){
+    fbSyncStockItemForDescription(oldDesc, fbDescriptions[idx].desc);
+    fbRenderStock();
+  }
   toast('Saved','success');
 }
 function fbMoveDescription(idx, dir){
@@ -21493,22 +21560,56 @@ function fbDeleteDescription(idx){
   fbRenderDescriptionsSettings();
   fbPopulateDescDatalist();
 }
-function fbAddDescriptionRow(){
-  fbDescriptions.push({id: fbUid(), desc:'New Item', rate:0, consumerRate:0, cartonQty:'', shopRates:{}});
-  saveFbDescriptions();
-  fbRenderDescriptionsSettings();
+// Ensures a Stock item always exists for a Rate List description, so newly
+// added / renamed items never go untracked in Stock. If a stock item already
+// matched the OLD description, it's renamed to follow (so editing "New Item"
+// into a real product name doesn't create a duplicate, orphaned stock row) —
+// otherwise a fresh stock item is created for the new description.
+function fbSyncStockItemForDescription(oldDesc, newDesc){
+  const nd = (newDesc||'').trim();
+  if(!nd) return;
+  const oldMatch = oldDesc ? fbFindStockItemByName(oldDesc) : null;
+  if(oldMatch){
+    if((oldMatch.name||'').trim().toLowerCase()!==nd.toLowerCase() && !fbFindStockItemByName(nd)){
+      oldMatch.name = nd;
+      saveFbStockItems();
+    }
+    return;
+  }
+  if(!fbFindStockItemByName(nd)){
+    const item = {id: fbUid(), name: nd, unit:'Pcs', currentQty:0, minQty:0, notes:'', cartonQty:'', location:''};
+    fbApplyUnitAlertDefaultToItem(item);
+    fbStockItems.push(item);
+    saveFbStockItems();
+  }
 }
-// One-time (or on-demand) import of the shop's default 110-item rate list.
-// Merges by description name: existing items get their price/carton fields
-// refreshed, brand-new ones get added — nothing is duplicated.
+function fbAddDescriptionRow(){
+  const newItem = {id: fbUid(), desc:'New Item', rate:0, consumerRate:0, cartonQty:'', shopRates:{}};
+  fbDescriptions.push(newItem);
+  saveFbDescriptions();
+  // Auto-create the matching Stock entry immediately (order/auto-save into
+  // Stock), instead of only doing this for the default 110-item import.
+  fbSyncStockItemForDescription('', newItem.desc);
+  fbRenderDescriptionsSettings();
+  fbRenderStock();
+}
+// On-demand import of the shop's default rate list. ADDITIVE ONLY: it only
+// adds default items that are missing from the current Rate List — it never
+// edits or removes an item that's already there (whether that item came from
+// the default list or was added manually), so your own price edits and any
+// extra items you've added are always safe, no matter how many times you run
+// this. A matching Stock item is also created for anything newly added.
 function fbImportDefaultRateList(doConfirm){
   if(typeof FB_DEFAULT_RATE_LIST === 'undefined' || !FB_DEFAULT_RATE_LIST.length) return;
-  if(doConfirm && !confirm(`Yeh ${FB_DEFAULT_RATE_LIST.length} default items load/refresh karega (naye add honge, jo pehle se hain unki price update ho jayegi). Continue?`)) return;
-  let added = 0, updated = 0;
-  FB_DEFAULT_RATE_LIST.forEach(src=>{
-    let d = fbDescriptions.find(x=>(x.desc||'').toLowerCase()===src.desc.toLowerCase());
-    if(!d){ d = {id: fbUid(), desc: src.desc, rate: src.rate, consumerRate: src.consumerRate, cartonQty: src.cartonQty, shopRates:{}}; fbDescriptions.push(d); added++; }
-    else { d.rate = src.rate; d.consumerRate = src.consumerRate; d.cartonQty = src.cartonQty; updated++; }
+  const missing = FB_DEFAULT_RATE_LIST.filter(src=>!fbDescriptions.find(x=>(x.desc||'').toLowerCase()===src.desc.toLowerCase()));
+  if(doConfirm){
+    if(!missing.length){ toast('✅ Sab default items already Rate List mein maujood hain — kuch bhi add nahi hua, kuch remove/change bhi nahi hua.','success'); return; }
+    if(!confirm(`Yeh sirf ${missing.length} naye default item(s) add karega jo abhi Rate List mein nahi hain. Jo items pehle se list mein hain (aapke edits samet, aur aapke manually add kiye hue items) unhe bilkul touch nahi kiya jayega. Continue?`)) return;
+  }
+  let added = 0;
+  missing.forEach(src=>{
+    const d = {id: fbUid(), desc: src.desc, rate: src.rate, consumerRate: src.consumerRate, cartonQty: src.cartonQty, shopRates:{}};
+    fbDescriptions.push(d); added++;
     // Also make sure a matching Stock item exists so stock tracking works out of the box.
     if(!fbFindStockItemByName(src.desc)){
       const newStockItem = {id: fbUid(), name: src.desc, unit:'Pcs', currentQty:0, minQty:0, notes:'', cartonQty: src.cartonQty, location:''};
@@ -21521,7 +21622,7 @@ function fbImportDefaultRateList(doConfirm){
   fbPopulateDescDatalist();
   fbRenderDescriptionsSettings();
   fbRenderStock();
-  if(doConfirm) toast(`✅ Rate List: ${added} added, ${updated} updated`,'success');
+  if(doConfirm) toast(`✅ Rate List: ${added} naya item add hua. Baqi kisi item ko touch nahi kiya gaya.`,'success');
 }
 
 // ==================== STOCK SYSTEM (Fast Billing) ====================
@@ -21756,6 +21857,48 @@ function fbDownloadStockAvailPDF(){
   doc.save(`Stock_${fbStockAvailTab}_${new Date().toISOString().slice(0,10)}.pdf`);
   toast('Stock Availability PDF generated','success');
 }
+// Excel version of the same report, filtered to whichever tab (All / Available
+// / Low Stock / Out of Stock) is currently selected — so picking "Low Stock"
+// and downloading only exports the low-stock items, same for the others.
+function fbDownloadStockAvailExcel(){
+  if(typeof XLSX==='undefined'){ toast('Excel library failed to load — check your internet connection and try again','error'); return; }
+  const labels = {all:'All Items', available:'Available Stock', low:'Low Stock', out:'Out of Stock'};
+  const wb = XLSX.utils.book_new();
+  const cols = [{wch:5},{wch:30},{wch:10},{wch:12},{wch:13},{wch:16}];
+  if(fbStockAvailTab==='all'){
+    const available = fbGetStockAvailRows('available').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    const low = fbGetStockAvailRows('low').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    const out = fbGetStockAvailRows('out').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    if(!available.length && !low.length && !out.length){ toast('No stock items to export','warning'); return; }
+    const aoa = [['STOCK AVAILABILITY REPORT — ALL'], [`Generated: ${new Date().toLocaleString('en-PK')}`], []];
+    const addBlock = (title, rows)=>{
+      if(!rows.length) return;
+      aoa.push([`${title} (${rows.length})`]);
+      aoa.push(['#','Item','Unit','Current Qty','Low Alert At','Location']);
+      rows.forEach((s,i)=> aoa.push([i+1, s.name||'', s.unit||'', s.currentQty||0, s.minQty||0, s.location||'']));
+      aoa.push([]);
+    };
+    addBlock('Available Stock', available);
+    addBlock('Low Stock', low);
+    addBlock('Out of Stock', out);
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = cols;
+    XLSX.utils.book_append_sheet(wb, ws, 'Stock Availability');
+    XLSX.writeFile(wb, `Stock_All_${new Date().toISOString().slice(0,10)}.xlsx`);
+    toast('Combined Stock Availability Excel generated','success');
+    return;
+  }
+  const rows = fbGetStockAvailRows(fbStockAvailTab).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  if(!rows.length){ toast('No items to export in this list','warning'); return; }
+  const aoa = [[`STOCK REPORT — ${labels[fbStockAvailTab].toUpperCase()}`], [`Generated: ${new Date().toLocaleString('en-PK')}`], []];
+  aoa.push(['#','Item','Unit','Current Qty','Low Alert At','Location']);
+  rows.forEach((s,i)=> aoa.push([i+1, s.name||'', s.unit||'', s.currentQty||0, s.minQty||0, s.location||'']));
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = cols;
+  XLSX.utils.book_append_sheet(wb, ws, labels[fbStockAvailTab].slice(0,31));
+  XLSX.writeFile(wb, `Stock_${fbStockAvailTab}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('Stock Availability Excel generated','success');
+}
 // ==================== MASTER STOCK REPORT (Available + All + Low Alert, ====================
 // optionally + Stock Movement History) — one combined report exportable as
 // both PDF and Excel. The "include history" toggle is remembered in fbSettings
@@ -21912,7 +22055,14 @@ function fbDownloadMasterStockExcel(){
 const FB_LEDGER_TYPE_LABEL = {purchase:'IN — Purchase', sale:'OUT — Sale (Bill)', adjustment_add:'IN — Correction', adjustment_remove:'OUT — Correction', reversal:'IN — Reversal', return:'IN — Customer Return', opening:'IN — Opening Balance'};
 function fbIsInMovement(type){ return type==='purchase' || type==='adjustment_add' || type==='reversal' || type==='return' || type==='opening'; }
 // Builds the grouped, date-wise ledger. fromDate/toDate are 'YYYY-MM-DD' or ''/null for no bound.
-function fbComputeItemLedgerData(fromDate, toDate, searchTerm){
+// Same Available / Low Stock / Out of Stock rule used everywhere else in Stock.
+function fbLedgerItemStatus(item){
+  if(!item) return '';
+  if((item.currentQty||0)<=0) return 'Out of Stock';
+  if((item.minQty||0)>0 && (item.currentQty||0)<=item.minQty) return 'Low Stock';
+  return 'Available';
+}
+function fbComputeItemLedgerData(fromDate, toDate, searchTerm, statusFilter){
   const search = (searchTerm||'').trim().toLowerCase();
   const inRange = (d)=>{
     if(!d) return true; // undated movements aren't excluded by a date filter — better to show than silently hide
@@ -21929,7 +22079,7 @@ function fbComputeItemLedgerData(fromDate, toDate, searchTerm){
     if(!byItem.has(m.stockItemId)) byItem.set(m.stockItemId, {item, name, unit: item?item.unit:'', moves:[]});
     byItem.get(m.stockItemId).moves.push(m);
   });
-  const groups = Array.from(byItem.values()).map(g=>{
+  let groups = Array.from(byItem.values()).map(g=>{
     const moves = g.moves.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||''));
     let totalIn=0, totalOut=0, running=0;
     const rows = moves.map(m=>{
@@ -21938,8 +22088,12 @@ function fbComputeItemLedgerData(fromDate, toDate, searchTerm){
       running += qty;
       return {date:m.date, type:m.type, qty, note:m.note||'', ref:m.ref||'', runningBalance:running};
     });
-    return {name:g.name, unit:g.unit, totalIn, totalOut, finalBalance: totalIn-totalOut, rows};
+    return {item:g.item, name:g.name, unit:g.unit, status: fbLedgerItemStatus(g.item), totalIn, totalOut, finalBalance: totalIn-totalOut, rows};
   }).sort((a,b)=>a.name.localeCompare(b.name));
+  if(statusFilter && statusFilter!=='all'){
+    const want = {available:'Available', low:'Low Stock', out:'Out of Stock'}[statusFilter];
+    if(want) groups = groups.filter(g=>g.status===want);
+  }
   return groups;
 }
 function fbOpenItemLedgerReport(){
@@ -21952,7 +22106,8 @@ function fbRenderItemLedgerReport(){
   const from = document.getElementById('fb-item-ledger-from')?.value || '';
   const to = document.getElementById('fb-item-ledger-to')?.value || '';
   const search = document.getElementById('fb-item-ledger-search')?.value || '';
-  const groups = fbComputeItemLedgerData(from, to, search);
+  const status = document.getElementById('fb-item-ledger-status')?.value || 'all';
+  const groups = fbComputeItemLedgerData(from, to, search, status);
   if(!groups.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">Is filter ke mutabiq koi stock movement nahi mili.</div>'; return; }
   wrap.innerHTML = groups.map(g=>`
     <div class="settings-section" style="margin-bottom:14px;">
@@ -21977,7 +22132,8 @@ function fbDownloadItemLedgerPDF(){
   const from = document.getElementById('fb-item-ledger-from')?.value || '';
   const to = document.getElementById('fb-item-ledger-to')?.value || '';
   const search = document.getElementById('fb-item-ledger-search')?.value || '';
-  const groups = fbComputeItemLedgerData(from, to, search);
+  const status = document.getElementById('fb-item-ledger-status')?.value || 'all';
+  const groups = fbComputeItemLedgerData(from, to, search, status);
   if(!groups.length){ toast('No stock movements to export for this filter','warning'); return; }
   const doc = new jspdf.jsPDF();
   let y = pdfHeader(doc, 'Item-wise Stock In/Out Ledger');
@@ -22003,6 +22159,93 @@ function fbDownloadItemLedgerPDF(){
   doc.save(`Item_Stock_Ledger_${new Date().toISOString().slice(0,10)}.pdf`);
   logAudit && typeof logAudit==='function' && logAudit('download','Stock','Item-wise Stock In/Out Ledger PDF downloaded', undefined, undefined);
   toast('Item-wise Stock Ledger PDF generated','success');
+}
+function fbFmtDateDDMMYY(dateStr){
+  if(!dateStr) return '';
+  const d = new Date(dateStr+'T00:00:00');
+  if(isNaN(d.getTime())) return dateStr;
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}-${mm}-${yy}`;
+}
+// Builds the list of calendar-day date columns for the Excel matrix export.
+// Uses the explicit From/To filter if given; otherwise spans from the
+// earliest to the latest movement date actually found in the filtered groups
+// (so a "full sheet" download still shows a complete continuous date range).
+function fbGetLedgerDateColumns(fromDate, toDate, groups){
+  let start = fromDate, end = toDate;
+  if(!start || !end){
+    let minD=null, maxD=null;
+    groups.forEach(g=> g.rows.forEach(r=>{
+      if(!r.date) return;
+      if(!minD || r.date<minD) minD = r.date;
+      if(!maxD || r.date>maxD) maxD = r.date;
+    }));
+    if(!start) start = minD || new Date().toISOString().slice(0,10);
+    if(!end) end = maxD || new Date().toISOString().slice(0,10);
+  }
+  const cols = [];
+  let d = new Date(start+'T00:00:00');
+  const endD = new Date(end+'T00:00:00');
+  if(isNaN(d.getTime()) || isNaN(endD.getTime()) || d>endD) return cols;
+  while(d<=endD){
+    cols.push(d.toISOString().slice(0,10));
+    d.setDate(d.getDate()+1);
+  }
+  return cols;
+}
+// Excel export of the Item-wise Stock In/Out Ledger in the shop's own table
+// format: one row per item (sr no, status, description, total in/out/qty),
+// then one column per calendar date showing that item's NET qty movement on
+// that day (blank = no movement that day). From/To dates (if set) control the
+// exact date range exported; leaving them blank exports the full data range.
+// The status filter (Available / Low Stock / Out of Stock) restricts which
+// item rows are included, same as the on-screen report and the PDF.
+function fbDownloadItemLedgerExcel(){
+  if(typeof XLSX==='undefined'){ toast('Excel library failed to load — check your internet connection and try again','error'); return; }
+  const from = document.getElementById('fb-item-ledger-from')?.value || '';
+  const to = document.getElementById('fb-item-ledger-to')?.value || '';
+  const search = document.getElementById('fb-item-ledger-search')?.value || '';
+  const status = document.getElementById('fb-item-ledger-status')?.value || 'all';
+  const groups = fbComputeItemLedgerData(from, to, search, status);
+  if(!groups.length){ toast('No stock movements to export for this filter','warning'); return; }
+  const dateCols = fbGetLedgerDateColumns(from, to, groups);
+
+  const headRow1 = new Array(6).fill('');
+  headRow1[5] = 'Date';
+  const headRow2 = ['sr no','Avaliable stock/Low Stock/out Of Stock','description','toatl in qty','total out qty','total qty'];
+  dateCols.forEach(dc=>{ headRow1.push(''); headRow2.push(fbFmtDateDDMMYY(dc)); });
+
+  const statusText = {available:'Available Stock', low:'Low Stock', out:'out Of Stock', all:'All'}[status] || 'All';
+  const aoa = [];
+  aoa.push([`Item-wise Stock In/Out Ledger — ${statusText}${(from||to)?(' — Period: '+(from?fmtDate(from):'Start')+' to '+(to?fmtDate(to):'Today')):''}`]);
+  aoa.push([`Generated: ${new Date().toLocaleString('en-PK')}`]);
+  aoa.push([]);
+  aoa.push(headRow1);
+  aoa.push(headRow2);
+  groups.forEach((g,i)=>{
+    const byDate = {};
+    g.rows.forEach(r=>{ if(!r.date) return; byDate[r.date] = (byDate[r.date]||0) + (parseFloat(r.qty)||0); });
+    const row = [i+1, g.status||statusText, g.name||'', g.totalIn, g.totalOut, g.finalBalance];
+    dateCols.forEach(dc=>{ const v = byDate[dc]; row.push(v ? v : ''); });
+    aoa.push(row);
+  });
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{wch:6},{wch:32},{wch:34},{wch:12},{wch:12},{wch:10}, ...dateCols.map(()=>({wch:10}))];
+  // Merge the title/subtitle rows across all columns for readability.
+  const lastCol = headRow2.length - 1;
+  ws['!merges'] = [
+    {s:{r:0,c:0}, e:{r:0,c:lastCol}},
+    {s:{r:1,c:0}, e:{r:1,c:lastCol}}
+  ];
+  XLSX.utils.book_append_sheet(wb, ws, 'Item Stock Ledger');
+  const suffix = (from||to) ? `_${from||'start'}_to_${to||'today'}` : '_Full';
+  XLSX.writeFile(wb, `Item_Stock_Ledger${suffix}.xlsx`);
+  logAudit && typeof logAudit==='function' && logAudit('download','Stock',`Item-wise Stock In/Out Ledger Excel downloaded (${statusText})`, undefined, undefined);
+  toast('Item-wise Stock Ledger Excel generated','success');
 }
 
 // Shared calculation used by both the on-screen Full Stock Value Report and
@@ -22243,28 +22486,97 @@ function fbAdjustStock(){
   fbRenderStock();
   toast('✅ Stock updated for "'+item.name+'"','success');
 }
+// Only Admin (logged in as role:'admin' in Security) can edit/delete a stock
+// movement history entry — everyone else just sees the read-only history.
+function fbIsAdmin(){
+  return typeof securityData!=='undefined' && !!securityData.currentUser && securityData.currentUser.role==='admin';
+}
+let fbStockMoveEditingId = null;
+function fbEditStockMovement(id){
+  if(!fbIsAdmin()){ toast('Sirf Admin hi stock movement history edit kar sakta hai','warning'); return; }
+  fbStockMoveEditingId = id;
+  fbRenderStockMovements();
+}
+function fbCancelEditStockMovement(){
+  fbStockMoveEditingId = null;
+  fbRenderStockMovements();
+}
+function fbSaveStockMovementEdit(id, newDate, newNote, newQty){
+  if(!fbIsAdmin()){ toast('Sirf Admin hi edit kar sakta hai','warning'); return; }
+  const m = fbStockMovements.find(x=>x.id===id);
+  if(!m) return;
+  const qty = parseFloat(newQty);
+  if(isNaN(qty)){ toast('Qty sahi number honi chahiye','warning'); return; }
+  if(!newDate){ toast('Date select karein','warning'); return; }
+  const item = fbStockItems.find(s=>s.id===m.stockItemId);
+  // Apply only the difference to current stock qty so totals stay correct.
+  if(item) item.currentQty = (item.currentQty||0) + (qty - (m.qty||0));
+  m.qty = qty;
+  m.date = newDate;
+  m.note = (newNote||'').trim();
+  saveFbStockMovements();
+  saveFbStockItems();
+  fbStockMoveEditingId = null;
+  fbRenderStockMovements(); // re-renders sorted by (new) date, newest first
+  fbRenderStock();
+  logAudit && typeof logAudit==='function' && logAudit('update','Stock',`Stock movement edited${item?' ('+item.name+')':''}`, undefined, undefined);
+  toast('✅ Updated — history date ke hisab se dobara sort ho gayi','success');
+}
+function fbDeleteStockMovementEntry(id){
+  if(!fbIsAdmin()){ toast('Sirf Admin hi delete kar sakta hai','warning'); return; }
+  const m = fbStockMovements.find(x=>x.id===id);
+  if(!m) return;
+  if(!confirm('Yeh movement entry delete karein? Iska asar current stock qty se bhi reverse ho jayega.')) return;
+  const item = fbStockItems.find(s=>s.id===m.stockItemId);
+  if(item) item.currentQty = (item.currentQty||0) - (m.qty||0);
+  fbStockMovements = fbStockMovements.filter(x=>x.id!==id);
+  saveFbStockMovements();
+  saveFbStockItems();
+  fbRenderStockMovements();
+  fbRenderStock();
+  toast('Deleted','success');
+}
 function fbRenderStockMovements(){
   const wrap = document.getElementById('fb-stock-movements-list');
   if(!wrap) return;
   const filterId = document.getElementById('fb-stock-move-filter')?.value || '';
   let list = fbStockMovements.slice();
   if(filterId) list = list.filter(m=>m.stockItemId===filterId);
+  // Always sorted date-wise (newest first) — editing a movement's date above
+  // and saving re-runs this sort automatically, so the row jumps to its
+  // correct date-order position right away.
   list = list.sort((a,b)=>(b.date||'').localeCompare(a.date||'') || (b.time||'').localeCompare(a.time||''));
   list = list.slice(0,200); // keep the view light on large histories
   if(!list.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No stock movements yet.</div>'; return; }
   const typeLabel = {purchase:'➕ Purchase', sale:'➖ Sale (Bill)', adjustment_add:'➕ Correction', adjustment_remove:'➖ Correction', reversal:'↩️ Reversal', return:'↩️ Customer Return'};
-  wrap.innerHTML = `<table class="items-table"><thead><tr><th>Date</th><th>Item</th><th>Type</th><th style="text-align:right;">Qty</th><th>Note / Ref</th></tr></thead><tbody>
+  const admin = fbIsAdmin();
+  wrap.innerHTML = `<table class="items-table"><thead><tr><th>Date</th><th>Item</th><th>Type</th><th style="text-align:right;">Qty</th><th>Note / Ref</th>${admin?'<th style="width:80px;"></th>':''}</tr></thead><tbody>
     ${list.map(m=>{
       const item = fbStockItems.find(s=>s.id===m.stockItemId);
+      if(admin && fbStockMoveEditingId===m.id){
+        const qid='fb-mv-q-'+m.id, did='fb-mv-d-'+m.id, nid='fb-mv-n-'+m.id;
+        return `<tr style="background:rgba(0,255,200,0.05);">
+        <td><input type="date" id="${did}" value="${m.date||''}" style="width:130px;"></td>
+        <td>${item ? item.name : '(deleted item)'}</td>
+        <td>${typeLabel[m.type]||m.type}</td>
+        <td><input type="number" step="any" id="${qid}" value="${m.qty}" style="width:80px;text-align:right;"></td>
+        <td><input type="text" id="${nid}" value="${(m.note||'').replace(/"/g,'&quot;')}" style="width:100%;" placeholder="Note"></td>
+        <td style="white-space:nowrap;">
+          <button type="button" class="btn btn-xs btn-green" title="Save" onclick="fbSaveStockMovementEdit('${m.id}', document.getElementById('${did}').value, document.getElementById('${nid}').value, document.getElementById('${qid}').value)">💾</button>
+          <button type="button" class="btn btn-xs" title="Cancel" onclick="fbCancelEditStockMovement()">✖️</button>
+        </td>
+        </tr>`;
+      }
       return `<tr>
       <td style="white-space:nowrap;">${fmtDate(m.date)}</td>
       <td>${item ? item.name : '(deleted item)'}</td>
       <td>${typeLabel[m.type]||m.type}</td>
       <td style="text-align:right;color:${m.qty<0?'var(--neon5)':'var(--neon4)'};font-weight:700;">${m.qty>0?'+':''}${m.qty}</td>
       <td style="font-size:11px;color:var(--text3);">${[m.note, m.ref?('Ref: '+m.ref):''].filter(Boolean).join(' — ')}</td>
+      ${admin?`<td style="white-space:nowrap;"><button type="button" class="btn btn-xs" title="Edit (Admin)" onclick="fbEditStockMovement('${m.id}')">✏️</button> <button type="button" class="btn btn-xs btn-red" title="Delete (Admin)" onclick="fbDeleteStockMovementEntry('${m.id}')">🗑️</button></td>`:''}
     </tr>`;
     }).join('')}
-  </tbody></table>`;
+  </tbody></table>${admin?'<div style="font-size:11px;color:var(--text3);margin-top:6px;">✏️ Yeh edit option sirf Admin ko dikhta hai. Date change karke Save karte hi list us date ke hisab se dobara (newest-first) sort ho jaati hai.</div>':''}`;
 }
 // Reconciles stock for a bill's items against what was previously deducted for
 // that same bill: reverses old items' deductions (if any), then deducts for
