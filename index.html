@@ -175,6 +175,12 @@ label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;displa
 .modal-overlay.open{display:flex;}
 .modal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 0 40px rgba(123,47,255,.3);}
 .modal-lg{max-width:900px;}
+/* Camera QR/barcode scanner preview — cap the size so the raw camera feed
+   never stretches larger than the modal; html5-qrcode otherwise renders the
+   <video> at the camera's native resolution which can look huge/zoomed. */
+.qr-reader-box{width:100%;max-width:320px;margin:0 auto;border-radius:8px;overflow:hidden;background:#000;}
+.qr-reader-box video{width:100%!important;height:auto!important;max-height:320px;object-fit:cover;display:block;}
+.qr-reader-box #qr-shaded-region,.qr-reader-box canvas{width:100%!important;height:auto!important;}
 .modal-md{max-width:650px;}
 .modal-sm{max-width:450px;}
 .modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);background:var(--bg3);}
@@ -2241,10 +2247,10 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
 
 <!-- BARCODE/QR SCANNER MODAL -->
 <div class="modal-overlay" id="scannerModal">
-<div class="modal">
+<div class="modal" style="max-width:380px;">
   <div class="modal-header"><h3>📷 Scan Barcode / QR</h3><button class="close-btn" onclick="closeScannerModal()">✕</button></div>
   <div class="modal-body">
-    <div id="scanner-reader" style="width:100%;"></div>
+    <div id="scanner-reader" class="qr-reader-box"></div>
     <div id="scanner-result" style="margin-top:10px;font-size:13px;color:var(--text2);"></div>
     <div style="font-size:11px;color:var(--text3);margin-top:8px;">Camera access is required. If nothing appears, allow camera permission in your browser.</div>
   </div>
@@ -2284,7 +2290,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
       <div id="empid-pic-wrap" style="margin-bottom:8px;"></div>
       <div id="empid-name" style="font-weight:700;font-size:15px;"></div>
       <div id="empid-designation" style="font-size:12px;color:#555;margin-bottom:8px;"></div>
-      <div id="empid-qr-canvas" style="display:flex;justify-content:center;margin-bottom:8px;"></div>
+      <div id="empid-qr-canvas" style="display:flex;justify-content:center;margin-bottom:8px;background:#fff;padding:10px;border:1px solid #eee;"></div>
       <div id="empid-code" style="font-size:11px;color:#555;"></div>
       <div id="empid-phone" style="font-size:11px;color:#555;"></div>
     </div>
@@ -2297,11 +2303,11 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
 
 <!-- EMPLOYEE QR ATTENDANCE SCANNER MODAL -->
 <div class="modal-overlay" id="empScannerModal">
-<div class="modal">
+<div class="modal" style="max-width:380px;">
   <div class="modal-header"><h3>📷 Scan Employee QR — Mark Attendance</h3><button class="close-btn" onclick="closeEmpAttendanceScanner()">✕</button></div>
   <div class="modal-body">
     <div class="form-group"><label>Date</label><input type="date" id="emp-scan-date"></div>
-    <div id="emp-scanner-reader" style="width:100%;"></div>
+    <div id="emp-scanner-reader" class="qr-reader-box"></div>
     <div id="emp-scanner-result" style="margin-top:10px;font-size:13px;color:var(--text2);"></div>
     <div style="font-size:11px;color:var(--text3);margin-top:8px;">Camera access is required. Scan each employee's ID card QR one by one — they'll be marked Present for the selected date. Keep scanning to mark multiple employees in one session.</div>
     <div id="emp-scan-log" style="font-size:12px;color:var(--text2);max-height:120px;overflow-y:auto;margin-top:8px;"></div>
@@ -14071,14 +14077,23 @@ function openEmployeeIdCard(idx){
     const qrEl = document.getElementById('empid-qr-canvas');
     qrEl.innerHTML = '';
     try{
-      new QRCode(qrEl, {text: JSON.stringify({type:'attendance', empId:e.id}), width:130, height:130});
+      new QRCode(qrEl, {text: JSON.stringify({type:'attendance', empId:e.id}), width:180, height:180, colorDark:'#000000', colorLight:'#ffffff', correctLevel:QRCode.CorrectLevel.H});
     }catch(err){ console.error('QR render failed', err); }
   }, 50);
 }
 function printEmployeeIdCard(){
   const content = document.getElementById('empid-card-preview').outerHTML;
   const win = window.open('', '_blank');
-  win.document.write(`<!DOCTYPE html><html><head><title>Employee ID Card</title></head><body style="text-align:center;padding:30px;font-family:sans-serif;">${content}<script>window.onload=()=>window.print();<\/script></body></html>`);
+  win.document.write(`<!DOCTYPE html><html><head><title>Employee ID Card</title>
+  <style>
+    @page{ size:auto; margin:10mm; }
+    *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    html,body{ margin:0; padding:0; }
+    body{ display:flex; align-items:center; justify-content:center; min-height:100vh; font-family:sans-serif; }
+    #empid-card-preview{ width:260px!important; }
+    #empid-qr-canvas img,#empid-qr-canvas canvas{ width:180px!important; height:180px!important; image-rendering:pixelated; }
+  </style>
+  </head><body>${content}<script>window.onload=()=>{ setTimeout(()=>window.print(), 150); };<\/script></body></html>`);
   win.document.close();
 }
 
@@ -14160,7 +14175,7 @@ function openEmpAttendanceScanner(){
   setTimeout(()=>{
     try{
       empQrScanner = new Html5Qrcode('emp-scanner-reader');
-      empQrScanner.start({facingMode:'environment'}, {fps:10, qrbox:220}, (decodedText)=>{
+      empQrScanner.start({facingMode:'environment'}, {fps:10, aspectRatio:1.0, qrbox:function(vw,vh){ const edge=Math.min(vw,vh); const size=Math.floor(edge*0.7); return {width:size,height:size}; }}, (decodedText)=>{
         handleEmpQrScan(decodedText);
       }, ()=>{});
     }catch(e){
@@ -16268,7 +16283,7 @@ function openBarcodeScanner(){
   setTimeout(()=>{
     try{
       html5QrScanner = new Html5Qrcode('scanner-reader');
-      html5QrScanner.start({facingMode:'environment'}, {fps:10, qrbox:220}, (decodedText)=>{
+      html5QrScanner.start({facingMode:'environment'}, {fps:10, aspectRatio:1.0, qrbox:function(vw,vh){ const edge=Math.min(vw,vh); const size=Math.floor(edge*0.7); return {width:size,height:size}; }}, (decodedText)=>{
         document.getElementById('scanner-result').textContent = 'Scanned: '+decodedText;
         const found = stockItems.find(i=>i.barcode===decodedText || decodedText.includes(i.barcode));
         if(found){
