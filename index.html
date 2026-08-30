@@ -20024,6 +20024,29 @@ function loadFastBilling(){
   if(!fbDescriptions.length && typeof FB_DEFAULT_RATE_LIST!=='undefined' && FB_DEFAULT_RATE_LIST.length){
     fbImportDefaultRateList(false);
   }
+  // One-time repair: older versions could leave a Rate List item without a
+  // matching Stock entry (e.g. items typed straight into a Bill/Quotation
+  // before this was fixed). Create any missing Stock items now so nothing
+  // stays untracked.
+  fbReconcileStockWithRateList();
+}
+function fbReconcileStockWithRateList(){
+  if(!Array.isArray(fbDescriptions) || !fbDescriptions.length) return;
+  let added = 0;
+  fbDescriptions.forEach(d=>{
+    const desc = (d.desc||'').trim();
+    if(!desc) return;
+    if(!fbFindStockItemByName(desc)){
+      const item = {id: fbUid(), name: desc, unit:'Pcs', currentQty:0, minQty:0, notes:'', cartonQty: d.cartonQty||'', location:''};
+      if(typeof fbApplyUnitAlertDefaultToItem==='function') fbApplyUnitAlertDefaultToItem(item);
+      fbStockItems.push(item);
+      added++;
+    }
+  });
+  if(added>0){
+    saveFbStockItems();
+    if(typeof toast==='function') toast(`🗄️ Stock sync: ${added} missing item(s) add ho gaye Rate List se.`,'success');
+  }
 }
 function saveFbQuotations(){ (typeof safeSetItem==='function'?safeSetItem:( (k,v)=>localStorage.setItem(k,v) ))('fb_quotations', JSON.stringify(fbQuotations)); }
 function saveFbCustomers(){ (typeof safeSetItem==='function'?safeSetItem:( (k,v)=>localStorage.setItem(k,v) ))('fb_customers', JSON.stringify(fbCustomers)); }
@@ -20388,11 +20411,20 @@ function fbRememberDescription(desc, rate, shopName){
   desc = (desc||'').trim();
   if(!desc) return;
   let d = fbDescriptions.find(x=>(x.desc||'').toLowerCase()===desc.toLowerCase());
+  const isNew = !d;
   if(!d){ d = {id: fbUid(), desc, rate: rate||0, shopRates:{}}; fbDescriptions.push(d); }
   else { d.rate = rate||d.rate||0; }
   if(shopName && rate){ d.shopRates = d.shopRates||{}; d.shopRates[shopName] = rate; }
   saveFbDescriptions();
   fbPopulateDescDatalist();
+  // Keep Stock in sync: a brand-new item typed straight into a Bill/Quotation
+  // (not added via the Rate List settings page) must still get a matching
+  // Stock entry created automatically, same as every other way of adding a
+  // Rate List item — otherwise it silently goes untracked in Stock.
+  if(isNew){
+    fbSyncStockItemForDescription('', d.desc);
+    if(typeof fbRenderStock==='function') fbRenderStock();
+  }
 }
 function fbSaveBill(){
   const billNo = document.getElementById('fb-billno').value || fbSettings.nextBillNo;
