@@ -1672,8 +1672,32 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
   </div>
   <div class="card">
     <div class="card-header">
+      <div class="card-title">⚙️ Attendance, Duty Time &amp; Overtime Settings</div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Set duty hours here. When "In/Out Scan Mode" is ON, every employee needs TWO scans a day (Check-In then Check-Out) — the app records the time of each scan automatically and, if Check-Out happens after Duty End Time, calculates Overtime pay by itself and adds it to that employee's salary. When it's OFF, a single scan just marks the employee Present instantly (no in/out tracking).</div>
+    <div class="form-row">
+      <div class="form-group"><label>Duty Start Time</label><input type="time" id="att-set-start"></div>
+      <div class="form-group"><label>Duty End Time</label><input type="time" id="att-set-end"></div>
+      <div class="form-group"><label>Duty Hours / Day</label><input type="number" step="0.5" id="att-set-hours"></div>
+      <div class="form-group"><label>Overtime Rate ×</label><input type="number" step="0.1" id="att-set-otrate" title="Multiplier applied to the normal hourly rate for overtime hours"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="toggle-wrap" style="cursor:pointer;">
+          <label class="toggle"><input type="checkbox" id="att-set-inout"><span class="toggle-slider"></span></label>
+          <span style="font-size:12px;">Enable In/Out Scan Mode (Check-In + Check-Out, auto Overtime)</span>
+        </label>
+      </div>
+      <div class="form-group" style="align-self:flex-end;"><button class="btn btn-neon btn-sm" onclick="saveAttendanceSettings()">💾 Save Attendance Settings</button></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header">
       <div class="card-title">🗓️ Daily Attendance — Quick Mark</div>
-      <div class="flex-gap"><button class="btn btn-purple btn-sm" onclick="openEmpAttendanceScanner()">📷 Scan QR for Attendance</button></div>
+      <div class="flex-gap">
+        <button class="btn btn-sm" style="background:var(--bg3);border:1px solid var(--neon2);color:var(--neon2);" onclick="openHwScanner()">🔌 Hardware Scanner (USB Barcode/QR Gun)</button>
+        <button class="btn btn-purple btn-sm" onclick="openEmpAttendanceScanner()">📷 Scan QR for Attendance</button>
+      </div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Date</label><input type="date" id="att-dash-date" onchange="renderAttendanceDashboard()"></div>
@@ -1689,6 +1713,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
       <div class="form-group"><label>Month</label><input type="month" id="salary-month" onchange="renderSalarySlipsTable()"></div>
       <div class="form-group" style="align-self:flex-end;"><button class="btn btn-neon btn-sm" onclick="generateMonthlySalarySlips()">⚙️ Generate / Refresh Slips</button></div>
       <div class="form-group" style="align-self:flex-end;"><button class="btn btn-purple btn-sm" onclick="downloadAllSalarySlipsPDF()">📄 Download All (PDF)</button></div>
+      <div class="form-group" style="align-self:flex-end;"><button class="btn btn-sm" style="background:var(--bg3);border:1px solid #ffb020;color:#ffb020;" onclick="downloadOvertimeSlipsPDF()" title="A separate PDF that lists ONLY the auto-calculated Overtime (date, check-in, check-out, OT hours, OT amount) for every employee this month">⏱️ Overtime Salary Slip (PDF)</button></div>
     </div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Only Absent days reduce salary (per-day rate = Base Salary ÷ days in month). Leave days are paid, same as Present. Bonus adds to net pay; Advance is deducted (since it was already paid out).</div>
     <div style="overflow-x:auto;">
@@ -2280,6 +2305,28 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
     <div id="emp-scanner-result" style="margin-top:10px;font-size:13px;color:var(--text2);"></div>
     <div style="font-size:11px;color:var(--text3);margin-top:8px;">Camera access is required. Scan each employee's ID card QR one by one — they'll be marked Present for the selected date. Keep scanning to mark multiple employees in one session.</div>
     <div id="emp-scan-log" style="font-size:12px;color:var(--text2);max-height:120px;overflow-y:auto;margin-top:8px;"></div>
+  </div>
+</div>
+</div>
+
+<!-- HARDWARE USB/WEDGE BARCODE-QR SCANNER MODAL (for physical scanners such as
+     the Symbol/Zebra LS9208 — these plug in and behave exactly like a
+     keyboard: they "type" the scanned code followed by Enter into whatever
+     input box currently has focus. So all this modal needs is a text input
+     that stays focused; no camera, no special driver. -->
+<div class="modal-overlay" id="hwScannerModal">
+<div class="modal">
+  <div class="modal-header"><h3>🔌 Hardware Scanner — Attendance</h3><button class="close-btn" onclick="closeHwScanner()">✕</button></div>
+  <div class="modal-body">
+    <div class="form-group"><label>Date</label><input type="date" id="hw-scan-date"></div>
+    <div id="hw-scan-mode-note" style="font-size:11px;color:var(--text3);margin-bottom:8px;"></div>
+    <div class="form-group">
+      <label>Scan Here 👇</label>
+      <input type="text" id="hw-scan-input" autocomplete="off" placeholder="Click here once, then just scan the employee ID card with your USB scanner…" style="font-size:15px;padding:10px;">
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:4px;">Keep this box focused (blue border) and plug in your USB scanner — every scan is captured automatically the instant the scanner sends its Enter key. No need to click any button between scans.</div>
+    <div id="hw-scan-result" style="margin-top:10px;font-size:13px;font-weight:700;color:var(--neon);"></div>
+    <div id="hw-scan-log" style="font-size:12px;color:var(--text2);max-height:160px;overflow-y:auto;margin-top:8px;"></div>
   </div>
 </div>
 </div>
@@ -4452,7 +4499,10 @@ const DEFAULT_SETTINGS = {
   pdfFullDetails:true, pdfReportOrder:'invoice', approvalWorkflowEnabled:false,
   poApprovalWorkflowEnabled:false, expApprovalWorkflowEnabled:false, chqApprovalWorkflowEnabled:false,
   logoBase64:'',
-  headerButtons:{notif:true,newdc:true,dashboard:true,backup:true,po:true,fastbilling:true,settings:true,mode:true,emplogin:true}
+  headerButtons:{notif:true,newdc:true,dashboard:true,backup:true,po:true,fastbilling:true,settings:true,mode:true,emplogin:true},
+  // ---- Attendance / Hardware-Scanner / Overtime settings ----
+  dutyStartTime:'09:00', dutyEndTime:'18:00', dutyHoursPerDay:8,
+  attendanceInOutMode:false, overtimeRateMultiplier:1.5
 };
 // Definitions for every optional header button. id must match a key in settings.headerButtons.
 const HEADER_BTN_DEFS = [
@@ -6372,7 +6422,7 @@ function renderTabContent(id){
   if(id==='partylookup') renderPartyLookup();
   if(id==='dispatch') { renderDispatchTab(); renderEnvelopeDispatchTab(); }
   if(id==='courierrates') { renderCourierRatesTab(); }
-  if(id==='employees') { renderEmployees(); renderAttendanceDashboard(); renderSalarySlipsTable(); }
+  if(id==='employees') { renderEmployees(); renderAttendanceDashboard(); renderSalarySlipsTable(); populateAttendanceSettingsUI(); }
   if(id==='docmanager') renderDocManager();
   if(id==='crm') renderCrmTab();
   if(id==='sendcenter') renderSendCenter();
@@ -14152,6 +14202,154 @@ function closeEmpAttendanceScanner(){
   closeModal('empScannerModal');
 }
 
+// ==================== ATTENDANCE / DUTY-TIME / OVERTIME SETTINGS ====================
+// Small, self-contained settings panel (Duty Start/End time, Duty Hours/Day,
+// Overtime rate multiplier, and the In/Out scan-mode toggle). Values live
+// inside the normal `settings` object so they're saved/backed-up/restored
+// along with everything else.
+function populateAttendanceSettingsUI(){
+  const startEl = document.getElementById('att-set-start');
+  if(!startEl) return; // panel not in DOM yet (e.g. Employees tab not opened)
+  startEl.value = settings.dutyStartTime || '09:00';
+  document.getElementById('att-set-end').value = settings.dutyEndTime || '18:00';
+  document.getElementById('att-set-hours').value = settings.dutyHoursPerDay || 8;
+  document.getElementById('att-set-otrate').value = settings.overtimeRateMultiplier || 1.5;
+  document.getElementById('att-set-inout').checked = !!settings.attendanceInOutMode;
+}
+function saveAttendanceSettings(){
+  settings.dutyStartTime = document.getElementById('att-set-start').value || '09:00';
+  settings.dutyEndTime = document.getElementById('att-set-end').value || '18:00';
+  settings.dutyHoursPerDay = parseFloat(document.getElementById('att-set-hours').value) || 8;
+  settings.overtimeRateMultiplier = parseFloat(document.getElementById('att-set-otrate').value) || 1;
+  settings.attendanceInOutMode = document.getElementById('att-set-inout').checked;
+  safeSetItem('sau_settings', JSON.stringify(settings));
+  toast('Attendance & Overtime settings saved','success');
+}
+// "HH:MM" -> minutes since midnight
+function timeStrToMinutes(t){
+  if(!t) return 0;
+  const [h,m] = t.split(':').map(Number);
+  return (h||0)*60 + (m||0);
+}
+
+// ==================== HARDWARE (USB/WEDGE) BARCODE-QR SCANNER ====================
+// Physical scanners like the Symbol/Zebra LS9208 act as a keyboard: they
+// "type" the scanned text and press Enter automatically. So this just needs
+// a focused text input that reacts to Enter — no camera/driver involved.
+let hwScanLog = [];
+function openHwScanner(){
+  if(!employees.length){ toast('Add employees first','warning'); return; }
+  const dateEl = document.getElementById('hw-scan-date');
+  if(dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0,10);
+  hwScanLog = [];
+  document.getElementById('hw-scan-log').innerHTML = '';
+  document.getElementById('hw-scan-result').textContent = '';
+  document.getElementById('hw-scan-mode-note').textContent = settings.attendanceInOutMode
+    ? '⏱️ In/Out Scan Mode is ON — 1st scan of the day = Check-In, 2nd scan = Check-Out (Overtime auto-calculated if Check-Out is after Duty End Time '+(settings.dutyEndTime||'18:00')+').'
+    : '✅ Single-Scan Mode is ON — one scan instantly marks the employee Present.';
+  openModal('hwScannerModal');
+  const input = document.getElementById('hw-scan-input');
+  input.value = '';
+  setTimeout(()=>{
+    input.focus();
+    // If the scanner-input loses focus for any reason (accidental click
+    // elsewhere inside the modal), quietly bring focus back so scanning
+    // never silently stops working.
+    input.onblur = ()=>{ if(document.getElementById('hwScannerModal').classList.contains('open')) setTimeout(()=>input.focus(), 50); };
+    input.onkeydown = (ev)=>{
+      if(ev.key==='Enter'){
+        ev.preventDefault();
+        const code = input.value.trim();
+        input.value = '';
+        if(code) handleHardwareScan(code);
+      }
+    };
+  }, 150);
+}
+function closeHwScanner(){
+  const input = document.getElementById('hw-scan-input');
+  if(input) input.onblur = null;
+  closeModal('hwScannerModal');
+}
+function handleHardwareScan(rawText){
+  const dateEl = document.getElementById('hw-scan-date');
+  const date = dateEl.value || new Date().toISOString().slice(0,10);
+  let payload = null;
+  try{ payload = JSON.parse(rawText); }catch(e){}
+  const empId = payload && payload.empId ? payload.empId : rawText;
+  const idx = employees.findIndex(e=>e.id===empId);
+  const logEl = document.getElementById('hw-scan-log');
+  const resultEl = document.getElementById('hw-scan-result');
+  if(idx<0){
+    resultEl.textContent = '❌ Not recognized: '+empId;
+    logEl.innerHTML = `<div>❌ ${date} — scan not recognized (${empId})</div>` + logEl.innerHTML;
+    toast('Scanned code not recognized — not a valid employee ID card','warning');
+    return;
+  }
+  const emp = employees[idx];
+  const now = new Date();
+  const nowTimeStr = now.toTimeString().slice(0,5); // "HH:MM"
+  if(!emp.attendance) emp.attendance = [];
+  let entry = emp.attendance.find(a=>a.date===date);
+
+  if(settings.attendanceInOutMode){
+    // ---- Two-scan Check-In / Check-Out flow ----
+    if(!entry || !entry.checkIn){
+      if(!entry){ entry = {date, type:'present'}; emp.attendance.push(entry); }
+      entry.type = 'present';
+      entry.checkIn = nowTimeStr;
+      saveEmployees();
+      resultEl.textContent = `✅ ${emp.name} — Checked IN at ${nowTimeStr}`;
+      logEl.innerHTML = `<div>✅ ${emp.name} — Check-IN at ${nowTimeStr} (${date})</div>` + logEl.innerHTML;
+      toast(emp.name+' checked IN at '+nowTimeStr,'success');
+    } else if(!entry.checkOut){
+      entry.checkOut = nowTimeStr;
+      // ---- Auto Overtime calculation ----
+      const dutyEndMin = timeStrToMinutes(settings.dutyEndTime||'18:00');
+      const outMin = timeStrToMinutes(nowTimeStr);
+      const otMinutes = outMin - dutyEndMin;
+      let otMsg = '';
+      if(otMinutes > 0){
+        const otHours = +(otMinutes/60).toFixed(2);
+        const baseSalary = parseFloat(emp.salary)||0;
+        const perDayRate = baseSalary/30;
+        const dutyHours = parseFloat(settings.dutyHoursPerDay)||8;
+        const hourlyRate = dutyHours>0 ? perDayRate/dutyHours : 0;
+        const otMultiplier = parseFloat(settings.overtimeRateMultiplier)||1;
+        const otAmount = +(otHours*hourlyRate*otMultiplier).toFixed(2);
+        entry.overtimeHours = otHours;
+        entry.overtimeAmount = otAmount;
+        if(!emp.money) emp.money = [];
+        // Remove any earlier auto-overtime entry for this same date (e.g. if
+        // the employee was accidentally scanned out twice) before adding the
+        // fresh one, so overtime never gets double-counted.
+        emp.money = emp.money.filter(mo=>!(mo.date===date && mo.autoOvertime));
+        emp.money.push({date, type:'overtime', amount:otAmount, note:'Auto overtime via hardware scan ('+otHours+' hrs after duty end)', autoOvertime:true});
+        const cur = settings.currency||'PKR';
+        otMsg = ` — ⏱️ Overtime: ${otHours} hrs (${cur} ${fmt(otAmount)}) added automatically`;
+      }
+      saveEmployees();
+      resultEl.textContent = `✅ ${emp.name} — Checked OUT at ${nowTimeStr}${otMsg}`;
+      logEl.innerHTML = `<div>🚪 ${emp.name} — Check-OUT at ${nowTimeStr} (${date})${otMsg}</div>` + logEl.innerHTML;
+      toast(emp.name+' checked OUT at '+nowTimeStr+(otMsg?' (overtime added)':''),'success');
+    } else {
+      resultEl.textContent = `⚠️ ${emp.name} already Checked-IN and Checked-OUT for ${date}`;
+      logEl.innerHTML = `<div>⚠️ ${emp.name} — already IN & OUT for ${date}</div>` + logEl.innerHTML;
+      toast(emp.name+' already checked IN & OUT for '+date,'warning');
+      return;
+    }
+  } else {
+    // ---- Single-scan flow: one scan = mark Present instantly ----
+    if(entry){ entry.type='present'; if(!entry.checkIn) entry.checkIn = nowTimeStr; }
+    else { entry = {date, type:'present', checkIn: nowTimeStr}; emp.attendance.push(entry); }
+    saveEmployees();
+    resultEl.textContent = `✅ ${emp.name} — marked Present at ${nowTimeStr}`;
+    logEl.innerHTML = `<div>✅ ${emp.name} — Present at ${nowTimeStr} (${date})</div>` + logEl.innerHTML;
+    toast(emp.name+' marked Present for '+date,'success');
+  }
+  renderAttendanceDashboard();
+}
+
 // ==================== QUICK ATTENDANCE DASHBOARD ====================
 // One screen to mark every employee's attendance for a given day in one or
 // two clicks each, instead of opening each employee's edit modal separately.
@@ -14167,9 +14365,21 @@ function renderAttendanceDashboard(){
     .map((emp,idx)=>({emp,idx}))
     .filter(({emp})=>emp.status!=='terminated' && emp.status!=='resigned');
   if(!activeIdxList.length){ wrap.innerHTML = '<div style="color:var(--text3);padding:10px;">No active employees to mark — add one below first.</div>'; return; }
+  const cur2 = settings.currency||'PKR';
   wrap.innerHTML = activeIdxList.map(({emp,idx})=>{
     const entry = (emp.attendance||[]).find(a=>a.date===date);
     const cur = entry ? entry.type : '';
+    // Show scanner Check-In/Check-Out times + any auto-overtime for this
+    // day, when the hardware scanner (or the in/out-mode camera flow) has
+    // recorded them — purely informational, doesn't affect the buttons.
+    let scanInfo = '';
+    if(entry && (entry.checkIn || entry.checkOut)){
+      scanInfo = `<div style="width:100%;font-size:11px;color:var(--text3);">`+
+        (entry.checkIn ? `🟢 In: ${entry.checkIn}` : '') +
+        (entry.checkOut ? ` &nbsp; 🔴 Out: ${entry.checkOut}` : (settings.attendanceInOutMode && entry.checkIn ? ` &nbsp; <span style="color:var(--neon2);">(awaiting check-out)</span>` : '')) +
+        (entry.overtimeHours ? ` &nbsp; ⏱️ OT: ${entry.overtimeHours} hrs (${cur2} ${fmt(entry.overtimeAmount||0)})` : '') +
+        `</div>`;
+    }
     return `<div class="accent-box" style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
       <div style="flex:1;min-width:140px;font-weight:600;">${emp.name}${emp.designation?(' <span style="font-weight:400;color:var(--text3);font-size:11px;">('+emp.designation+')</span>'):''}</div>
       <button class="btn btn-xs ${cur==='present'?'btn-green':''}" onclick="quickMarkAttendance(${idx},'present')">✅ Present</button>
@@ -14177,6 +14387,7 @@ function renderAttendanceDashboard(){
       <button class="btn btn-xs ${cur==='late'?'btn-purple':''}" onclick="quickMarkAttendance(${idx},'late')">⏰ Late</button>
       <button class="btn btn-xs ${cur==='leave'?'btn-neon':''}" onclick="quickMarkAttendance(${idx},'leave')">🏖️ Leave</button>
       <button class="btn btn-xs ${cur==='absent'?'btn-red':''}" onclick="quickMarkAttendance(${idx},'absent')">❌ Absent</button>
+      ${scanInfo}
     </div>`;
   }).join('');
 }
@@ -14508,6 +14719,57 @@ function downloadAllSalarySlipsPDF(){
   doc.save(`Salary_Slips_${month}.pdf`);
   logAudit('download','Salary Slips',`All salary slips downloaded for ${month} (${list.length} employee(s))`, undefined, undefined);
   toast('PDF generated','success');
+}
+// ---- Separate OVERTIME-ONLY slip: day-by-day Check-In/Check-Out/OT-hours/
+// OT-amount breakdown for every employee who has auto-calculated overtime
+// that month, plus a grand total row. Kept as its own PDF/button so it never
+// has to be mixed into (or confused with) the regular Monthly Salary Slip. ----
+function downloadOvertimeSlipsPDF(){
+  const month = document.getElementById('salary-month')?.value;
+  if(!month){ toast('Select a month first','warning'); return; }
+  if(!employees.length){ toast('No employees found','warning'); return; }
+  const cur = settings.currency||'PKR';
+  const doc = new jspdf.jsPDF();
+  let y = pdfHeader(doc, 'Overtime Salary Slip — '+month);
+  let anyRows = false;
+  let grandOtHours = 0, grandOtAmount = 0;
+  employees.forEach(emp=>{
+    const records = (emp.attendance||[])
+      .filter(a=>a.date && a.date.slice(0,7)===month && (a.overtimeHours||a.overtimeAmount))
+      .sort((a,b)=> a.date<b.date?-1:1);
+    if(!records.length) return;
+    anyRows = true;
+    if(y > 260){ doc.addPage(); y = pdfHeader(doc, 'Overtime Salary Slip — '+month); }
+    doc.setFontSize(11); doc.setFont(undefined,'bold');
+    doc.text(`${emp.name}${emp.designation?' ('+emp.designation+')':''}`, 14, y); y+=6;
+    let empOtHours=0, empOtAmount=0;
+    const body = records.map(r=>{
+      empOtHours += r.overtimeHours||0;
+      empOtAmount += r.overtimeAmount||0;
+      return [r.date, r.checkIn||'-', r.checkOut||'-', (r.overtimeHours||0)+' hrs', cur+' '+fmt(r.overtimeAmount||0)];
+    });
+    grandOtHours += empOtHours; grandOtAmount += empOtAmount;
+    doc.autoTable({
+      startY:y,
+      head:[['Date','Check-In','Check-Out','OT Hours','OT Amount']],
+      body,
+      foot:[['','','Total', empOtHours.toFixed(2)+' hrs', cur+' '+fmt(empOtAmount)]],
+      styles:{fontSize:9}, headStyles:{fillColor:[20,20,40]}, footStyles:{fillColor:[40,40,70],fontStyle:'bold'}
+    });
+    y = doc.lastAutoTable.finalY + 10;
+  });
+  if(!anyRows){
+    doc.setFontSize(11);
+    doc.text('No auto-calculated overtime (via Hardware Scanner Check-Out) found for '+month+'.', 14, y+4);
+  } else {
+    if(y > 260){ doc.addPage(); y = pdfHeader(doc, 'Overtime Salary Slip — '+month); }
+    doc.setFontSize(11); doc.setFont(undefined,'bold');
+    doc.text(`Grand Total — All Employees: ${grandOtHours.toFixed(2)} hrs — ${cur} ${fmt(grandOtAmount)}`, 14, y+6);
+  }
+  stampBrandLogoOnAllPages(doc);
+  doc.save(`Overtime_Salary_Slip_${month}.pdf`);
+  logAudit('download','Salary Slips',`Overtime salary slip downloaded for ${month}`, undefined, undefined);
+  toast('Overtime PDF generated','success');
 }
 // ---- Quick/Simple Slip: just Days × Per-Day Rate + Bonus - Advance = Net ----
 function buildQuickSalarySlipPage(doc, s, startY, emp){
