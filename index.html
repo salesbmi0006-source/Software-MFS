@@ -30,6 +30,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/JsBarcode/3.11.5/JsBarcode.all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -3373,11 +3374,17 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
   </div>
   <div class="modal-body">
     <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Sirf quantities — kitna stock available hai, kitna low hai, aur kitna khatam ho chuka hai. Koi price/value nahi (uske liye 🔒 Full Stock Value Report use karein).</div>
-    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
-      <button type="button" class="btn btn-sm" id="fb-stock-avail-tab-all" onclick="fbSwitchStockAvailTab('all')">📋 All</button>
-      <button type="button" class="btn btn-sm" id="fb-stock-avail-tab-available" onclick="fbSwitchStockAvailTab('available')">✅ Available Stock</button>
-      <button type="button" class="btn btn-sm" id="fb-stock-avail-tab-low" onclick="fbSwitchStockAvailTab('low')">⚠️ Low Stock</button>
-      <button type="button" class="btn btn-sm" id="fb-stock-avail-tab-out" onclick="fbSwitchStockAvailTab('out')">❌ Out of Stock</button>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">✔️ Jo tick karenge, sirf wahi PDF aur Excel report me aayega — baaki nahi.</div>
+    <div style="display:flex;gap:16px;margin-bottom:8px;flex-wrap:wrap;align-items:center;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="fb-stock-avail-chk-all" onchange="fbToggleStockAvailAll(this)" style="width:16px;height:16px;"> 📋 All</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="fb-stock-avail-chk-available" onchange="fbToggleStockAvailPart()" style="width:16px;height:16px;"> ✅ Available Stock</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="fb-stock-avail-chk-low" onchange="fbToggleStockAvailPart()" style="width:16px;height:16px;"> ⚠️ Low Stock</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="fb-stock-avail-chk-out" onchange="fbToggleStockAvailOut(this)" style="width:16px;height:16px;"> ❌ Out of Stock</label>
+    </div>
+    <div id="fb-stock-avail-out-submode" style="display:none;margin:0 0 14px;padding:8px 10px;border:1px dashed var(--text3);border-radius:8px;font-size:12px;">
+      <div style="margin-bottom:6px;color:var(--text3);">❌ Out of Stock me kaunsi list chahiye:</div>
+      <label style="display:inline-flex;align-items:center;gap:5px;margin-right:18px;cursor:pointer;"><input type="radio" name="fb-stock-avail-out-mode" value="full" checked onchange="fbSetStockAvailOutMode('full')"> Full — jitne bhi items khatam hain</label>
+      <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="fb-stock-avail-out-mode" value="billed" onchange="fbSetStockAvailOutMode('billed')"> Sirf wo — jo stock list me nahi hain, magar bill me nikle hain</label>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
       <div id="fb-stock-avail-count" style="font-size:12px;color:var(--text3);"></div>
@@ -4735,6 +4742,7 @@ function loadData(){
   if(c) cheques = JSON.parse(c); else cheques = [];
   if(l) ledgerData = JSON.parse(l); else ledgerData = [];
   dedupeDuplicateLedgerPaymentEntries();
+  { const nRemoved = repairOrphanAutoLedgerEntries(); if(nRemoved>0 && typeof toast==='function') setTimeout(()=>toast(`Ledger cleanup: removed ${nRemoved} duplicate/ghost bill ${nRemoved===1?'entry':'entries'} left over from edited DCs.`,'info'), 800); }
   if(p) fbrParties = JSON.parse(p); else fbrParties = EMBEDDED_BACKUP.fbrParties||[];
   const ob = localStorage.getItem('sau_opening_balances');
   partyOpeningBalances = ob ? JSON.parse(ob) : {};
@@ -5796,7 +5804,7 @@ async function applyRestoredBackupData(data){
       if(pdfData){ try{ await storePdfBlob(di.id, pdfData); }catch(err){console.error('PDF restore failed for',di.fileName,err);} }
     }
   }
-  syncLedgerFromDB(); dedupeDuplicateLedgerPaymentEntries();
+  syncLedgerFromDB(); dedupeDuplicateLedgerPaymentEntries(); repairOrphanAutoLedgerEntries();
   saveData();
   saveDigitalInvoices();
   savePartyContacts();
@@ -5921,7 +5929,7 @@ function restoreEmbedded(silent=false){
   cheques = JSON.parse(JSON.stringify(EMBEDDED_BACKUP.cheques||[]));
   ledgerData = JSON.parse(JSON.stringify(EMBEDDED_BACKUP.ledgerData||[]));
   fbrParties = JSON.parse(JSON.stringify(EMBEDDED_BACKUP.fbrParties||[]));
-  syncLedgerFromDB(); dedupeDuplicateLedgerPaymentEntries();
+  syncLedgerFromDB(); dedupeDuplicateLedgerPaymentEntries(); repairOrphanAutoLedgerEntries();
   saveData();
   renderAll();
   toast('Embedded (OLD) backup restored on THIS DEVICE ONLY — this was NOT pushed to the cloud. Do not refresh/sync from here unless you mean to overwrite the cloud too.','warning');
@@ -7369,7 +7377,7 @@ async function saveDC(){
   }
   else { db.push(rec); if(settings.approvalWorkflowEnabled){ rec.approvalStatus='pending_manager'; rec.approvalHistory=[{stage:'Staff', by:securityData.currentUser?securityData.currentUser.username:'Unknown', date:new Date().toISOString(), action:'created'}]; rec.readyForInv=false; } logAudit('create','DC/Invoice',`DC #${rec.dcNo} (${rec.partyName}) created`, undefined, rec); toast('DC added!','success'); }
   if(rec.invNo && editingDcIdx===null){ addAutoLedger(rec, db.length-1); }
-  else if(rec.invNo && editingDcIdx!==null){ syncAutoLedgerFromDC(rec); }
+  else if(rec.invNo && editingDcIdx!==null){ syncAutoLedgerFromDC(rec, oldRec); }
   syncPartiesFromDB();
   saveData(); renderRecords(); closeDcModal();
   // A DC's dispatch info is also shown on the separate Dispatch tab/table.
@@ -7668,9 +7676,25 @@ function addAutoLedger(rec, idx){
 // agar match na mile (purani entries jin mein dcNo save nahi hua) to fallback
 // ke tor par sirf invNo se bhi dhoondta hai. Agar phir bhi na mile aur DC
 // abhi bhi readyForInv hai, to naya entry bana deta hai (jaise pehli dafa banta).
-function syncAutoLedgerFromDC(rec){
+function syncAutoLedgerFromDC(rec, oldRec){
   if(!rec.invNo || !rec.partyName) return;
-  let entry = ledgerData.find(l=>l.type==='bill' && l.dcNo===rec.dcNo && l.invNo===rec.invNo);
+  // BUG FIX (duplicate ledger bills after editing a DC): previously this only
+  // looked for the ledger entry using the DC's *new* (post-edit) dcNo/invNo.
+  // If editing the DC also changed its DC# or invoice# (e.g. correcting a
+  // typo, or filling in the invoice number after it was originally blank),
+  // the old ledger 'bill' entry — which still had the OLD dcNo/invNo — was
+  // never found, so a brand-new ledger entry got created instead while the
+  // stale old one stayed behind forever. Over several edits this piles up
+  // extra "ghost" bill rows in the party's ledger (wrong count, wrong total).
+  // Fix: first try to find the entry using the DC's values *before* this
+  // edit (oldRec, passed in by saveDC), which is the only way to reliably
+  // find it when both dcNo and invNo changed at once. Fall back to the new
+  // values, then to the old invNo+party heuristic, in that order.
+  let entry = null;
+  if(oldRec){
+    entry = ledgerData.find(l=>l.type==='bill' && l.dcNo===oldRec.dcNo && l.invNo===oldRec.invNo && l.partyName===oldRec.partyName);
+  }
+  if(!entry) entry = ledgerData.find(l=>l.type==='bill' && l.dcNo===rec.dcNo && l.invNo===rec.invNo);
   if(!entry){
     entry = ledgerData.find(l=>l.type==='bill' && l.invNo===rec.invNo && l.partyName===rec.partyName && l.narration==='Auto from DC record');
   }
@@ -7698,6 +7722,37 @@ function syncAutoLedgerFromDC(rec){
 // leftover duplicates: a single-invoice payment entry that shares the same
 // ref/cheque no, party, and amount as another payment entry whose invoice
 // list already contains that invoice number.
+// ONE-TIME CLEANUP (added alongside the syncAutoLedgerFromDC fix above): before
+// that fix, editing a DC whose DC#/invoice# had already been auto-billed to the
+// ledger — and changing that DC#/invoice# during the edit — left the OLD
+// "Auto from DC record" ledger 'bill' entry behind forever (it no longer matched
+// the DC by dcNo+invNo, so nothing found/removed it), while a fresh duplicate
+// entry got created for the new dcNo/invNo. Repeated edits of the same DC (e.g.
+// filling in / correcting an invoice number a few times) pile up several extra
+// "ghost" bill rows for that party — the Ledger then shows more bills than the
+// party actually has DC/invoice records for, and outstanding balances that
+// should be zero (or a specific figure) come out wrong. This removes any
+// auto-generated ledger 'bill' entry whose party+invNo+dcNo no longer matches
+// ANY current DC record — for every party, not just one — then re-syncs so
+// each real DC still has exactly one correct ledger entry.
+function repairOrphanAutoLedgerEntries(){
+  const validKeys = new Set(
+    db.filter(r=>r.invNo && r.partyName && !r.cancelled)
+      .map(r=>r.partyName+'\u0001'+r.invNo+'\u0001'+r.dcNo)
+  );
+  const before = ledgerData.length;
+  ledgerData = ledgerData.filter(l=>{
+    if(l.type!=='bill' || l.narration!=='Auto from DC record') return true; // keep manual entries, payments, credit notes etc.
+    return validKeys.has(l.partyName+'\u0001'+l.invNo+'\u0001'+l.dcNo);
+  });
+  const removed = before - ledgerData.length;
+  if(removed>0){
+    if(typeof syncLedgerFromDB==='function') syncLedgerFromDB();
+    saveData();
+    if(typeof renderLedger==='function') renderLedger();
+  }
+  return removed;
+}
 function dedupeDuplicateLedgerPaymentEntries(){
   const toRemove = new Set();
   const payments = ledgerData.filter(l=>l.type==='payment');
@@ -10038,7 +10093,7 @@ function init(){
   // is the real live sync now; Google Drive is only a manual/optional extra backup.
   // The "Connect" button in Settings → Cloud Backup Connections still works if needed.
   // setTimeout(()=>attemptSilentGDriveReconnect(), 1200);
-  syncLedgerFromDB(); dedupeDuplicateLedgerPaymentEntries();
+  syncLedgerFromDB(); dedupeDuplicateLedgerPaymentEntries(); repairOrphanAutoLedgerEntries();
   syncPartiesFromDB();
   populatePartyList(); populateMonthFilter();
   populateEmployeeList();
@@ -21777,14 +21832,59 @@ function fbOpenStockValueReport(){
 }
 // ---- Stock Availability Report: quantities only (no rates/values), no admin lock.
 // Three views: Available (qty > low-alert level), Low Stock (qty>0 but <= min), Out of Stock (qty<=0).
-let fbStockAvailTab = 'all';
+// NOTE: fbGetStockAvailRows(tab) below is also used by the Master Stock Report further down
+// this file (tabs 'all'/'available'/'low'/'out') — its signature/behaviour is left unchanged.
+let fbStockAvailTab = 'all'; // kept only for older call sites; not used to drive the UI anymore
+// Multi-select "tick" state: user can tick any combination of Available / Low / Out.
+// "All" is just a shortcut that ticks all three at once — same as before, but now the
+// person can also tick e.g. only Available+Low, or only Out, etc.
+let fbStockAvailSel = { available:true, low:true, out:true };
+// Out of Stock has 2 sub-lists: 'full' = every stock item that's at/under zero,
+// 'billed' = items that were sold on a bill but were never added to the stock list at all.
+let fbStockAvailOutMode = 'full';
+
 function fbOpenStockAvailReport(){
-  fbStockAvailTab = 'all';
+  fbStockAvailSel = { available:true, low:true, out:true };
+  fbStockAvailOutMode = 'full';
   openModal('fb-stock-avail-modal');
+  fbSyncStockAvailCheckboxUI();
   fbRenderStockAvailReport();
 }
-function fbSwitchStockAvailTab(tab){
-  fbStockAvailTab = tab;
+function fbSyncStockAvailCheckboxUI(){
+  const a = document.getElementById('fb-stock-avail-chk-available');
+  const l = document.getElementById('fb-stock-avail-chk-low');
+  const o = document.getElementById('fb-stock-avail-chk-out');
+  const all = document.getElementById('fb-stock-avail-chk-all');
+  if(a) a.checked = !!fbStockAvailSel.available;
+  if(l) l.checked = !!fbStockAvailSel.low;
+  if(o) o.checked = !!fbStockAvailSel.out;
+  if(all) all.checked = !!(fbStockAvailSel.available && fbStockAvailSel.low && fbStockAvailSel.out);
+  const sub = document.getElementById('fb-stock-avail-out-submode');
+  if(sub) sub.style.display = fbStockAvailSel.out ? '' : 'none';
+  const fullRadio = document.querySelector('input[name="fb-stock-avail-out-mode"][value="full"]');
+  const billedRadio = document.querySelector('input[name="fb-stock-avail-out-mode"][value="billed"]');
+  if(fullRadio) fullRadio.checked = fbStockAvailOutMode==='full';
+  if(billedRadio) billedRadio.checked = fbStockAvailOutMode==='billed';
+}
+function fbToggleStockAvailAll(el){
+  fbStockAvailSel = { available: el.checked, low: el.checked, out: el.checked };
+  fbSyncStockAvailCheckboxUI();
+  fbRenderStockAvailReport();
+}
+function fbToggleStockAvailPart(){
+  fbStockAvailSel.available = !!(document.getElementById('fb-stock-avail-chk-available')||{}).checked;
+  fbStockAvailSel.low = !!(document.getElementById('fb-stock-avail-chk-low')||{}).checked;
+  fbStockAvailSel.out = !!(document.getElementById('fb-stock-avail-chk-out')||{}).checked;
+  fbSyncStockAvailCheckboxUI();
+  fbRenderStockAvailReport();
+}
+function fbToggleStockAvailOut(el){
+  fbStockAvailSel.out = el.checked;
+  fbSyncStockAvailCheckboxUI();
+  fbRenderStockAvailReport();
+}
+function fbSetStockAvailOutMode(mode){
+  fbStockAvailOutMode = mode;
   fbRenderStockAvailReport();
 }
 function fbGetStockAvailRows(tab){
@@ -21798,138 +21898,217 @@ function fbGetStockAvailRows(tab){
   if(tab==='all') return [...available, ...low, ...out]; // used for the combined "All" view/PDF
   return available;
 }
-function fbRenderStockAvailReport(){
-  const tabs = {all:'fb-stock-avail-tab-all', available:'fb-stock-avail-tab-available', low:'fb-stock-avail-tab-low', out:'fb-stock-avail-tab-out'};
-  Object.entries(tabs).forEach(([key,id])=>{
-    const btn = document.getElementById(id);
-    if(btn) btn.className = 'btn btn-sm' + (fbStockAvailTab===key ? ' btn-neon' : '');
+// Items that appear on bills (their `desc` text) but do NOT match any name in the
+// stock master list — i.e. never added to Stock but have been billed/"out" anyway.
+function fbGetUnstockedBilledItems(){
+  const map = new Map();
+  (fbBills||[]).forEach(b=>{
+    (b.items||[]).forEach(it=>{
+      const desc = (it.desc||'').trim();
+      if(!desc) return;
+      if(fbFindStockItemByName(desc)) return; // tracked in stock — belongs to the normal Out list, not here
+      const qty = parseFloat(it.qty)||0;
+      const key = desc.toLowerCase();
+      if(!map.has(key)) map.set(key, { name: desc, qty: 0, bills: new Set() });
+      const rec = map.get(key);
+      rec.qty += qty;
+      rec.bills.add(b.billNo!=null ? String(b.billNo) : b.id);
+    });
   });
-  const labels = {all:'All Items', available:'Available Stock', low:'Low Stock', out:'Out of Stock'};
+  return Array.from(map.values()).map(r=>({ name:r.name, qty:r.qty, billsCount:r.bills.size }));
+}
+// Builds the list of sections to show/export based on the current tick state.
+function fbGetStockAvailSections(){
+  const sections = [];
+  if(fbStockAvailSel.available){
+    sections.push({ key:'available', emoji:'✅', title:'Available Stock', kind:'stock',
+      rows: fbGetStockAvailRows('available').sort((a,b)=>(a.name||'').localeCompare(b.name||'')) });
+  }
+  if(fbStockAvailSel.low){
+    sections.push({ key:'low', emoji:'⚠️', title:'Low Stock', kind:'stock',
+      rows: fbGetStockAvailRows('low').sort((a,b)=>(a.name||'').localeCompare(b.name||'')) });
+  }
+  if(fbStockAvailSel.out){
+    if(fbStockAvailOutMode==='billed'){
+      sections.push({ key:'out-billed', emoji:'❌', title:'Out of Stock — Billed but Not in Stock List', kind:'billed',
+        rows: fbGetUnstockedBilledItems().sort((a,b)=>(a.name||'').localeCompare(b.name||'')) });
+    } else {
+      sections.push({ key:'out-full', emoji:'❌', title:'Out of Stock — Full', kind:'stock',
+        rows: fbGetStockAvailRows('out').sort((a,b)=>(a.name||'').localeCompare(b.name||'')) });
+    }
+  }
+  return sections;
+}
+function fbStockAvailSectionHTML(s){
+  const head = `<div style="font-weight:700;margin:10px 0 4px;">${s.emoji} ${s.title} (${s.rows.length})</div>`;
+  if(!s.rows.length) return head + `<div style="color:var(--text3);font-size:12px;margin-bottom:8px;">Koi item nahi.</div>`;
+  if(s.kind==='billed'){
+    return head + `<table class="items-table"><thead><tr><th>#</th><th>Item</th><th style="width:130px;">Total Qty Billed</th><th style="width:110px;">Bills Count</th></tr></thead><tbody>
+      ${s.rows.map((r,i)=>`<tr>
+        <td style="color:var(--text3);">${i+1}</td>
+        <td>${(r.name||'').replace(/</g,'&lt;')}</td>
+        <td style="text-align:right;font-weight:700;color:var(--neon5);">${r.qty}</td>
+        <td style="text-align:right;color:var(--text3);">${r.billsCount}</td>
+      </tr>`).join('')}
+      </tbody></table>`;
+  }
+  return head + `<table class="items-table"><thead><tr><th>#</th><th>Item</th><th style="width:80px;">Unit</th><th style="width:110px;">Current Qty</th><th style="width:110px;">Low Alert At</th><th style="width:110px;">🏭 Location</th></tr></thead><tbody>
+    ${s.rows.map((r,i)=>`<tr>
+      <td style="color:var(--text3);">${i+1}</td>
+      <td>${(r.name||'').replace(/</g,'&lt;')}</td>
+      <td style="color:var(--text3);">${(r.unit||'').replace(/</g,'&lt;')}</td>
+      <td style="text-align:right;font-weight:700;color:${(r.currentQty||0)<=0?'var(--neon5)':((r.minQty||0)>0&&(r.currentQty||0)<=r.minQty?'#ff6a00':'var(--text2)')};">${r.currentQty||0}</td>
+      <td style="text-align:right;color:var(--text3);">${r.minQty||0}</td>
+      <td style="color:var(--text3);">${(r.location||'').replace(/</g,'&lt;')}</td>
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+function fbRenderStockAvailReport(){
+  fbSyncStockAvailCheckboxUI();
   const countEl = document.getElementById('fb-stock-avail-count');
   const tableWrap = document.getElementById('fb-stock-avail-table');
   if(!tableWrap) return;
-  if(fbStockAvailTab==='all'){
-    // One combined view/PDF: three labelled sections instead of one flat list,
-    // so it still reads as Available/Low/Out at a glance, in a single click.
-    const available = fbGetStockAvailRows('available').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-    const low = fbGetStockAvailRows('low').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-    const out = fbGetStockAvailRows('out').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-    if(countEl) countEl.textContent = `${available.length+low.length+out.length} item(s) total — ✅ ${available.length} Available, ⚠️ ${low.length} Low, ❌ ${out.length} Out`;
-    const section = (title, rows)=> !rows.length ? '' : `<div style="font-weight:700;margin:10px 0 4px;">${title} (${rows.length})</div>
-      <table class="items-table"><thead><tr><th>#</th><th>Item</th><th style="width:80px;">Unit</th><th style="width:110px;">Current Qty</th><th style="width:110px;">Low Alert At</th><th style="width:110px;">🏭 Location</th></tr></thead><tbody>
-      ${rows.map((s,i)=>`<tr>
-        <td style="color:var(--text3);">${i+1}</td>
-        <td>${(s.name||'').replace(/</g,'&lt;')}</td>
-        <td style="color:var(--text3);">${(s.unit||'').replace(/</g,'&lt;')}</td>
-        <td style="text-align:right;font-weight:700;color:${(s.currentQty||0)<=0?'var(--neon5)':((s.minQty||0)>0&&(s.currentQty||0)<=s.minQty?'#ff6a00':'var(--text2)')};">${s.currentQty||0}</td>
-        <td style="text-align:right;color:var(--text3);">${s.minQty||0}</td>
-        <td style="color:var(--text3);">${(s.location||'').replace(/</g,'&lt;')}</td>
-      </tr>`).join('')}
-      </tbody></table>`;
-    tableWrap.innerHTML = section('✅ Available Stock', available) + section('⚠️ Low Stock', low) + section('❌ Out of Stock', out)
-      || `<div style="color:var(--text3);font-size:12px;">No stock items yet.</div>`;
+  const sections = fbGetStockAvailSections();
+  if(!sections.length){
+    if(countEl) countEl.textContent = 'Koi category select nahi ki.';
+    tableWrap.innerHTML = `<div style="color:var(--text3);font-size:12px;">Upar se kam az kam ek category (All / Available / Low / Out) tick karein.</div>`;
     return;
   }
-  const rows = fbGetStockAvailRows(fbStockAvailTab).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-  if(countEl) countEl.textContent = `${rows.length} item(s) — ${labels[fbStockAvailTab]}`;
-  if(!rows.length){ tableWrap.innerHTML = `<div style="color:var(--text3);font-size:12px;">No items in "${labels[fbStockAvailTab]}" right now.</div>`; return; }
-  tableWrap.innerHTML = `<table class="items-table"><thead><tr><th>#</th><th>Item</th><th style="width:80px;">Unit</th><th style="width:110px;">Current Qty</th><th style="width:110px;">Low Alert At</th><th style="width:110px;">🏭 Location</th></tr></thead><tbody>
-    ${rows.map((s,i)=>`<tr>
-      <td style="color:var(--text3);">${i+1}</td>
-      <td>${(s.name||'').replace(/</g,'&lt;')}</td>
-      <td style="color:var(--text3);">${(s.unit||'').replace(/</g,'&lt;')}</td>
-      <td style="text-align:right;font-weight:700;color:${(s.currentQty||0)<=0?'var(--neon5)':((s.minQty||0)>0&&(s.currentQty||0)<=s.minQty?'#ff6a00':'var(--text2)')};">${s.currentQty||0}</td>
-      <td style="text-align:right;color:var(--text3);">${s.minQty||0}</td>
-      <td style="color:var(--text3);">${(s.location||'').replace(/</g,'&lt;')}</td>
-    </tr>`).join('')}
-  </tbody></table>`;
+  const total = sections.reduce((n,s)=>n+s.rows.length,0);
+  if(countEl) countEl.textContent = `${total} item(s) total — ` + sections.map(s=>`${s.emoji} ${s.rows.length} ${s.title}`).join(', ');
+  tableWrap.innerHTML = sections.map(fbStockAvailSectionHTML).join('');
+}
+// Short filename tag reflecting exactly what's ticked (All / Avail_Low / Out-Billed etc.)
+function fbStockAvailFileTag(){
+  if(fbStockAvailSel.available && fbStockAvailSel.low && fbStockAvailSel.out && fbStockAvailOutMode==='full') return 'All';
+  const parts = [];
+  if(fbStockAvailSel.available) parts.push('Available');
+  if(fbStockAvailSel.low) parts.push('Low');
+  if(fbStockAvailSel.out) parts.push(fbStockAvailOutMode==='billed' ? 'OutBilled' : 'Out');
+  return parts.join('_') || 'Report';
 }
 function fbDownloadStockAvailPDF(){
-  const labels = {all:'All Items', available:'Available Stock', low:'Low Stock', out:'Out of Stock'};
-  if(fbStockAvailTab==='all'){
-    // Single-click combined PDF: Available + Low + Out, each its own table,
-    // covering all 3 categories in one document instead of downloading 3 separately.
-    const available = fbGetStockAvailRows('available').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-    const low = fbGetStockAvailRows('low').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-    const out = fbGetStockAvailRows('out').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-    if(!available.length && !low.length && !out.length){ toast('No stock items to export','warning'); return; }
-    const doc = new jspdf.jsPDF();
-    let y = pdfHeader(doc, 'Stock Availability Report — All');
-    const addSection = (title, rows)=>{
-      if(!rows.length) return;
-      doc.setFontSize(11); doc.setFont(undefined,'bold');
-      doc.text(`${title} (${rows.length})`, 14, y); y+=4;
+  const sections = fbGetStockAvailSections();
+  if(!sections.length){ toast('Pehle upar se kam az kam ek category tick karein','warning'); return; }
+  const total = sections.reduce((n,s)=>n+s.rows.length,0);
+  if(!total){ toast('No stock items to export','warning'); return; }
+  const doc = new jspdf.jsPDF();
+  let y = pdfHeader(doc, 'Stock Availability Report');
+  sections.forEach(s=>{
+    if(!s.rows.length) return;
+    doc.setFontSize(11); doc.setFont(undefined,'bold');
+    doc.text(`${s.emoji} ${s.title} (${s.rows.length})`, 14, y); y+=4;
+    if(s.kind==='billed'){
+      doc.autoTable({
+        startY:y,
+        head:[['#','Item','Total Qty Billed','Bills Count']],
+        body: s.rows.map((r,i)=>[i+1, r.name||'', r.qty, r.billsCount]),
+        styles:{fontSize:9}, headStyles:{fillColor:[20,20,40]}
+      });
+    } else {
       doc.autoTable({
         startY:y,
         head:[['#','Item','Unit','Current Qty','Low Alert At','Location']],
-        body: rows.map((s,i)=>[i+1, s.name||'', s.unit||'', s.currentQty||0, s.minQty||0, s.location||'']),
+        body: s.rows.map((r,i)=>[i+1, r.name||'', r.unit||'', r.currentQty||0, r.minQty||0, r.location||'']),
         styles:{fontSize:9}, headStyles:{fillColor:[20,20,40]}
       });
-      y = doc.lastAutoTable.finalY + 8;
-    };
-    addSection('Available Stock', available);
-    addSection('Low Stock', low);
-    addSection('Out of Stock', out);
-    stampBrandLogoOnAllPages(doc);
-    doc.save(`Stock_All_${new Date().toISOString().slice(0,10)}.pdf`);
-    toast('Combined Stock Availability PDF generated','success');
-    return;
-  }
-  const rows = fbGetStockAvailRows(fbStockAvailTab).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-  if(!rows.length){ toast('No items to export in this list','warning'); return; }
-  const doc = new jspdf.jsPDF();
-  let y = pdfHeader(doc, `Stock Report — ${labels[fbStockAvailTab]}`);
-  doc.autoTable({
-    startY:y,
-    head:[['#','Item','Unit','Current Qty','Low Alert At','Location']],
-    body: rows.map((s,i)=>[i+1, s.name||'', s.unit||'', s.currentQty||0, s.minQty||0, s.location||'']),
-    styles:{fontSize:9}, headStyles:{fillColor:[20,20,40]}
+    }
+    y = doc.lastAutoTable.finalY + 8;
   });
   stampBrandLogoOnAllPages(doc);
-  doc.save(`Stock_${fbStockAvailTab}_${new Date().toISOString().slice(0,10)}.pdf`);
+  doc.save(`Stock_${fbStockAvailFileTag()}_${new Date().toISOString().slice(0,10)}.pdf`);
   toast('Stock Availability PDF generated','success');
 }
-// Excel version of the same report, filtered to whichever tab (All / Available
-// / Low Stock / Out of Stock) is currently selected — so picking "Low Stock"
-// and downloading only exports the low-stock items, same for the others.
-function fbDownloadStockAvailExcel(){
-  if(typeof XLSX==='undefined'){ toast('Excel library failed to load — check your internet connection and try again','error'); return; }
-  const labels = {all:'All Items', available:'Available Stock', low:'Low Stock', out:'Out of Stock'};
-  const wb = XLSX.utils.book_new();
-  const cols = [{wch:5},{wch:30},{wch:10},{wch:12},{wch:13},{wch:16}];
-  if(fbStockAvailTab==='all'){
-    const available = fbGetStockAvailRows('available').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-    const low = fbGetStockAvailRows('low').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-    const out = fbGetStockAvailRows('out').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-    if(!available.length && !low.length && !out.length){ toast('No stock items to export','warning'); return; }
-    const aoa = [['STOCK AVAILABILITY REPORT — ALL'], [`Generated: ${new Date().toLocaleString('en-PK')}`], []];
-    const addBlock = (title, rows)=>{
-      if(!rows.length) return;
-      aoa.push([`${title} (${rows.length})`]);
-      aoa.push(['#','Item','Unit','Current Qty','Low Alert At','Location']);
-      rows.forEach((s,i)=> aoa.push([i+1, s.name||'', s.unit||'', s.currentQty||0, s.minQty||0, s.location||'']));
-      aoa.push([]);
-    };
-    addBlock('Available Stock', available);
-    addBlock('Low Stock', low);
-    addBlock('Out of Stock', out);
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = cols;
-    XLSX.utils.book_append_sheet(wb, ws, 'Stock Availability');
-    XLSX.writeFile(wb, `Stock_All_${new Date().toISOString().slice(0,10)}.xlsx`);
-    toast('Combined Stock Availability Excel generated','success');
-    return;
-  }
-  const rows = fbGetStockAvailRows(fbStockAvailTab).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-  if(!rows.length){ toast('No items to export in this list','warning'); return; }
-  const aoa = [[`STOCK REPORT — ${labels[fbStockAvailTab].toUpperCase()}`], [`Generated: ${new Date().toLocaleString('en-PK')}`], []];
-  aoa.push(['#','Item','Unit','Current Qty','Low Alert At','Location']);
-  rows.forEach((s,i)=> aoa.push([i+1, s.name||'', s.unit||'', s.currentQty||0, s.minQty||0, s.location||'']));
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = cols;
-  XLSX.utils.book_append_sheet(wb, ws, labels[fbStockAvailTab].slice(0,31));
-  XLSX.writeFile(wb, `Stock_${fbStockAvailTab}_${new Date().toISOString().slice(0,10)}.xlsx`);
-  toast('Stock Availability Excel generated','success');
+// Excel version — built with ExcelJS (not plain SheetJS) so every table actually gets
+// real cell borders + a shaded header + A4/portrait page setup baked into the file,
+// meaning it opens already looking like a table and prints correctly on A4 with no
+// manual column/border/print-area setup needed on the user's side.
+async function fbDownloadStockAvailExcel(){
+  if(typeof ExcelJS==='undefined'){ toast('Excel library failed to load — check your internet connection and try again','error'); return; }
+  const sections = fbGetStockAvailSections();
+  if(!sections.length){ toast('Pehle upar se kam az kam ek category tick karein','warning'); return; }
+  const total = sections.reduce((n,s)=>n+s.rows.length,0);
+  if(!total){ toast('No stock items to export','warning'); return; }
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Stock Availability', {
+    pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+      margins: { left:0.4, right:0.4, top:0.5, bottom:0.5, header:0.2, footer:0.2 } }
+  });
+
+  const thinBorder = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
+  const stockCols = [
+    { header:'#', width:5 }, { header:'Item', width:34 }, { header:'Unit', width:10 },
+    { header:'Current Qty', width:13 }, { header:'Low Alert At', width:13 }, { header:'Location', width:16 }
+  ];
+  const billedCols = [
+    { header:'#', width:5 }, { header:'Item', width:36 }, { header:'Total Qty Billed', width:16 }, { header:'Bills Count', width:13 }
+  ];
+  const maxCols = 6;
+
+  // Title + generated-on rows
+  ws.mergeCells(1,1,1,maxCols);
+  const titleCell = ws.getCell(1,1);
+  titleCell.value = 'STOCK AVAILABILITY REPORT';
+  titleCell.font = { bold:true, size:14 };
+  titleCell.alignment = { horizontal:'center' };
+  ws.mergeCells(2,1,2,maxCols);
+  const genCell = ws.getCell(2,1);
+  genCell.value = `Generated: ${new Date().toLocaleString('en-PK')}`;
+  genCell.font = { size:9, color:{argb:'FF888888'} };
+  genCell.alignment = { horizontal:'center' };
+  ws.addRow([]);
+
+  sections.forEach(s=>{
+    const cols = s.kind==='billed' ? billedCols : stockCols;
+    // section title row
+    const titleRow = ws.addRow([`${s.title} (${s.rows.length})`]);
+    ws.mergeCells(titleRow.number,1,titleRow.number,maxCols);
+    titleRow.getCell(1).font = { bold:true, size:11 };
+    titleRow.getCell(1).fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFE8E8F0'} };
+
+    // header row
+    const headerRow = ws.addRow(cols.map(c=>c.header));
+    headerRow.eachCell((cell, colNum)=>{
+      if(colNum>cols.length) return;
+      cell.font = { bold:true, color:{argb:'FFFFFFFF'} };
+      cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF14142A'} };
+      cell.alignment = { horizontal:'center', vertical:'middle' };
+      cell.border = thinBorder;
+    });
+    cols.forEach((c,i)=>{ if(ws.getColumn(i+1).width < c.width) ws.getColumn(i+1).width = c.width; });
+
+    // data rows
+    if(!s.rows.length){
+      const emptyRow = ws.addRow(['No items']);
+      ws.mergeCells(emptyRow.number,1,emptyRow.number,maxCols);
+      emptyRow.getCell(1).font = { italic:true, color:{argb:'FF999999'} };
+    } else {
+      s.rows.forEach((r,i)=>{
+        const rowVals = s.kind==='billed'
+          ? [i+1, r.name||'', r.qty, r.billsCount]
+          : [i+1, r.name||'', r.unit||'', r.currentQty||0, r.minQty||0, r.location||''];
+        const row = ws.addRow(rowVals);
+        row.eachCell((cell, colNum)=>{
+          if(colNum>cols.length) return;
+          cell.border = thinBorder;
+          if(colNum===1 || (s.kind!=='billed' && (colNum===4||colNum===5)) || (s.kind==='billed' && (colNum===3||colNum===4))){
+            cell.alignment = { horizontal:'right' };
+          }
+        });
+      });
+    }
+    ws.addRow([]); // spacer between sections
+  });
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `Stock_${fbStockAvailFileTag()}_${new Date().toISOString().slice(0,10)}.xlsx`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('Stock Availability Excel generated (A4 print-ready table)','success');
 }
 // ==================== MASTER STOCK REPORT (Available + All + Low Alert, ====================
 // optionally + Stock Movement History) — one combined report exportable as
