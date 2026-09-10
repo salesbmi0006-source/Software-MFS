@@ -1,31 +1,71 @@
+# SAU Corporation — APK Banane Ke Steps (Sab FREE)
+
+Aapko ek hi **ZIP file** (`SAU_Corp_GitHub_Package.zip`) mil rahi hai — usay download karke apne computer par extract (unzip) kar lein. Andar 4 files niklengi:
+- `index.html`  → aapka poora program (naya, live-ready)
+- `manifest.json`  → app ka naam/icon batati hai
+- `icon-192.png`  → chhota app icon (aapka asli MFS round logo)
+- `icon-512.png`  → bara app icon (aapka asli MFS round logo)
+
+⚠️ Zaroori: chaaron files **usi folder** mein honi chahiyen (index.html jahan hai, manifest.json/icons bhi wahin) — alag folder mein nahi.
+
+⚠️ GitHub par seedha ZIP file mat daalein — GitHub usay extract nahi karta, wo ek compressed file hi reh jayegi aur Pages/PWA kaam nahi karega. Pehle apne computer par extract karein, phir andar wali 4 files ek sath (select karke) GitHub par drag-drop karein — GitHub ek hi baar mein multiple files upload kar leta hai, to ye "ek hi drag-drop" mein ho jayega.
+
+---
+
+## STEP 1 — GitHub Pages ON karein (free, 2 minute)
+1. Apne GitHub repo ko kholein (jahan aap abhi bhi naya program push karte hain).
+2. Purani `.html` file hata dein, aur ZIP se nikli hui chaaron files ek sath select karke repo ke root mein drag-drop kar dein (ek hi baar mein commit ho jayengi).
+3. Repo ke andar **Settings** tab kholein → left menu mein **Pages** par click karein.
+4. "Build and deployment" ke neeche, **Source** = "Deploy from a branch" select karein.
+5. **Branch** = `main` (ya jo bhi aapki default branch hai), folder = `/ (root)` select karke **Save** karein.
+6. 1-2 minute mein GitHub aapko ek live link de dega, jaisa:
+   `https://<aapka-username>.github.io/<repo-ka-naam>/`
+7. Ye link khol kar check karein — poora app load hona chahiye, aur Firebase se data live aana chahiye.
+
+👉 Ab se, jab bhi aap naya code GitHub par push/copy-paste karenge, ye live link apne aap 1-2 minute mein update ho jayega — kuch alag se karne ki zaroorat nahi.
+
+---
+
+## STEP 2 — APK banayein (free, PWABuilder)
+1. Browser mein **pwabuilder.com** kholein.
+2. Apna Step 1 wala live link (`https://...github.io/...`) us box mein paste karein aur **Start** dabayein.
+3. Ye khud check karega ke manifest/icon sab theek hain (green ticks aayenge).
+4. Upar **"Package for Stores"** ya **Android** wala option choose karein.
+5. Android package banate waqt options aayengi — default settings hi rakhein, **Generate** dabayein.
+6. Ek `.zip` file download hogi — usay extract karne par ek `.apk` file milegi (signed, install-ready). Ye poora process **free** hai, koi payment/login zaroori nahi.
+
+---
+
+## STEP 3 — APK mobile par install karein (free)
+1. Wo `.apk` file apne Android phone/tablet mein transfer karein (USB, Google Drive, WhatsApp — jo bhi aasan ho).
+2. Phone par us file par tap karein → agar "Install blocked" ka message aaye to **Settings → allow install from this source** on kar dein (ek hi dafa karna hota hai).
+3. **Install** dabayein — app icon home screen par aa jayega, bilkul real app ki tarah khulega (koi browser bar nahi dikhegi).
+
+---
+
+## Zaroori baatein
+- Ye APK **hamesha internet maangega** — jaisa aap chahte hain, offline kaam nahi karega (Firebase data ke liye net zaroori hai).
+- APK dobara-dobara nahi banani paregi: jab bhi aap GitHub par naya code daalenge, wahi APK khud-ba-khud naya data/design dikhayega, kyunke APK andar se hamesha aapke live link ko hi kholti hai.
+- Mobile aur tablet dono par view apne aap adjust ho jayegi (app pehle se responsive hai).
+- Ye sab **bilkul free** hai — GitHub Pages free, PWABuilder free, APK install free. Sirf agar kabhi Google Play Store par official publish karna ho to Google ki one-time $25 fee lagti hai — abhi ke liye us ki zaroorat nahi, aap direct APK install/share kar sakte hain.
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MFS | FULL MANAGEMENT</title>
-<link id="pwa-manifest-link" rel="manifest" href="">
-<script>
-// PHASE 14 — inline Web App Manifest (single-file app, so it's built as a
-// data: URI at runtime rather than a separate manifest.json). Lets Android
-// Chrome/Edge offer "Add to Home Screen" / "Install app" when this page is
-// hosted over https://. Does nothing harmful if the browser ignores it.
-(function(){
-  try{
-    const manifest = {
-      name:"SAU Corporation - Full Management",
-      short_name:"SAU Corp",
-      start_url:".",
-      display:"standalone",
-      background_color:"#0d1117",
-      theme_color:"#0d1117",
-      icons:[]
-    };
-    const blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
-    document.getElementById('pwa-manifest-link').setAttribute('href', URL.createObjectURL(blob));
-  }catch(e){}
-})();
-</script>
+<!-- PHASE 15 — real, static manifest.json + real PNG icons (replacing the old
+     runtime-generated blob manifest). A static file is what APK-builder tools
+     like PWABuilder actually need to detect the app and its icon — a blob
+     manifest built by JS after page-load isn't reliably readable by their
+     scanners. Keep manifest.json + icon-192.png + icon-512.png in the SAME
+     folder as this index.html when you host/deploy it (e.g. in your GitHub
+     Pages repo root) or the icon/app-name won't be picked up correctly. -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d1117">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -23547,3 +23587,19 @@ function fbPrintA4Doc(docId, docType){
 </script>
 
 </body></html>
+
+{
+  "name": "SAU Corporation - Full Management",
+  "short_name": "SAU Corp",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "description": "SAU Corporation — Full Business Management (DC, Invoicing, Ledger, Stock, FBR/Tax, Fast Billing)",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
