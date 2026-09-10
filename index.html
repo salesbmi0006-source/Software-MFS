@@ -4,17 +4,28 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MFS | FULL MANAGEMENT</title>
-<!-- PHASE 15 — real, static manifest.json + real PNG icons (replacing the old
-     runtime-generated blob manifest). A static file is what APK-builder tools
-     like PWABuilder actually need to detect the app and its icon — a blob
-     manifest built by JS after page-load isn't reliably readable by their
-     scanners. Keep manifest.json + icon-192.png + icon-512.png in the SAME
-     folder as this index.html when you host/deploy it (e.g. in your GitHub
-     Pages repo root) or the icon/app-name won't be picked up correctly. -->
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0d1117">
-<link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link id="pwa-manifest-link" rel="manifest" href="">
+<script>
+// PHASE 14 — inline Web App Manifest (single-file app, so it's built as a
+// data: URI at runtime rather than a separate manifest.json). Lets Android
+// Chrome/Edge offer "Add to Home Screen" / "Install app" when this page is
+// hosted over https://. Does nothing harmful if the browser ignores it.
+(function(){
+  try{
+    const manifest = {
+      name:"SAU Corporation - Full Management",
+      short_name:"SAU Corp",
+      start_url:".",
+      display:"standalone",
+      background_color:"#0d1117",
+      theme_color:"#0d1117",
+      icons:[]
+    };
+    const blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+    document.getElementById('pwa-manifest-link').setAttribute('href', URL.createObjectURL(blob));
+  }catch(e){}
+})();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -23536,19 +23547,3 @@ function fbPrintA4Doc(docId, docType){
 </script>
 
 </body></html>
-
-{
-  "name": "SAU Corporation - Full Management",
-  "short_name": "SAU Corp",
-  "start_url": "./index.html",
-  "scope": "./",
-  "display": "standalone",
-  "orientation": "any",
-  "background_color": "#0d1117",
-  "theme_color": "#0d1117",
-  "description": "SAU Corporation — Full Business Management (DC, Invoicing, Ledger, Stock, FBR/Tax, Fast Billing)",
-  "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
-  ]
-}
