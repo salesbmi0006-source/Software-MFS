@@ -4386,7 +4386,7 @@ Switch Socket"></textarea>
 <div class="modal modal-sm">
   <div class="modal-header"><h3>📄 Quotation Details</h3><button class="close-btn" onclick="closeModal('quotationCustomerModal')">✕</button></div>
   <div class="modal-body">
-    <div class="form-group"><label>Customer / Party Name *</label><input type="text" id="quote-customer-name" list="party-list3" placeholder="Customer name"><datalist id="party-list3"></datalist></div>
+    <div class="form-group"><label>Customer / Party Name *</label><input type="text" id="quote-customer-name" list="party-list4" placeholder="Customer name"><datalist id="party-list4"></datalist></div>
     <div class="form-group"><label>Address</label><input type="text" id="quote-customer-address" placeholder="Optional address"></div>
   </div>
   <div class="modal-footer">
@@ -5405,6 +5405,20 @@ async function initRealtimeSync(){
 // within ~1.2s of the last change, without any button press.
 let pendingCloudSyncDirty = false;   // PHASE 14: true when a local change happened while offline/not-yet-connected — flushed automatically once back online
 let lastOfflineToastAt = 0;
+// PHASE 14 FIX: this used to be called below but was never actually defined
+// anywhere, so every save made while offline/not-yet-connected threw
+// "retryCloudConnectionIfNeeded is not defined" — caught by the global error
+// handler and shown to the user as "⚠️ Something went wrong". Implemented
+// here: nudges a (re)connection attempt (on top of the 'online' browser
+// event and initRealtimeSync's own backoff loop) without spamming it on
+// every rapid save.
+let cloudConnectionRetryInFlight = false;
+function retryCloudConnectionIfNeeded(){
+  if(cloudSyncReady || cloudConnectionRetryInFlight) return;
+  if(typeof initRealtimeSync!=='function') return;
+  cloudConnectionRetryInFlight = true;
+  try{ initRealtimeSync(); } finally { setTimeout(()=>{ cloudConnectionRetryInFlight = false; }, 3000); }
+}
 function scheduleCloudPush(){
   if(cloudApplyingRemote) return; // we're mid-way applying someone else's update — don't echo it straight back
   if(!cloudSyncReady){
@@ -5952,7 +5966,8 @@ function resetAllWithAdminGate(){
   db=[]; cheques=[]; ledgerData=[]; fbrParties=[];
   digitalInvoices=[]; partyContacts={}; invoiceSendStatus={}; hsStockData={};
   if(typeof rateLists!=='undefined') rateLists={};
-  if(typeof quotations!=='undefined') quotations=[];
+  if(typeof savedQuotations!=='undefined') savedQuotations=[];
+  if(typeof quotationBasket!=='undefined') quotationBasket=[];
   if(typeof partyDispatchData!=='undefined') partyDispatchData={};
   saveData();
   if(typeof saveDigitalInvoices==='function') saveDigitalInvoices();
@@ -5960,6 +5975,7 @@ function resetAllWithAdminGate(){
   if(typeof saveInvoiceSendStatus==='function') saveInvoiceSendStatus();
   if(typeof saveHsStockData==='function') saveHsStockData();
   if(typeof saveRateLists==='function') saveRateLists();
+  if(typeof saveSavedQuotations==='function') saveSavedQuotations();
   if(typeof savePartyDispatchData==='function') savePartyDispatchData();
   renderAll();
   toast('All data has been reset','warning');
@@ -6019,7 +6035,7 @@ function dzCapture(moduleKey, moduleLabel, itemLabel, itemData){
 // Maps a trash entry's module key back to "push it back into its live array
 // and re-render/save" so Restore actually puts data back where it came from.
 const DZ_RESTORE_HANDLERS = {
-  records:   d=>{ db.push(d); saveData(); if(typeof renderRecords==='function') renderRecords(); },
+  records:   d=>{ db.push(d); saveData(); if(typeof renderRecords==='function') renderRecords(); if(typeof refreshDashboardIfActive==='function') refreshDashboardIfActive(); },
   ledger:    d=>{ ledgerData.push(d); saveData(); if(typeof renderLedger==='function') renderLedger(); },
   party:     d=>{ fbrParties.push(d); saveData(); if(typeof renderParties==='function') renderParties(); },
   cheque:    d=>{ cheques.push(d); saveData(); if(typeof renderCheques==='function') renderCheques(); },
@@ -6639,7 +6655,7 @@ setInterval(updateClock, 1000);
 function populatePartyList(){
   const parties = getUniqueParties();
   const allParties = [...new Set([...parties, ...fbrParties.map(p=>p.partyName)])].sort();
-  ['party-list','party-list2','party-list3'].forEach(id=>{
+  ['party-list','party-list2','party-list3','party-list4'].forEach(id=>{
     const el = document.getElementById(id);
     if(el){ el.innerHTML = allParties.map(p=>`<option value="${p}">`).join(''); }
   });
@@ -6908,6 +6924,7 @@ function bulkStatus(status){
     else if(status==='invoiced'){ db[idx].readyForInv=true; }
   });
   saveData(); renderRecords(); clearSelection();
+  refreshDashboardIfActive();
   toast(`Marked ${selectedIds.size} records as ${status}`,'success');
 }
 function openBulkInvoiceModal(){
@@ -6928,6 +6945,7 @@ function bulkSetInvoice(){
   });
   saveData(); renderRecords(); clearSelection();
   closeModal('bulkInvoiceModal');
+  refreshDashboardIfActive();
   toast(`Invoice ${invNo} set for selected records`,'success');
 }
 function bulkDelete(){
@@ -6936,12 +6954,14 @@ function bulkDelete(){
   const idxArr = [...selectedIds].sort((a,b)=>b-a);
   idxArr.forEach(idx=>db.splice(idx,1));
   saveData(); clearSelection(); renderRecords();
+  refreshDashboardIfActive();
   toast(`${idxArr.length} records deleted`,'warning');
 }
 function bulkCancel(){
   if(!selectedIds.size){toast('No records selected','warning');return;}
   selectedIds.forEach(idx=>{ db[idx].cancelled=true; });
   saveData(); clearSelection(); renderRecords();
+  refreshDashboardIfActive();
   toast(`${selectedIds.size} records cancelled`,'warning');
 }
 
@@ -7369,8 +7389,9 @@ async function saveDC(){
     note:document.getElementById('dc-note').value.trim(),
     dispatch: dispatchInfo
   };
+  let oldRec = null;
   if(editingDcIdx!==null){
-    const oldRec = {...db[editingDcIdx]};
+    oldRec = {...db[editingDcIdx]};
     db[editingDcIdx]={...db[editingDcIdx],...rec};
     logAudit('edit','DC/Invoice',`DC #${rec.dcNo} (${rec.partyName}) updated`, oldRec, db[editingDcIdx]);
     toast('DC updated!','success');
@@ -7380,6 +7401,13 @@ async function saveDC(){
   else if(rec.invNo && editingDcIdx!==null){ syncAutoLedgerFromDC(rec, oldRec); }
   syncPartiesFromDB();
   saveData(); renderRecords(); closeDcModal();
+  // A DC's status (Pending/Ready/Invoiced) also drives the Dashboard's stat
+  // cards and "Ready for Invoice" mini-summary. Without this, adding an
+  // invoice number/date (or toggling Ready for Invoice) on an existing DC
+  // would leave the record showing under its OLD status on the Dashboard
+  // until a manual page refresh, even though it had already moved to its
+  // new status in the main records table above.
+  refreshDashboardIfActive();
   // A DC's dispatch info is also shown on the separate Dispatch tab/table.
   // Refresh it too so changes are visible immediately without a page reload.
   if(document.getElementById('panel-dispatch')?.classList.contains('active')) renderDispatchTab();
@@ -7811,6 +7839,7 @@ function deleteRecord(idx){
   dzCapture('records','📋 Records',`DC #${rec.dcNo} (${rec.partyName})`, rec);
   db.splice(idx,1);
   saveData(); renderRecords();
+  refreshDashboardIfActive();
   toast('Record deleted','warning');
 }
 
@@ -7890,6 +7919,7 @@ function quickView(idx){
   // DC Print button
   html+=approvalWorkflowHtml(idx);
   html+=`<div class="flex-gap mt-8">
+    <button class="btn btn-yellow btn-sm" onclick="closeModal('quickViewModal');editDC(${idx})">✏️ Edit DC</button>
     <button class="btn btn-neon btn-sm" onclick="closeModal('quickViewModal');openDCPrint(${idx})">🖨️ Print Delivery Challan</button>
     <button class="btn btn-neon btn-sm" onclick="showRecordTimeline(${idx})">🕐 Activity Timeline</button>
     ${(rec.dispatch && rec.dispatch.method) ? `<button class="btn btn-neon btn-sm" onclick="generateDispatchFullPDF(${idx})">📄 Full Dispatch/Bilty PDF</button>` : ''}
@@ -7994,6 +8024,16 @@ function saveNote(){
 }
 
 // ==================== DASHBOARD ====================
+// Whenever a DC record's status-affecting fields change (readyForInv, invNo,
+// cancelled, or the record set itself via add/delete/restore), the Dashboard's
+// stat cards and "Pending/Ready" mini-summary need to reflect it immediately —
+// not just the main records table — otherwise it looks stuck on the old
+// status until a manual page refresh, even though the underlying data is
+// already correct. Call this right after saveData()+renderRecords() from any
+// place that adds, deletes, restores, or changes the status of DC records.
+function refreshDashboardIfActive(){
+  if(document.getElementById('panel-dashboard')?.classList.contains('active')) renderDashboard();
+}
 function renderDashboard(){
   renderReminders();
   const active = db.filter(r=>!r.cancelled);
@@ -9311,6 +9351,7 @@ function saveCheque(){
   if(!isNaN(idx)&&idx>=0){ logAudit('edit','Cheque',`Cheque ${obj.chequeNo} updated`, cheques[idx], obj); cheques[idx]=obj; } else { cheques.push(obj); initApprovalForEntity('cheque', obj); logAudit('create','Cheque',`Cheque ${obj.chequeNo} added — amount ${obj.amount}`, undefined, obj); }
   document.getElementById('cheque-edit-idx').value='';
   saveData(); renderCheques(); closeModal('addChequeModal'); populateChequeList();
+  refreshDashboardIfActive();
   toast('Cheque saved & ledger synced ✓','success');
 }
 
@@ -9365,6 +9406,7 @@ function deleteCheque(idx){
   if(chq){ logAudit('delete','Cheque',`Cheque ${chq.chequeNo} deleted`, chq, undefined); dzCapture('cheque','🏦 Cheques',`Cheque ${chq.chequeNo}`, chq); }
   cheques.splice(idx,1);
   saveData(); renderCheques();
+  refreshDashboardIfActive();
   toast('Cheque deleted','warning');
 }
 
@@ -11602,50 +11644,14 @@ function clearBasket(){
   renderBasketTable(); renderRateListBasketSummary();
   toast('Basket cleared','info');
 }
-function openQuotationCustomerForm(){
-  if(!quotationBasket.length){toast('Basket is empty','warning');return;}
-  populatePartyList();
-  document.getElementById('quote-customer-name').value='';
-  document.getElementById('quote-customer-address').value='';
-  openModal('quotationCustomerModal');
-}
-function generateQuotationPDF(){
-  const customerName = document.getElementById('quote-customer-name').value.trim();
-  const customerAddress = document.getElementById('quote-customer-address').value.trim();
-  if(!customerName){toast('Enter customer/party name','warning');return;}
-  const cur = settings.currency||'PKR';
-  const doc = new jspdf.jsPDF();
-  let y = pdfHeader(doc, 'QUOTATION');
-  doc.setFontSize(10); doc.setFont(undefined,'bold');
-  doc.text('To:', 14, y); y+=5;
-  doc.setFont(undefined,'normal');
-  doc.text(customerName, 14, y); y+=5;
-  if(customerAddress){ doc.text(customerAddress, 14, y, {maxWidth:180}); y+=8; } else y+=3;
-  doc.text(`Date: ${new Date().toLocaleDateString('en-PK')}`, 140, y-5);
-
-  let qty_total=0, total=0;
-  const body = quotationBasket.map((b,i)=>{
-    const finalPrice = b.price*(1-b.discountPct/100);
-    const lineTotal = finalPrice*b.qty;
-    qty_total+=b.qty; total+=lineTotal;
-    return [i+1, b.desc, b.cat, b.qty, fmt(finalPrice), fmt(lineTotal)];
-  });
-  body.push([
-    {content:'TOTAL', colSpan:3, styles:{fontStyle:'bold',fillColor:[20,40,80],textColor:[0,245,255]}},
-    {content:fmt(qty_total), styles:{fontStyle:'bold',fillColor:[20,40,80],textColor:[0,245,255]}},
-    {content:'', styles:{fillColor:[20,40,80]}},
-    {content:cur+' '+fmt(total), styles:{fontStyle:'bold',fillColor:[20,40,80],textColor:[0,245,255],halign:'right'}}
-  ]);
-  doc.autoTable({
-    startY:y+5,
-    head:[['Sr#','Description','Cat No','Qty','Unit Price','Total']],
-    body, styles:{fontSize:9}, headStyles:{fillColor:[20,20,40]}
-  });
-  stampBrandLogoOnAllPages(doc);
-  doc.save(`Quotation_${customerName.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
-  toast('Quotation PDF generated','success');
-  closeModal('quotationCustomerModal');
-}
+// NOTE: openQuotationCustomerForm()/generateQuotationPDF() used to also be
+// defined here (an older, pre-"Saved Quotations" version that built a PDF
+// directly from the basket without saving a record). Because a later,
+// active version of both functions is defined further below (search
+// "Open customer form (reuse existing modal, but also save after)"), this
+// old pair was 100% dead code — JS keeps only the LAST function declaration
+// with a given name, so these two were never actually running no matter
+// which button called them. Removed to avoid confusion; no behavior change.
 
 // === Add custom item to a rate list ===
 function openAddRateItemModal(){
