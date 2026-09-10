@@ -436,6 +436,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
       <span id="operator-name">LOADING...</span>
       <span id="logged-in-as" style="font-size:10px;color:var(--text2);display:none;"></span>
     </div>
+    <button id="sound-toggle-btn" class="btn btn-xs" style="background:transparent;border:1px solid var(--border2);color:var(--text2);" onclick="sauToggleSound()" title="Sound: On (click to mute)">🔊</button>
     <button id="lock-btn" class="btn btn-xs" style="background:transparent;border:1px solid var(--border2);color:var(--text2);display:none;" onclick="lockScreen()" title="Lock Screen">🔐</button>
     <button id="logout-btn" class="btn btn-xs" style="background:transparent;border:1px solid var(--neon3);color:var(--neon3);display:none;" onclick="doLogout()" title="Logout">🚪</button>
     <span id="clock">00:00:00</span>
@@ -3091,6 +3092,14 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
       <div class="form-group"><button type="button" class="btn btn-neon btn-sm" onclick="fbExportLedgerPDFRange()">📄 Ledger for Date Range</button></div>
     </div>
     <div class="divider"></div>
+    <strong style="color:var(--neon);">📊 Full Ledger — ALL Parties (one table, PDF)</strong>
+    <div style="font-size:11px;color:var(--text2);margin:4px 0 8px;">Har bill ek line mein — Bill #, Date, Status, Shop, Customer, Phone, Ref#, tamam Items (desc/qty/rate/amount), Grand Total, Return items ki detail, Returned Amt, Paid aur Bakaya (balance) — sab parties ek hi PDF table mein.</div>
+    <div class="form-row" style="margin-top:8px;align-items:flex-end;">
+      <div class="form-group"><label>From (optional)</label><input type="date" id="fb-fullledger-from"></div>
+      <div class="form-group"><label>To (optional)</label><input type="date" id="fb-fullledger-to"></div>
+      <div class="form-group"><button type="button" class="btn btn-neon btn-sm" onclick="fbExportFullLedgerAllPartiesPDF()">📄 Download Full Ledger (All Parties) PDF</button></div>
+    </div>
+    <div class="divider"></div>
     <strong style="color:var(--neon);">➕ Add Lump Sum Payment (not tied to a specific bill)</strong>
     <div class="form-row" style="margin-top:8px;">
       <div class="form-group"><label>Date</label><input type="date" id="fb-lump-date"></div>
@@ -3301,7 +3310,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
 
     <div class="divider"></div>
     <strong style="color:var(--neon);">📦 Adjust Stock (Purchase / Manual Correction)</strong>
-    <div style="font-size:11px;color:var(--text3);margin:4px 0 8px;">Use this to add newly purchased stock, or correct a count after a physical check. Sales made through New Bill deduct automatically — you don't need to enter those here.</div>
+    <div style="font-size:11px;color:var(--text3);margin:4px 0 8px;">Use this to add newly purchased stock, or correct a count after a physical check. Sales made through New Bill deduct automatically — you don't need to enter those here. <b>Source</b> "Fast Company" par fix rehta hai by default (jaisa ab tak sara saman wahin se aaya hai); agar saman kisi saved party/customer se aaya ho to Source box mein us ka naam select/type kar dein — record mein wo save ho jayega taake baad mein pata chal sake yeh saman kahan se aaya tha.</div>
     <div class="form-row" style="align-items:flex-end;">
       <div class="form-group" style="flex:2;"><label>Stock Item</label>
         <input type="text" id="fb-stock-adj-item" list="fb-stockitem-list" placeholder="Type or pick item name...">
@@ -3315,6 +3324,10 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
         </select>
       </div>
       <div class="form-group"><label>Qty</label><input type="number" id="fb-stock-adj-qty" min="0" step="any" placeholder="Qty"></div>
+      <div class="form-group" style="flex:1.4;"><label>Source (Kahan se aaya)</label>
+        <input type="text" id="fb-stock-adj-source" list="fb-stock-source-list" value="Fast Company" placeholder="e.g. Fast Company">
+        <datalist id="fb-stock-source-list"></datalist>
+      </div>
       <div class="form-group" style="flex:2;"><label>Note</label><input type="text" id="fb-stock-adj-note" placeholder="e.g. Purchased from XYZ supplier"></div>
       <div class="form-group" style="align-self:flex-end;"><button type="button" class="btn btn-green btn-sm" onclick="fbAdjustStock()">💾 Apply</button></div>
     </div>
@@ -3383,8 +3396,8 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
     </div>
     <div id="fb-stock-avail-out-submode" style="display:none;margin:0 0 14px;padding:8px 10px;border:1px dashed var(--text3);border-radius:8px;font-size:12px;">
       <div style="margin-bottom:6px;color:var(--text3);">❌ Out of Stock me kaunsi list chahiye:</div>
-      <label style="display:inline-flex;align-items:center;gap:5px;margin-right:18px;cursor:pointer;"><input type="radio" name="fb-stock-avail-out-mode" value="full" checked onchange="fbSetStockAvailOutMode('full')"> Full — jitne bhi items khatam hain</label>
-      <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="fb-stock-avail-out-mode" value="billed" onchange="fbSetStockAvailOutMode('billed')"> Sirf wo — jo stock list me nahi hain, magar bill me nikle hain</label>
+      <label style="display:inline-flex;align-items:center;gap:5px;margin-right:18px;cursor:pointer;"><input type="radio" name="fb-stock-avail-out-mode" value="full" checked onchange="fbSetStockAvailOutMode('full')"> Full — jitne bhi items khatam hain (0 ya usse kam)</label>
+      <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" name="fb-stock-avail-out-mode" value="billed" onchange="fbSetStockAvailOutMode('billed')"> Sirf Negative Qty — jo bhi item minus mein hai (stock list mein ho ya sirf bill mein nikla ho), asal minus number (e.g. -192, -232) ke saath</label>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
       <div id="fb-stock-avail-count" style="font-size:12px;color:var(--text3);"></div>
@@ -4452,6 +4465,93 @@ Switch Socket"></textarea>
 </div>
 
 <script>
+// ==================== UI SOUND ENGINE (v72) ====================
+// Small, dependency-free sound engine using the Web Audio API — no sound
+// files to download, everything is synthesized on the fly. Gives soft
+// "decent" feedback tones for: tab switching, save/update, delete, and
+// error/warning toasts, app-wide. Respects an on/off toggle persisted in
+// localStorage (key: sau_sound_enabled), default ON.
+(function(){
+  let actx = null;
+  function ctx(){
+    if(!actx){
+      try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ actx = null; }
+    }
+    // Browsers suspend the context until a user gesture; resume opportunistically.
+    if(actx && actx.state === 'suspended'){ actx.resume().catch(()=>{}); }
+    return actx;
+  }
+  function soundEnabled(){
+    const v = localStorage.getItem('sau_sound_enabled');
+    return v === null ? true : v === '1';
+  }
+  window.sauSoundEnabled = soundEnabled;
+  window.sauSetSoundEnabled = function(on){
+    localStorage.setItem('sau_sound_enabled', on ? '1' : '0');
+    updateSoundToggleBtn();
+    if(on) window.sauPlaySound('click');
+  };
+  window.sauToggleSound = function(){
+    window.sauSetSoundEnabled(!soundEnabled());
+  };
+  function updateSoundToggleBtn(){
+    const btn = document.getElementById('sound-toggle-btn');
+    if(!btn) return;
+    const on = soundEnabled();
+    btn.textContent = on ? '🔊' : '🔇';
+    btn.title = on ? 'Sound: On (click to mute)' : 'Sound: Off (click to unmute)';
+  }
+  // Plays a short tone. `notes` is an array of {freq, start, dur, gain, type}.
+  function playTone(notes, masterGain){
+    if(!soundEnabled()) return;
+    const c = ctx();
+    if(!c) return;
+    const now = c.currentTime;
+    const master = c.createGain();
+    master.gain.value = masterGain==null?0.18:masterGain;
+    master.connect(c.destination);
+    notes.forEach(n=>{
+      const osc = c.createOscillator();
+      const g = c.createGain();
+      osc.type = n.type || 'sine';
+      osc.frequency.setValueAtTime(n.freq, now + (n.start||0));
+      g.gain.setValueAtTime(0, now + (n.start||0));
+      g.gain.linearRampToValueAtTime(n.gain==null?1:n.gain, now + (n.start||0) + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.001, now + (n.start||0) + (n.dur||0.12));
+      osc.connect(g); g.connect(master);
+      osc.start(now + (n.start||0));
+      osc.stop(now + (n.start||0) + (n.dur||0.12) + 0.02);
+    });
+  }
+  const SOUNDS = {
+    // Soft, quick tick for tab switches / general clicks.
+    click:  ()=>playTone([{freq:720, dur:0.06, type:'sine', gain:0.6}], 0.14),
+    // Gentle rising two-note chime for successful save/update.
+    save:   ()=>playTone([
+              {freq:660, start:0,    dur:0.10, type:'sine', gain:0.7},
+              {freq:990, start:0.09, dur:0.14, type:'sine', gain:0.8}
+            ], 0.16),
+    // Soft descending tone for delete (distinct, not harsh).
+    delete: ()=>playTone([
+              {freq:520, start:0,    dur:0.09, type:'sine', gain:0.7},
+              {freq:340, start:0.08, dur:0.16, type:'sine', gain:0.7}
+            ], 0.16),
+    // Low double-buzz for errors.
+    error:  ()=>playTone([
+              {freq:220, start:0,    dur:0.10, type:'square', gain:0.35},
+              {freq:220, start:0.13, dur:0.10, type:'square', gain:0.35}
+            ], 0.12),
+    // Single mellow blip for warnings.
+    warning:()=>playTone([{freq:480, dur:0.13, type:'triangle', gain:0.6}], 0.14),
+    // Neutral confirmation blip for the toggle itself.
+    toggle: ()=>playTone([{freq:840, dur:0.07, type:'sine', gain:0.6}], 0.15)
+  };
+  window.sauPlaySound = function(kind){
+    try{ (SOUNDS[kind]||SOUNDS.click)(); }catch(e){}
+  };
+  window.addEventListener('DOMContentLoaded', updateSoundToggleBtn);
+})();
+// ==================== END UI SOUND ENGINE ====================
 // ==================== NO LOCAL STORAGE — FIREBASE ONLY (v26) ====================
 // This app now stores NOTHING on the device's disk. The line below shadows
 // the browser's real `localStorage` with a plain in-memory object for the
@@ -6335,6 +6435,13 @@ function hideMfsQuickLoader(){
   if(ov) ov.remove();
 }
 function toast(msg, type='info'){
+  if(typeof window.sauPlaySound==='function'){
+    const isDelete = /delet/i.test(String(msg));
+    if(isDelete) window.sauPlaySound('delete');
+    else if(type==='success') window.sauPlaySound('save');
+    else if(type==='error') window.sauPlaySound('error');
+    else if(type==='warning') window.sauPlaySound('warning');
+  }
   const fire = ()=>{
     const c = document.getElementById('toast-container');
     const t = document.createElement('div');
@@ -6498,6 +6605,7 @@ function renderCurrentTab(){
   renderTabContent(activePanel.id.replace('panel-',''));
 }
 function showTab(id){
+  if(typeof window.sauPlaySound==='function') window.sauPlaySound('click');
   showMfsQuickLoader();
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -21904,24 +22012,34 @@ function fbGetStockAvailRows(tab){
   if(tab==='all') return [...available, ...low, ...out]; // used for the combined "All" view/PDF
   return available;
 }
-// Items that appear on bills (their `desc` text) but do NOT match any name in the
-// stock master list — i.e. never added to Stock but have been billed/"out" anyway.
+// Items with a NEGATIVE net stock position because of billing — covers two cases:
+// 1) Items that ARE in the stock list but have been sold more than was ever added
+//    (their own currentQty has gone below zero, e.g. -192, -232, -300).
+// 2) Items billed but never added to the Stock list at all — their net position
+//    is simply "0 minus everything sold", shown as a negative number too.
+// Both cases are merged into one list so every negative-qty item, wherever it
+// comes from, shows up here with its actual negative number.
 function fbGetUnstockedBilledItems(){
   const map = new Map();
   (fbBills||[]).forEach(b=>{
     (b.items||[]).forEach(it=>{
       const desc = (it.desc||'').trim();
       if(!desc) return;
-      if(fbFindStockItemByName(desc)) return; // tracked in stock — belongs to the normal Out list, not here
+      if(fbFindStockItemByName(desc)) return; // tracked in Stock — handled by negativeStock below instead
       const qty = parseFloat(it.qty)||0;
       const key = desc.toLowerCase();
       if(!map.has(key)) map.set(key, { name: desc, qty: 0, bills: new Set() });
       const rec = map.get(key);
-      rec.qty += qty;
+      rec.qty -= qty; // net position is negative — nothing was ever added to stock for this item
       rec.bills.add(b.billNo!=null ? String(b.billNo) : b.id);
     });
   });
-  return Array.from(map.values()).map(r=>({ name:r.name, qty:r.qty, billsCount:r.bills.size }));
+  const untracked = Array.from(map.values()).map(r=>({ name:r.name, qty:r.qty, billsCount:r.bills.size }));
+  const negativeStock = fbStockItems.filter(s=>(s.currentQty||0)<0).map(s=>{
+    const billsCount = new Set(fbStockMovements.filter(m=>m.stockItemId===s.id && m.type==='sale' && m.ref).map(m=>m.ref)).size;
+    return { name: s.name, qty: s.currentQty||0, billsCount };
+  });
+  return [...negativeStock, ...untracked].sort((a,b)=> a.qty - b.qty); // most negative first
 }
 // Builds the list of sections to show/export based on the current tick state.
 function fbGetStockAvailSections(){
@@ -21936,8 +22054,8 @@ function fbGetStockAvailSections(){
   }
   if(fbStockAvailSel.out){
     if(fbStockAvailOutMode==='billed'){
-      sections.push({ key:'out-billed', emoji:'❌', title:'Out of Stock — Billed but Not in Stock List', kind:'billed',
-        rows: fbGetUnstockedBilledItems().sort((a,b)=>(a.name||'').localeCompare(b.name||'')) });
+      sections.push({ key:'out-billed', emoji:'❌', title:'Out of Stock — Negative Qty (Stock list ya sirf bill se, jo bhi minus mein hai)', kind:'billed',
+        rows: fbGetUnstockedBilledItems() });
     } else {
       sections.push({ key:'out-full', emoji:'❌', title:'Out of Stock — Full', kind:'stock',
         rows: fbGetStockAvailRows('out').sort((a,b)=>(a.name||'').localeCompare(b.name||'')) });
@@ -21949,11 +22067,11 @@ function fbStockAvailSectionHTML(s){
   const head = `<div style="font-weight:700;margin:10px 0 4px;">${s.emoji} ${s.title} (${s.rows.length})</div>`;
   if(!s.rows.length) return head + `<div style="color:var(--text3);font-size:12px;margin-bottom:8px;">Koi item nahi.</div>`;
   if(s.kind==='billed'){
-    return head + `<table class="items-table"><thead><tr><th>#</th><th>Item</th><th style="width:130px;">Total Qty Billed</th><th style="width:110px;">Bills Count</th></tr></thead><tbody>
+    return head + `<table class="items-table"><thead><tr><th>#</th><th>Item</th><th style="width:130px;">Net Qty</th><th style="width:110px;">Bills Count</th></tr></thead><tbody>
       ${s.rows.map((r,i)=>`<tr>
         <td style="color:var(--text3);">${i+1}</td>
         <td>${(r.name||'').replace(/</g,'&lt;')}</td>
-        <td style="text-align:right;font-weight:700;color:var(--neon5);">${r.qty}</td>
+        <td style="text-align:right;font-weight:700;color:${(r.qty||0)<0?'var(--neon5)':'var(--text2)'};">${r.qty}</td>
         <td style="text-align:right;color:var(--text3);">${r.billsCount}</td>
       </tr>`).join('')}
       </tbody></table>`;
@@ -22007,7 +22125,7 @@ function fbDownloadStockAvailPDF(){
     if(s.kind==='billed'){
       doc.autoTable({
         startY:y,
-        head:[['#','Item','Total Qty Billed','Bills Count']],
+        head:[['#','Item','Net Qty','Bills Count']],
         body: s.rows.map((r,i)=>[i+1, r.name||'', r.qty, r.billsCount]),
         styles:{fontSize:9}, headStyles:{fillColor:[20,20,40]}
       });
@@ -22048,7 +22166,7 @@ async function fbDownloadStockAvailExcel(){
     { header:'Current Qty', width:13 }, { header:'Low Alert At', width:13 }, { header:'Location', width:16 }
   ];
   const billedCols = [
-    { header:'#', width:5 }, { header:'Item', width:36 }, { header:'Total Qty Billed', width:16 }, { header:'Bills Count', width:13 }
+    { header:'#', width:5 }, { header:'Item', width:36 }, { header:'Net Qty', width:16 }, { header:'Bills Count', width:13 }
   ];
   const maxCols = 6;
 
@@ -22588,6 +22706,7 @@ function fbDownloadFullStockValuePDF(){
 }
 function fbRenderStock(){
   fbPopulateStockDatalist();
+  fbPopulateStockSourceList();
   fbPopulateStockMoveFilter();
   const cardsWrap = document.getElementById('fb-stock-summary-cards');
   if(cardsWrap){
@@ -22677,11 +22796,22 @@ function fbDeleteStockItem(idx){
   fbRenderStock();
 }
 // Records a movement and applies it to the item's currentQty. qtyDelta can be +/-.
-function fbApplyStockMovement(stockItemId, qtyDelta, type, date, note, ref){
+// `source` records WHERE the stock came from (e.g. "Fast Company", or a saved
+// party/customer name) — only meaningful for purchase/adjustment entries, but
+// harmless to pass for others (sale/return movements just leave it blank).
+function fbApplyStockMovement(stockItemId, qtyDelta, type, date, note, ref, source){
   const item = fbStockItems.find(s=>s.id===stockItemId);
   if(!item || !qtyDelta) return;
   item.currentQty = (item.currentQty||0) + qtyDelta;
-  fbStockMovements.push({ id: fbUid(), stockItemId, type, qty: qtyDelta, date: date||new Date().toISOString().slice(0,10), time: fbNowTime(), note: note||'', ref: ref||'' });
+  fbStockMovements.push({ id: fbUid(), stockItemId, type, qty: qtyDelta, date: date||new Date().toISOString().slice(0,10), time: fbNowTime(), note: note||'', ref: ref||'', source: source||'' });
+}
+// Datalist suggestions for the Adjust Stock "Source" box: "Fast Company" first
+// (the default/most common source), then every saved Fast Billing party name.
+function fbPopulateStockSourceList(){
+  const dl = document.getElementById('fb-stock-source-list');
+  if(!dl) return;
+  const names = ['Fast Company', ...fbCustomers.map(c=>c.name).filter(Boolean)];
+  dl.innerHTML = [...new Set(names)].map(n=>`<option value="${n.replace(/"/g,'&quot;')}">`).join('');
 }
 function fbAdjustStock(){
   const nameEl = document.getElementById('fb-stock-adj-item');
@@ -22689,19 +22819,21 @@ function fbAdjustStock(){
   const type = document.getElementById('fb-stock-adj-type')?.value || 'purchase';
   const qty = parseFloat(document.getElementById('fb-stock-adj-qty')?.value) || 0;
   const note = (document.getElementById('fb-stock-adj-note')?.value||'').trim();
+  const source = (document.getElementById('fb-stock-adj-source')?.value||'').trim() || 'Fast Company';
   if(!name){ toast('Enter a stock item name','warning'); return; }
   if(!qty || qty<=0){ toast('Enter a qty greater than 0','warning'); return; }
   let item = fbFindStockItemByName(name);
   if(!item){ item = {id: fbUid(), name, unit:'Pcs', currentQty:0, minQty:0, notes:''}; fbApplyUnitAlertDefaultToItem(item); fbStockItems.push(item); }
   const delta = (type==='adjustment_remove') ? -qty : qty;
-  fbApplyStockMovement(item.id, delta, type, new Date().toISOString().slice(0,10), note, '');
+  fbApplyStockMovement(item.id, delta, type, new Date().toISOString().slice(0,10), note, '', source);
   saveFbStockItems();
   saveFbStockMovements();
   if(nameEl) nameEl.value = '';
   const qtyEl = document.getElementById('fb-stock-adj-qty'); if(qtyEl) qtyEl.value = '';
   const noteEl = document.getElementById('fb-stock-adj-note'); if(noteEl) noteEl.value = '';
+  const srcEl = document.getElementById('fb-stock-adj-source'); if(srcEl) srcEl.value = 'Fast Company';
   fbRenderStock();
-  toast('✅ Stock updated for "'+item.name+'"','success');
+  toast('✅ Stock updated for "'+item.name+'" — Source: '+source,'success');
 }
 // Only Admin (logged in as role:'admin' in Security) can edit/delete a stock
 // movement history entry — everyone else just sees the read-only history.
@@ -22718,7 +22850,7 @@ function fbCancelEditStockMovement(){
   fbStockMoveEditingId = null;
   fbRenderStockMovements();
 }
-function fbSaveStockMovementEdit(id, newDate, newNote, newQty){
+function fbSaveStockMovementEdit(id, newDate, newNote, newQty, newSource){
   if(!fbIsAdmin()){ toast('Sirf Admin hi edit kar sakta hai','warning'); return; }
   const m = fbStockMovements.find(x=>x.id===id);
   if(!m) return;
@@ -22731,6 +22863,7 @@ function fbSaveStockMovementEdit(id, newDate, newNote, newQty){
   m.qty = qty;
   m.date = newDate;
   m.note = (newNote||'').trim();
+  if(newSource!==undefined) m.source = (newSource||'').trim();
   saveFbStockMovements();
   saveFbStockItems();
   fbStockMoveEditingId = null;
@@ -22767,19 +22900,24 @@ function fbRenderStockMovements(){
   if(!list.length){ wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;">No stock movements yet.</div>'; return; }
   const typeLabel = {purchase:'➕ Purchase', sale:'➖ Sale (Bill)', adjustment_add:'➕ Correction', adjustment_remove:'➖ Correction', reversal:'↩️ Reversal', return:'↩️ Customer Return'};
   const admin = fbIsAdmin();
-  wrap.innerHTML = `<table class="items-table"><thead><tr><th>Date</th><th>Item</th><th>Type</th><th style="text-align:right;">Qty</th><th>Note / Ref</th>${admin?'<th style="width:80px;"></th>':''}</tr></thead><tbody>
+  // Purchases/corrections always have a source (defaults to "Fast Company" for
+  // older entries recorded before this field existed); sales/returns are tied
+  // to a bill instead, so their Source column just shows a dash.
+  const sourceOf = (m)=> (m.type==='purchase' || m.type==='adjustment_add' || m.type==='adjustment_remove') ? (m.source || 'Fast Company') : '-';
+  wrap.innerHTML = `<table class="items-table"><thead><tr><th>Date</th><th>Item</th><th>Type</th><th style="text-align:right;">Qty</th><th>Source</th><th>Note / Ref</th>${admin?'<th style="width:80px;"></th>':''}</tr></thead><tbody>
     ${list.map(m=>{
       const item = fbStockItems.find(s=>s.id===m.stockItemId);
       if(admin && fbStockMoveEditingId===m.id){
-        const qid='fb-mv-q-'+m.id, did='fb-mv-d-'+m.id, nid='fb-mv-n-'+m.id;
+        const qid='fb-mv-q-'+m.id, did='fb-mv-d-'+m.id, nid='fb-mv-n-'+m.id, sid='fb-mv-s-'+m.id;
         return `<tr style="background:rgba(0,255,200,0.05);">
         <td><input type="date" id="${did}" value="${m.date||''}" style="width:130px;"></td>
         <td>${item ? item.name : '(deleted item)'}</td>
         <td>${typeLabel[m.type]||m.type}</td>
         <td><input type="number" step="any" id="${qid}" value="${m.qty}" style="width:80px;text-align:right;"></td>
+        <td><input type="text" id="${sid}" value="${(m.source||'Fast Company').replace(/"/g,'&quot;')}" list="fb-stock-source-list" style="width:120px;" placeholder="Source"></td>
         <td><input type="text" id="${nid}" value="${(m.note||'').replace(/"/g,'&quot;')}" style="width:100%;" placeholder="Note"></td>
         <td style="white-space:nowrap;">
-          <button type="button" class="btn btn-xs btn-green" title="Save" onclick="fbSaveStockMovementEdit('${m.id}', document.getElementById('${did}').value, document.getElementById('${nid}').value, document.getElementById('${qid}').value)">💾</button>
+          <button type="button" class="btn btn-xs btn-green" title="Save" onclick="fbSaveStockMovementEdit('${m.id}', document.getElementById('${did}').value, document.getElementById('${nid}').value, document.getElementById('${qid}').value, document.getElementById('${sid}').value)">💾</button>
           <button type="button" class="btn btn-xs" title="Cancel" onclick="fbCancelEditStockMovement()">✖️</button>
         </td>
         </tr>`;
@@ -22789,11 +22927,12 @@ function fbRenderStockMovements(){
       <td>${item ? item.name : '(deleted item)'}</td>
       <td>${typeLabel[m.type]||m.type}</td>
       <td style="text-align:right;color:${m.qty<0?'var(--neon5)':'var(--neon4)'};font-weight:700;">${m.qty>0?'+':''}${m.qty}</td>
+      <td style="font-size:11px;color:var(--text3);">${sourceOf(m)}</td>
       <td style="font-size:11px;color:var(--text3);">${[m.note, m.ref?('Ref: '+m.ref):''].filter(Boolean).join(' — ')}</td>
       ${admin?`<td style="white-space:nowrap;"><button type="button" class="btn btn-xs" title="Edit (Admin)" onclick="fbEditStockMovement('${m.id}')">✏️</button> <button type="button" class="btn btn-xs btn-red" title="Delete (Admin)" onclick="fbDeleteStockMovementEntry('${m.id}')">🗑️</button></td>`:''}
     </tr>`;
     }).join('')}
-  </tbody></table>${admin?'<div style="font-size:11px;color:var(--text3);margin-top:6px;">✏️ Yeh edit option sirf Admin ko dikhta hai. Date change karke Save karte hi list us date ke hisab se dobara (newest-first) sort ho jaati hai.</div>':''}`;
+  </tbody></table>${admin?'<div style="font-size:11px;color:var(--text3);margin-top:6px;">✏️ Yeh edit option sirf Admin ko dikhta hai. Date/Source change karke Save karte hi list us date ke hisab se dobara (newest-first) sort ho jaati hai.</div>':''}`;
 }
 // Reconciles stock for a bill's items against what was previously deducted for
 // that same bill: reverses old items' deductions (if any), then deducts for
@@ -22975,6 +23114,108 @@ function fbExportLedgerPDFRange(){
   const to = (document.getElementById('fb-ledger-pdf-to')||{}).value || '';
   if(!from && !to){ toast('Pick at least a From or To date','warning'); return; }
   fbExportLedgerPDFCore(from, to);
+}
+
+// ---- Full Ledger — ALL parties, one bill per line, in a single PDF table ----
+// Every bill (across every customer) becomes one row with: bill no, date,
+// status, shop, customer, phone, ref#, a multi-line items breakdown
+// (desc / qty / rate / amount for each item), grand total, a multi-line
+// return-items breakdown (if any), returned amount, paid amount, and the
+// remaining balance (bakaya). autoTable wraps long cell text onto multiple
+// lines automatically, so the row simply grows taller to fit everything —
+// no data gets cut off.
+function fbBillStatusText(b){
+  const paidAmt = b.paidAmount||0;
+  if(b.isSample) return b.sampleStatus==='returned' ? 'Sample (Returned)' : 'Sample';
+  if(paidAmt >= b.total) return 'Paid';
+  if(paidAmt > 0) return `Partial (${fmt(paidAmt)}/${fmt(b.total)})`;
+  return 'Pending';
+}
+function fbBillItemsLines(items){
+  return (items||[]).map(it=>{
+    const qty = parseFloat(it.qty)||0, rate = parseFloat(it.rate)||0;
+    return `${it.desc||''} — Qty:${qty} x ${fmt(rate)} = ${fmt(qty*rate)}`;
+  }).join('\n') || '-';
+}
+function fbBillReturnLines(bill){
+  if(!bill.returns || !bill.returns.length) return '-';
+  const lines = [];
+  bill.returns.forEach(r=>{
+    (r.items||[]).forEach(it=>{
+      const qty = parseFloat(it.qty)||0, rate = parseFloat(it.rate)||0;
+      lines.push(`${it.desc||''} — Qty:${qty} x ${fmt(rate)} = ${fmt(qty*rate)}${r.date?'  ('+fmtDate(r.date)+')':''}`);
+    });
+  });
+  return lines.length ? lines.join('\n') : '-';
+}
+function fbExportFullLedgerAllPartiesPDF(){
+  const from = (document.getElementById('fb-fullledger-from')||{}).value || '';
+  const to = (document.getElementById('fb-fullledger-to')||{}).value || '';
+  let list = fbBills.slice().sort((a,b)=> (a.date||'').localeCompare(b.date||'') || String(a.billNo).localeCompare(String(b.billNo)));
+  if(from) list = list.filter(b=> (b.date||'') >= from);
+  if(to) list = list.filter(b=> (b.date||'') <= to);
+  if(!list.length){ toast('Is range mein koi bill nahi mila','warning'); return; }
+  const doc = new jspdf.jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+  const hdr0 = fbHdr('bill');
+  doc.setFontSize(16); doc.setFont(undefined,'bold'); doc.setTextColor(255,106,0);
+  doc.text(hdr0.name, 14, 14);
+  doc.setFontSize(9); doc.setFont(undefined,'normal'); doc.setTextColor(80,80,80);
+  doc.text(hdr0.addr+'  |  Ph: '+hdr0.phone, 14, 19);
+  doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
+  doc.text('Full Ledger — All Parties (every bill, one line each)', 14, 27);
+  doc.setFontSize(8); doc.setFont(undefined,'normal');
+  doc.text(from||to ? `Date range: ${from||'start'} to ${to||'today'}` : 'All bills (no date filter)', 14, 32);
+
+  let grandTotalAll = 0, grandReturnedAll = 0, grandPaidAll = 0, grandBalanceAll = 0;
+  const body = list.map(b=>{
+    const paidAmt = b.isSample ? 0 : (b.paidAmount||0);
+    const returnedAmt = fbBillReturnedAmount(b);
+    const balance = b.isSample ? 0 : Math.max(0, (b.total||0) - paidAmt - returnedAmt);
+    grandTotalAll += (b.isSample?0:(b.total||0));
+    grandReturnedAll += returnedAmt;
+    grandPaidAll += paidAmt;
+    grandBalanceAll += balance;
+    return [
+      b.billNo||'',
+      fmtDate(b.date),
+      fbBillStatusText(b),
+      b.shopName||'',
+      b.customerName||'',
+      b.phone||'',
+      b.refNo||'',
+      fbBillItemsLines(b.items),
+      fmt(b.total),
+      fbBillReturnLines(b),
+      returnedAmt ? fmt(returnedAmt) : '-',
+      fmt(paidAmt),
+      fmt(balance)
+    ];
+  });
+  doc.autoTable({
+    startY: 37,
+    head: [['Bill #','Date','Status','Shop','Customer','Phone','Ref #','Items (Desc / Qty / Rate / Amount)','Grand Total','Returned Items (Desc / Qty / Amount)','Returned Amt','Paid','Balance (Bakaya)']],
+    body,
+    styles:{ fontSize:7, cellPadding:2, valign:'top', overflow:'linebreak' },
+    headStyles:{ fillColor:[255,106,0], fontSize:7.5 },
+    alternateRowStyles:{ fillColor:[250,245,240] },
+    columnStyles:{
+      0:{cellWidth:12}, 1:{cellWidth:16}, 2:{cellWidth:18}, 3:{cellWidth:18}, 4:{cellWidth:20},
+      5:{cellWidth:16}, 6:{cellWidth:14}, 7:{cellWidth:52}, 8:{cellWidth:16,halign:'right'},
+      9:{cellWidth:48}, 10:{cellWidth:16,halign:'right'}, 11:{cellWidth:14,halign:'right'}, 12:{cellWidth:16,halign:'right'}
+    },
+    didParseCell: function(data){
+      if(data.section==='body' && (data.column.index===8 || data.column.index===12)){
+        data.cell.styles.fontStyle = 'bold';
+      }
+    }
+  });
+  const y = doc.lastAutoTable.finalY + 8;
+  doc.setFontSize(9); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
+  doc.text(`Grand Total (all bills): ${fmt(grandTotalAll)}   |   Total Returned: ${fmt(grandReturnedAll)}   |   Total Paid: ${fmt(grandPaidAll)}   |   Total Balance (Bakaya): ${fmt(grandBalanceAll)}`, 14, y);
+  doc.setFontSize(7.5); doc.setFont(undefined,'normal'); doc.setTextColor(120,120,120);
+  doc.text(`Generated: ${new Date().toLocaleDateString()} ${formatTime12(new Date())}`, 14, y+7);
+  doc.save(`Full_Ledger_All_Parties${from||to?('_'+(from||'')+'_'+(to||'')):''}.pdf`);
+  toast('📄 Full Ledger (All Parties) PDF generated','success');
 }
 
 // ---- Print: Thermal + A4, both with shop address in the footer ----
