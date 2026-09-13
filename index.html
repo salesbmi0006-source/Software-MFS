@@ -485,6 +485,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
     <div class="tab-group-label">Finance</div>
     <div class="tab" onclick="showTab('cheques')" id="tab-cheques" style="display:none;">🏦 Cheques</div>
     <div class="tab" onclick="showTab('salesreturns')" id="tab-salesreturns">🔄 Sales Returns</div>
+    <div class="tab" onclick="showTab('returnreceipts')" id="tab-returnreceipts">🧾 Return Receipts</div>
     <div class="tab" onclick="showTab('bank')" id="tab-bank">🏛️ Bank</div>
     <div class="tab" onclick="showTab('expenses')" id="tab-expenses">💸 Expenses</div>
     <div class="tab" onclick="showTab('pantry')" id="tab-pantry">🍵 Pantry</div>
@@ -862,6 +863,67 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
     </div>
     <div style="font-size:11px;color:var(--text3);margin-top:8px;">Saving a Sales Return automatically creates a <strong>Credit Note</strong> ledger entry (reduces party's outstanding balance) and adds the returned quantity back into <strong>Stock</strong> (matched by item name).</div>
   </div>
+</div>
+
+<!-- ====== RETURN RECEIPTS TAB (goods physically received back from a party) ====== -->
+<div class="tab-panel" id="panel-returnreceipts">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">🧾 Return Receipts — Goods Received Back</div>
+      <button class="btn btn-green btn-sm" onclick="openReturnReceiptModal()">➕ New Return Receipt</button>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="rr-search" placeholder="Search Receipt No, party, DC/Invoice..." oninput="renderReturnReceiptsTab()" style="max-width:320px;">
+    </div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>Receipt No</th><th>Date</th><th>Party</th><th>Against DC/Invoice</th><th>Items</th><th>Received By</th><th>Actions</th></tr></thead>
+      <tbody id="rrTbody"></tbody></table>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:8px;">Use this when a customer physically brings goods back — record what was received and print them a signed receipt (Thermal or A4). Item descriptions can be picked from the <strong>Item Descriptions Master List</strong> or typed manually; manually typed descriptions here are used on the receipt only and are <strong>not</strong> saved to the master list.</div>
+  </div>
+</div>
+
+<!-- NEW RETURN RECEIPT MODAL -->
+<div class="modal-overlay" id="returnReceiptModal">
+<div class="modal modal-lg">
+  <div class="modal-header"><h3 id="rrModalTitle">➕ New Return Receipt</h3><button class="close-btn" onclick="closeModal('returnReceiptModal')">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="rr-edit-id" value="">
+    <div class="form-row">
+      <div class="form-group"><label>Receipt No</label><input type="text" id="rr-receiptno" placeholder="Auto"></div>
+      <div class="form-group"><label>Date *</label><input type="date" id="rr-date"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Party *</label><input type="text" id="rr-party" list="rr-party-list" placeholder="Party name"><datalist id="rr-party-list"></datalist></div>
+      <div class="form-group"><label>Against DC/Invoice No (optional)</label><input type="text" id="rr-refno" placeholder="e.g. 1997 or 517"></div>
+    </div>
+    <div class="form-group"><label>Received By</label><input type="text" id="rr-receivedby" placeholder="Person who received the goods"></div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th style="width:38%;">Description</th><th>UOM</th><th>Qty</th><th>Notes</th><th></th></tr></thead>
+      <tbody id="rr-items-tbody"></tbody></table>
+    </div>
+    <button type="button" class="btn btn-neon btn-sm" onclick="addRRItemRow()" style="margin-top:6px;">➕ Add Item</button>
+    <div class="form-group" style="margin-top:10px;"><label>Reason / Notes</label><textarea id="rr-reason" rows="2" placeholder="Why the goods were returned..."></textarea></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="saveReturnReceipt()">💾 Save</button>
+    <button class="btn btn-neon" onclick="closeModal('returnReceiptModal')">Cancel</button>
+  </div>
+</div>
+</div>
+
+<!-- RETURN RECEIPT PRINT PREVIEW MODAL -->
+<div class="modal-overlay" id="rrPreviewModal">
+<div class="modal modal-lg">
+  <div class="modal-header"><h3 id="rr-preview-title">📄 Return Receipt Preview</h3><button class="close-btn" onclick="closeModal('rrPreviewModal')">✕</button></div>
+  <div class="modal-body">
+    <div class="flex-gap mb-8">
+      <button class="btn btn-green btn-sm" onclick="printReturnReceipt('a4')">🖨️ Print (A4)</button>
+      <button class="btn btn-purple btn-sm" onclick="printReturnReceipt('thermal')">🖨️ Print (Thermal)</button>
+    </div>
+    <div id="rr-preview-frame" style="background:#f5f5f5;padding:16px;border-radius:8px;min-height:300px;"></div>
+  </div>
+</div>
 </div>
 
 <!-- ====== HS CODES TAB ====== -->
@@ -4942,7 +5004,7 @@ async function buildFullBackupData(){
     digitalInvoices: diWithPdf,
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
     savedQuotations, quotSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
-    stockItems, stockMovements, salesReturns, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
+    stockItems, stockMovements, salesReturns, returnReceipts, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     fbCustomers, fbBills, fbQuotations, fbLedger, fbSettings, fbDescriptions, fbStockItems, fbStockMovements,
     documentManager: docsWithBlob,
     securityData: (typeof securityData!=='undefined'?securityData:null),
@@ -5130,7 +5192,7 @@ function buildCloudSyncData(){
     db, cheques, ledgerData, fbrParties, descMaster, settings, partyOpeningBalances,
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
     savedQuotations, quotSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
-    stockItems, stockMovements, salesReturns, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
+    stockItems, stockMovements, salesReturns, returnReceipts, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     fbCustomers, fbBills, fbQuotations, fbLedger, fbSettings, fbDescriptions, fbStockItems, fbStockMovements,
     securityData: (typeof securityData!=='undefined'?securityData:null),
     updatedAt: new Date().toISOString(),
@@ -5878,6 +5940,7 @@ async function applyRestoredBackupData(data){
   if(data.stockItems) { stockItems = data.stockItems; saveStockItems(); }
   if(data.stockMovements) { stockMovements = data.stockMovements; saveStockMovements(); }
   if(data.salesReturns) { salesReturns = data.salesReturns; saveSalesReturns(); }
+  if(data.returnReceipts) { returnReceipts = data.returnReceipts; saveReturnReceiptsData(); }
   if(data.purchaseOrders) { purchaseOrders = data.purchaseOrders; savePurchaseOrders(); }
   if(data.partyPaymentTerms) { partyPaymentTerms = data.partyPaymentTerms; savePartyPaymentTerms(); }
   if(data.visitLogs) { visitLogs = data.visitLogs; saveVisitLogsToStorage(); }
@@ -6585,6 +6648,7 @@ function renderTabContent(id){
   if(id==='sendcenter') renderSendCenter();
   if(id==='stock') renderStockTab();
   if(id==='salesreturns') renderSalesReturnsTab();
+  if(id==='returnreceipts') renderReturnReceiptsTab();
   if(id==='purchaseorders') renderPOTab();
   if(id==='warehouses') renderWarehousesTab();
   if(id==='expenses') renderExpensesTab();
@@ -6649,6 +6713,7 @@ const MOBILE_MORE_GROUPS = [
   ]},
   {label:'Finance', tabs:[
     {id:'cheques',label:'Cheques',icon:'🏦'},{id:'salesreturns',label:'Sales Returns',icon:'🔄'},
+    {id:'returnreceipts',label:'Return Receipts',icon:'🧾'},
     {id:'bank',label:'Bank',icon:'🏛️'},{id:'expenses',label:'Expenses',icon:'💸'},
     {id:'pantry',label:'Pantry',icon:'🍵'},{id:'receipts',label:'Receipts',icon:'🧾'}
   ]},
@@ -10224,6 +10289,7 @@ function init(){
   loadAutoNumberSettings();
   loadStockModule();
   loadSalesReturns();
+  loadReturnReceipts();
   loadPurchaseOrders();
   loadPartyPaymentTerms();
   loadVisitLogs();
@@ -16440,6 +16506,183 @@ function renderSalesReturnsTab(){
     <td>${r.reason||'-'}</td>
     <td><button class="btn btn-xs btn-neon" onclick="viewSalesReturn('${r.id}')">🔍</button> <button class="btn btn-xs btn-red" onclick="deleteSalesReturn('${r.id}')">🗑️</button></td>
   </tr>`).join('') : '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:20px;">No sales returns / credit notes yet</td></tr>';
+}
+
+// ==================== RETURN RECEIPTS MODULE ====================
+// Records goods physically received back from a party (customer brings something
+// back, we receive it and print them a signed receipt). Independent of the
+// Sales Return / Credit Note module above — this does NOT touch the ledger or
+// stock; it's purely a receiving-slip / proof-of-receipt record. Item
+// descriptions can be picked from the shared Item Descriptions Master List
+// datalist, or typed manually — manual entries here are intentionally never
+// pushed into descMaster (ensureDescInMaster is never called from this module),
+// so the master list is only ever grown from DC/Quotation entries as before.
+let returnReceipts = [];
+let currentRRItems = [];
+function loadReturnReceipts(){
+  const d = localStorage.getItem('sau_return_receipts');
+  returnReceipts = d ? JSON.parse(d) : [];
+}
+function saveReturnReceiptsData(){ safeSetItem('sau_return_receipts', JSON.stringify(returnReceipts)); }
+function nextReturnReceiptNo(){
+  const nums = returnReceipts.map(r=>parseInt((r.receiptNo||'').replace(/\D/g,''))||0);
+  const next = (nums.length?Math.max(...nums):0)+1;
+  return 'RR-'+next;
+}
+function openReturnReceiptModal(){
+  document.getElementById('rr-edit-id').value = '';
+  document.getElementById('rrModalTitle').textContent = '➕ New Return Receipt';
+  document.getElementById('rr-receiptno').value = nextReturnReceiptNo();
+  document.getElementById('rr-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('rr-party').value = '';
+  document.getElementById('rr-refno').value = '';
+  document.getElementById('rr-receivedby').value = '';
+  document.getElementById('rr-reason').value = '';
+  currentRRItems = [];
+  renderRRItemsTable();
+  const dl = document.getElementById('rr-party-list');
+  if(dl) dl.innerHTML = fbrParties.map(p=>`<option value="${p.partyName}">`).join('');
+  if(typeof populateDescList==='function') populateDescList(); // reuse #desc-master-list datalist for suggestions only
+  openModal('returnReceiptModal');
+}
+function addRRItemRow(){
+  currentRRItems.push({desc:'', uom:settings.defaultUom||'Pcs', qty:1, notes:''});
+  renderRRItemsTable();
+}
+function removeRRItemRow(i){
+  currentRRItems.splice(i,1);
+  renderRRItemsTable();
+}
+function updateRRItem(i, field, val){
+  currentRRItems[i][field] = field==='qty' ? (parseFloat(val)||0) : val;
+}
+function renderRRItemsTable(){
+  const tbody = document.getElementById('rr-items-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = currentRRItems.map((it,i)=>`<tr>
+    <td><input type="text" value="${(it.desc||'').replace(/"/g,'&quot;')}" list="desc-master-list" oninput="updateRRItem(${i},'desc',this.value)" style="width:100%;min-width:160px;" placeholder="Pick from master list or type new"></td>
+    <td><input type="text" value="${(it.uom||'').replace(/"/g,'&quot;')}" oninput="updateRRItem(${i},'uom',this.value)" style="width:60px;"></td>
+    <td><input type="number" value="${it.qty}" min="0" oninput="updateRRItem(${i},'qty',this.value)" style="width:70px;"></td>
+    <td><input type="text" value="${(it.notes||'').replace(/"/g,'&quot;')}" oninput="updateRRItem(${i},'notes',this.value)" style="width:100%;min-width:100px;" placeholder="e.g. damaged, wrong item"></td>
+    <td><button type="button" class="btn btn-xs btn-red" onclick="removeRRItemRow(${i})">🗑️</button></td>
+  </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:10px;">No items added — use "➕ Add Item"</td></tr>';
+}
+function saveReturnReceipt(){
+  const party = document.getElementById('rr-party').value.trim();
+  const receiptNo = document.getElementById('rr-receiptno').value.trim();
+  const date = document.getElementById('rr-date').value;
+  const refNo = document.getElementById('rr-refno').value.trim();
+  const receivedBy = document.getElementById('rr-receivedby').value.trim();
+  const reason = document.getElementById('rr-reason').value.trim();
+  if(!party){ toast('Party name required','warning'); return; }
+  if(!receiptNo){ toast('Receipt No required','warning'); return; }
+  if(!date){ toast('Date required','warning'); return; }
+  const validItems = currentRRItems.filter(it=>(it.desc||'').trim() && it.qty>0);
+  if(!validItems.length){ toast('Add at least one returned item (with description & qty)','warning'); return; }
+  // Deliberately NOT calling ensureDescInMaster() here — descriptions typed in
+  // this tab are used on the receipt only and must not grow the master list.
+  const rec = {id:'RR'+uid(), receiptNo, partyName:party, refNo, date, receivedBy, reason, items:JSON.parse(JSON.stringify(validItems))};
+  returnReceipts.push(rec);
+  saveReturnReceiptsData();
+  logAudit('create','Return Receipt',`Return Receipt ${receiptNo} for ${party}`, undefined, rec);
+  closeModal('returnReceiptModal');
+  renderReturnReceiptsTab();
+  toast(`Return Receipt ${receiptNo} saved`,'success');
+}
+function deleteReturnReceipt(id){
+  if(!confirm('Delete this Return Receipt?')) return;
+  const rec = returnReceipts.find(r=>r.id===id);
+  if(rec) logAudit('delete','Return Receipt',`Return Receipt ${rec.receiptNo} deleted`, rec, undefined);
+  returnReceipts = returnReceipts.filter(r=>r.id!==id);
+  saveReturnReceiptsData();
+  renderReturnReceiptsTab();
+  toast('Return Receipt deleted','warning');
+}
+function renderReturnReceiptsTab(){
+  const q = (document.getElementById('rr-search')?.value||'').toLowerCase();
+  let list = returnReceipts.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  if(q) list = list.filter(r=>[r.receiptNo,r.partyName,r.refNo].join(' ').toLowerCase().includes(q));
+  const tbody = document.getElementById('rrTbody');
+  if(!tbody) return;
+  tbody.innerHTML = list.length ? list.map(r=>`<tr>
+    <td><strong>${r.receiptNo}</strong></td>
+    <td>${fmtDate(r.date)}</td>
+    <td>${r.partyName}</td>
+    <td>${r.refNo||'-'}</td>
+    <td>${r.items.length}</td>
+    <td>${r.receivedBy||'-'}</td>
+    <td><button class="btn btn-xs btn-neon" onclick="previewReturnReceipt('${r.id}')">🔍</button> <button class="btn btn-xs btn-red" onclick="deleteReturnReceipt('${r.id}')">🗑️</button></td>
+  </tr>`).join('') : '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px;">No return receipts yet</td></tr>';
+}
+
+// ---- Print (Thermal + A4), same visual system as Bill/Quotation printing ----
+let currentRRPreview = null;
+function buildReturnReceiptHTML(rec, printSize){
+  const isThermal = printSize==='thermal';
+  const fs = isThermal ? 11 : parseInt(quotSettings.fontSize||11);
+  let companyInfoLines = [];
+  if(settings.ntn) companyInfoLines.push(`NTN: ${settings.ntn}`);
+  if(settings.strn) companyInfoLines.push(`STRN: ${settings.strn}`);
+  if(settings.phone) companyInfoLines.push(settings.phone);
+  const addressLine = settings.address ? `<div style="font-size:${fs-2}px;">${(settings.address||'').replace(/\n/g,' ')}</div>` : '';
+  const companyInfo = `${companyInfoLines.length ? `<div style="font-size:${fs-2}px;">${companyInfoLines.join(' | ')}</div>` : ''}${addressLine}`;
+  const rows = (rec.items||[]).map((it,i)=>`<tr style="border-bottom:1px solid #eee;">
+      <td style="padding:3px 5px;">${i+1}</td>
+      <td style="padding:3px 5px;max-width:${isThermal?'140px':'260px'};">${it.desc}</td>
+      <td style="padding:3px 5px;text-align:center;">${it.uom||''}</td>
+      <td style="padding:3px 5px;text-align:right;">${it.qty}</td>
+      <td style="padding:3px 5px;">${it.notes||''}</td>
+    </tr>`).join('');
+  const width = isThermal ? `${quotSettings.thermalWidth||80}mm` : '190mm';
+  return `<div style="font-family:Arial,sans-serif;font-size:${fs}px;width:${width};max-width:${width};margin:0 auto;padding:${quotSettings.margin||10}mm;">
+    <div style="text-align:center;margin-bottom:8px;">
+      ${settings.logoBase64?`<img src="${settings.logoBase64}" style="max-height:${isThermal?'40px':'55px'};max-width:160px;margin-bottom:4px;">`:''}
+      <div style="font-size:${fs+4}px;font-weight:bold;">${settings.companyName||'SAU CORPORATION'}</div>
+      ${companyInfo}
+    </div>
+    <div style="text-align:center;font-size:${fs+2}px;font-weight:bold;border-top:2px solid #000;border-bottom:2px solid #000;padding:4px;margin:6px 0;">GOODS RETURN RECEIPT</div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:${fs}px;">
+      <div><strong>Received From:</strong> ${rec.partyName}</div>
+      <div style="text-align:right;"><strong>Receipt #:</strong> ${rec.receiptNo}<br><strong>Date:</strong> ${fmtDate(rec.date)}</div>
+    </div>
+    ${rec.refNo?`<div style="font-size:${fs}px;margin-bottom:6px;"><strong>Against DC/Invoice:</strong> ${rec.refNo}</div>`:''}
+    <table style="width:100%;border-collapse:collapse;font-size:${fs}px;margin-top:6px;">
+      <thead><tr style="background:#f0f0f0;">
+        <th style="padding:4px 5px;">#</th><th style="padding:4px 5px;">Description</th>
+        <th style="padding:4px 5px;">UOM</th><th style="padding:4px 5px;">Qty</th><th style="padding:4px 5px;">Notes</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    ${rec.reason?`<div style="margin-top:8px;font-size:${fs}px;"><strong>Reason:</strong> ${rec.reason}</div>`:''}
+    <div style="display:flex;justify-content:space-between;margin-top:${isThermal?'24px':'40px'};font-size:${fs}px;">
+      <div>Received By: ${rec.receivedBy||'_______________'}</div>
+      <div>Signature: _______________</div>
+    </div>
+  </div>`;
+}
+function previewReturnReceipt(id){
+  const rec = returnReceipts.find(r=>r.id===id);
+  if(!rec) return;
+  currentRRPreview = rec;
+  document.getElementById('rr-preview-title').textContent = `🧾 Return Receipt ${rec.receiptNo}`;
+  document.getElementById('rr-preview-frame').innerHTML = buildReturnReceiptHTML(rec, 'a4');
+  openModal('rrPreviewModal');
+}
+function printReturnReceipt(size){
+  if(!currentRRPreview) return;
+  const html = buildReturnReceiptHTML(currentRRPreview, size);
+  const isThermal = size==='thermal';
+  const margin = quotSettings.margin||10;
+  const win = window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>Print</title><style>
+    @page{size:${isThermal?(quotSettings.thermalWidth||80)+'mm auto':'A4 portrait'};margin:${margin}mm;}
+    body{margin:0;font-family:Arial,sans-serif;font-size:10px;}
+    table{width:100%;border-collapse:collapse;table-layout:fixed;}
+    td,th{word-wrap:break-word;overflow-wrap:break-word;}
+    div{max-width:100%;}
+  </style></head><body>${html}</body></html>`);
+  win.document.close();
+  setTimeout(()=>win.print(),300);
 }
 
 // ==================== MODULE 11: BARCODE / QR SYSTEM ====================
