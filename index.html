@@ -870,7 +870,10 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
   <div class="card">
     <div class="card-header">
       <div class="card-title">🧾 Return Receipts — Goods Received Back</div>
-      <button class="btn btn-green btn-sm" onclick="openReturnReceiptModal()">➕ New Return Receipt</button>
+      <div class="flex-gap">
+        <button class="btn btn-neon btn-sm" onclick="openRRSettingsModal()">⚙️ Print Settings</button>
+        <button class="btn btn-green btn-sm" onclick="openReturnReceiptModal()">➕ New Return Receipt</button>
+      </div>
     </div>
     <div class="search-bar">
       <input type="text" id="rr-search" placeholder="Search Receipt No, party, DC/Invoice..." oninput="renderReturnReceiptsTab()" style="max-width:320px;">
@@ -925,6 +928,36 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
       <button class="btn btn-purple btn-sm" onclick="printReturnReceipt('thermal')">🖨️ Print (Thermal)</button>
     </div>
     <div id="rr-preview-frame" style="background:#f5f5f5;padding:16px;border-radius:8px;min-height:300px;"></div>
+  </div>
+</div>
+</div>
+
+<!-- RETURN RECEIPT PRINT SETTINGS MODAL -->
+<div class="modal-overlay" id="rrSettingsModal">
+<div class="modal">
+  <div class="modal-header"><h3>⚙️ Return Receipt Print Settings</h3><button class="close-btn" onclick="closeModal('rrSettingsModal')">✕</button></div>
+  <div class="modal-body">
+    <div class="form-row">
+      <div class="form-group"><label>Thermal Text Size (px)</label><input type="number" id="rrs-font-size" min="8" max="20" value="12"></div>
+      <div class="form-group"><label>Thermal Paper Width (mm)</label><input type="number" id="rrs-thermal-width" min="50" max="120" value="80"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Page Margin (mm)</label><input type="number" id="rrs-margin" min="0" max="30" value="10"></div>
+      <div class="form-group"><label>Watermark / Stamp Text</label><input type="text" id="rrs-stamp-text" value="RECEIVED" placeholder="e.g. RECEIVED"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label><input type="checkbox" id="rrs-bold" checked> Bold text on Thermal print (all text)</label></div>
+      <div class="form-group"><label><input type="checkbox" id="rrs-show-watermark" checked> Show watermark/stamp on print</label></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label><input type="checkbox" id="rrs-show-header" checked> Show header (company name / logo / address)</label></div>
+      <div class="form-group"><label><input type="checkbox" id="rrs-show-footer" checked> Show footer (Received By / Signature)</label></div>
+    </div>
+    <div class="form-group"><label>Extra Footer Note (optional, shown below signature line)</label><input type="text" id="rrs-footer-note" placeholder="e.g. Goods once returned will not be exchanged"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="saveRRSettings()">💾 Save Settings</button>
+    <button class="btn btn-neon" onclick="closeModal('rrSettingsModal')">Cancel</button>
   </div>
 </div>
 </div>
@@ -5006,7 +5039,7 @@ async function buildFullBackupData(){
     db, cheques, ledgerData:ledgerData, fbrParties, descMaster, settings, partyOpeningBalances,
     digitalInvoices: diWithPdf,
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
-    savedQuotations, quotSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
+    savedQuotations, quotSettings, rrSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
     stockItems, stockMovements, salesReturns, returnReceipts, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     fbCustomers, fbBills, fbQuotations, fbLedger, fbSettings, fbDescriptions, fbStockItems, fbStockMovements,
     documentManager: docsWithBlob,
@@ -5194,7 +5227,7 @@ function buildCloudSyncData(){
   return {
     db, cheques, ledgerData, fbrParties, descMaster, settings, partyOpeningBalances,
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
-    savedQuotations, quotSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
+    savedQuotations, quotSettings, rrSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
     stockItems, stockMovements, salesReturns, returnReceipts, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     fbCustomers, fbBills, fbQuotations, fbLedger, fbSettings, fbDescriptions, fbStockItems, fbStockMovements,
     securityData: (typeof securityData!=='undefined'?securityData:null),
@@ -5906,6 +5939,7 @@ async function applyRestoredBackupData(data){
   if(data.partyDispatchData) partyDispatchData = data.partyDispatchData;
   if(data.savedQuotations) savedQuotations = data.savedQuotations;
   if(data.quotSettings) quotSettings = {...quotSettings, ...data.quotSettings};
+  if(data.rrSettings) rrSettings = {...rrSettings, ...data.rrSettings};
   if(data.securityData && typeof securityData!=='undefined'){
     // PERMANENT FIX: "is Security ON/OFF" and "who is logged in on THIS
     // device" are now 100% local-only settings — a cloud sync can NEVER
@@ -16620,32 +16654,73 @@ function renderReturnReceiptsTab(){
   </tr>`).join('') : '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px;">No return receipts yet</td></tr>';
 }
 
+// ---- Return Receipt print settings (font size, bold, header/footer, watermark) ----
+let rrSettings = {
+  fontSize: 12, thermalWidth: 80, margin: 10,
+  bold: true, showWatermark: true, stampText: 'RECEIVED',
+  showHeader: true, showFooter: true, footerNote: ''
+};
+(function loadRRSettings(){
+  const d = localStorage.getItem('sau_rr_settings');
+  if(d) try{ rrSettings = {...rrSettings, ...JSON.parse(d)}; }catch(e){}
+})();
+function openRRSettingsModal(){
+  document.getElementById('rrs-font-size').value = rrSettings.fontSize||12;
+  document.getElementById('rrs-thermal-width').value = rrSettings.thermalWidth||80;
+  document.getElementById('rrs-margin').value = rrSettings.margin||10;
+  document.getElementById('rrs-stamp-text').value = rrSettings.stampText||'RECEIVED';
+  document.getElementById('rrs-bold').checked = rrSettings.bold!==false;
+  document.getElementById('rrs-show-watermark').checked = rrSettings.showWatermark!==false;
+  document.getElementById('rrs-show-header').checked = rrSettings.showHeader!==false;
+  document.getElementById('rrs-show-footer').checked = rrSettings.showFooter!==false;
+  document.getElementById('rrs-footer-note').value = rrSettings.footerNote||'';
+  openModal('rrSettingsModal');
+}
+function saveRRSettings(){
+  rrSettings.fontSize = parseInt(document.getElementById('rrs-font-size').value)||12;
+  rrSettings.thermalWidth = parseInt(document.getElementById('rrs-thermal-width').value)||80;
+  rrSettings.margin = parseInt(document.getElementById('rrs-margin').value)||10;
+  rrSettings.stampText = document.getElementById('rrs-stamp-text').value||'RECEIVED';
+  rrSettings.bold = document.getElementById('rrs-bold').checked;
+  rrSettings.showWatermark = document.getElementById('rrs-show-watermark').checked;
+  rrSettings.showHeader = document.getElementById('rrs-show-header').checked;
+  rrSettings.showFooter = document.getElementById('rrs-show-footer').checked;
+  rrSettings.footerNote = document.getElementById('rrs-footer-note').value||'';
+  safeSetItem('sau_rr_settings', JSON.stringify(rrSettings));
+  closeModal('rrSettingsModal');
+  toast('Return Receipt print settings saved','success');
+  if(currentRRPreview) document.getElementById('rr-preview-frame').innerHTML = buildReturnReceiptHTML(currentRRPreview, 'a4');
+}
+
 // ---- Print (Thermal + A4), same visual system as Bill/Quotation printing ----
 let currentRRPreview = null;
 function buildReturnReceiptHTML(rec, printSize){
   const isThermal = printSize==='thermal';
-  // Thermal paper is narrow (58-80mm) — smaller base font + tighter spacing keeps
-  // things readable instead of wrapping/breaking mid-word all over the receipt.
-  const fs = isThermal ? 9 : parseInt(quotSettings.fontSize||11);
+  // Thermal paper is narrow (58-80mm). Font size + bold are fully user-configurable
+  // via Print Settings so receipts come out as bold/large as the printer needs.
+  const fs = isThermal ? parseInt(rrSettings.fontSize||12) : parseInt(quotSettings.fontSize||11);
   const cellPad = isThermal ? '2px 3px' : '4px 5px';
+  const thermalBold = isThermal && rrSettings.bold!==false;
+  const fw = thermalBold ? 'bold' : 'normal';
   // Only company name, address & phone show on this receipt — NTN/STRN deliberately omitted.
   let companyInfoLines = [];
   if(settings.phone) companyInfoLines.push(settings.phone);
-  const addressLine = settings.address ? `<div style="font-size:${fs-1}px;line-height:1.3;">${(settings.address||'').replace(/\n/g,' ')}</div>` : '';
-  const companyInfo = `${companyInfoLines.length ? `<div style="font-size:${fs-1}px;">${companyInfoLines.join(' | ')}</div>` : ''}${addressLine}`;
+  const addressLine = settings.address ? `<div style="font-size:${fs-1}px;line-height:1.3;font-weight:${fw};">${(settings.address||'').replace(/\n/g,' ')}</div>` : '';
+  const companyInfo = `${companyInfoLines.length ? `<div style="font-size:${fs-1}px;font-weight:${fw};">${companyInfoLines.join(' | ')}</div>` : ''}${addressLine}`;
   const rows = (rec.items||[]).map((it,i)=>`<tr style="border-bottom:1px solid #eee;">
-      <td style="padding:${cellPad};word-break:break-word;">${i+1}</td>
-      <td style="padding:${cellPad};word-break:break-word;overflow-wrap:break-word;">${it.desc}</td>
-      <td style="padding:${cellPad};text-align:center;word-break:break-word;">${it.uom||''}</td>
-      <td style="padding:${cellPad};text-align:right;word-break:break-word;">${it.qty}</td>
-      <td style="padding:${cellPad};word-break:break-word;overflow-wrap:break-word;">${it.notes||''}</td>
+      <td style="padding:${cellPad};word-break:break-word;font-weight:${fw};">${i+1}</td>
+      <td style="padding:${cellPad};word-break:break-word;overflow-wrap:break-word;font-weight:${fw};">${it.desc}</td>
+      <td style="padding:${cellPad};text-align:center;word-break:break-word;font-weight:${fw};">${it.uom||''}</td>
+      <td style="padding:${cellPad};text-align:right;word-break:break-word;font-weight:${fw};">${it.qty}</td>
+      <td style="padding:${cellPad};word-break:break-word;overflow-wrap:break-word;font-weight:${fw};">${it.notes||''}</td>
     </tr>`).join('');
   // Fixed column widths (as %) so the table never stretches wider than the paper —
   // this is what was causing the "broken/scattered" look on thermal prints.
   const colgroup = isThermal
     ? `<colgroup><col style="width:8%;"><col style="width:42%;"><col style="width:14%;"><col style="width:14%;"><col style="width:22%;"></colgroup>`
     : `<colgroup><col style="width:6%;"><col style="width:44%;"><col style="width:14%;"><col style="width:12%;"><col style="width:24%;"></colgroup>`;
-  const width = isThermal ? `${quotSettings.thermalWidth||80}mm` : '190mm';
+  const width = isThermal ? `${rrSettings.thermalWidth||80}mm` : '190mm';
+  const margin = isThermal ? (rrSettings.margin||10) : (quotSettings.margin||10);
   const fromParts = [];
   if(rec.partyName) fromParts.push(rec.partyName);
   if(rec.senderName) fromParts.push(`Sender: ${rec.senderName}`);
@@ -16654,7 +16729,7 @@ function buildReturnReceiptHTML(rec, printSize){
   // in a flex row, which squeezed and broke long party names on narrow paper — stack
   // them instead. A4 keeps the original side-by-side layout.
   const metaBlock = isThermal
-    ? `<div style="font-size:${fs}px;margin-bottom:6px;line-height:1.4;">
+    ? `<div style="font-size:${fs}px;margin-bottom:6px;line-height:1.4;font-weight:${fw};">
         <div><strong>Received From:</strong> ${fromLine}</div>
         <div><strong>Receipt #:</strong> ${rec.receiptNo}</div>
         <div><strong>Date:</strong> ${fmtDate(rec.date)}</div>
@@ -16663,35 +16738,45 @@ function buildReturnReceiptHTML(rec, printSize){
         <div><strong>Received From:</strong> ${fromLine}</div>
         <div style="text-align:right;"><strong>Receipt #:</strong> ${rec.receiptNo}<br><strong>Date:</strong> ${fmtDate(rec.date)}</div>
       </div>`;
-  // Faint background watermark (company logo if set, else company name) — low
-  // opacity so it never interferes with reading the printed details on top of it.
-  const watermarkHtml = settings.logoBase64
-    ? `<img src="${settings.logoBase64}" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-25deg);width:${isThermal?'75%':'55%'};opacity:0.06;filter:grayscale(100%);z-index:0;pointer-events:none;">`
-    : `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-25deg);font-size:${isThermal?18:48}px;font-weight:800;color:#000;opacity:0.06;white-space:nowrap;z-index:0;pointer-events:none;letter-spacing:1px;">${(settings.companyName||'SAU CORPORATION').toUpperCase()}</div>`;
-  return `<div style="position:relative;overflow:hidden;font-family:Arial,sans-serif;font-size:${fs}px;width:${width};max-width:${width};margin:0 auto;padding:${quotSettings.margin||10}mm;box-sizing:border-box;">
-    ${watermarkHtml}
-    <div style="position:relative;z-index:1;">
-    <div style="text-align:center;margin-bottom:8px;">
+  // Header block (company name/logo/address) — can be hidden entirely via settings.
+  const showHeader = isThermal ? rrSettings.showHeader!==false : true;
+  const headerBlock = showHeader ? `<div style="text-align:center;margin-bottom:8px;">
       ${settings.logoBase64?`<img src="${settings.logoBase64}" style="max-height:${isThermal?'36px':'55px'};max-width:${isThermal?'120px':'160px'};margin-bottom:4px;">`:''}
       <div style="font-size:${fs+3}px;font-weight:bold;line-height:1.3;">${settings.companyName||'SAU CORPORATION'}</div>
       ${companyInfo}
-    </div>
-    <div style="text-align:center;font-size:${fs+1}px;font-weight:bold;border-top:2px solid #000;border-bottom:2px solid #000;padding:4px;margin:6px 0;">GOODS RETURN RECEIPT</div>
-    ${metaBlock}
-    ${rec.refNo?`<div style="font-size:${fs}px;margin-bottom:6px;word-break:break-word;"><strong>Against DC/Invoice:</strong> ${rec.refNo}</div>`:''}
-    <table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:${fs}px;margin-top:6px;">
-      ${colgroup}
-      <thead><tr style="background:#f0f0f0;">
-        <th style="padding:${cellPad};">#</th><th style="padding:${cellPad};text-align:left;">Description</th>
-        <th style="padding:${cellPad};">UOM</th><th style="padding:${cellPad};">Qty</th><th style="padding:${cellPad};">Notes</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    ${rec.reason?`<div style="margin-top:8px;font-size:${fs}px;word-break:break-word;"><strong>Reason:</strong> ${rec.reason}</div>`:''}
-    <div style="display:flex;justify-content:space-between;margin-top:${isThermal?'24px':'40px'};font-size:${fs}px;gap:8px;">
+    </div>` : '';
+  // Footer block (Received By / Signature) — can be hidden, plus an optional extra note line.
+  const showFooter = isThermal ? rrSettings.showFooter!==false : true;
+  const footerBlock = showFooter ? `<div style="display:flex;justify-content:space-between;margin-top:${isThermal?'24px':'40px'};font-size:${fs}px;gap:8px;font-weight:${fw};">
       <div style="word-break:break-word;">Received By: ${rec.receivedBy||'_______________'}</div>
       <div style="white-space:nowrap;">Signature: _______________</div>
     </div>
+    ${rrSettings.footerNote?`<div style="text-align:center;margin-top:10px;font-size:${fs-2}px;color:#555;">${rrSettings.footerNote}</div>`:''}` : '';
+  // Rubber-stamp style watermark — bold, bordered box with rounded corners like a
+  // real ink stamp, rotated slightly, printed with a forced color so it isn't
+  // stripped out by the browser's print color optimizations.
+  const stampText = (rrSettings.stampText||'RECEIVED').toUpperCase();
+  const showWatermark = rrSettings.showWatermark!==false;
+  const watermarkHtml = showWatermark ? `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-18deg);z-index:0;pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;">
+      <div style="border:${isThermal?'3px':'5px'} solid #c0392b;border-radius:10px;padding:${isThermal?'4px 14px':'10px 28px'};font-size:${isThermal?20:52}px;font-weight:800;color:#c0392b;opacity:0.45;white-space:nowrap;letter-spacing:2px;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;">${stampText}</div>
+    </div>` : '';
+  return `<div style="position:relative;overflow:hidden;font-family:Arial,sans-serif;font-size:${fs}px;width:${width};max-width:${width};margin:0 auto;padding:${margin}mm;box-sizing:border-box;font-weight:${fw};">
+    ${watermarkHtml}
+    <div style="position:relative;z-index:1;">
+    ${headerBlock}
+    <div style="text-align:center;font-size:${fs+1}px;font-weight:bold;border-top:2px solid #000;border-bottom:2px solid #000;padding:4px;margin:6px 0;">GOODS RETURN RECEIPT</div>
+    ${metaBlock}
+    ${rec.refNo?`<div style="font-size:${fs}px;margin-bottom:6px;word-break:break-word;font-weight:${fw};"><strong>Against DC/Invoice:</strong> ${rec.refNo}</div>`:''}
+    <table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:${fs}px;margin-top:6px;">
+      ${colgroup}
+      <thead><tr style="background:#f0f0f0;">
+        <th style="padding:${cellPad};font-weight:${fw};">#</th><th style="padding:${cellPad};text-align:left;font-weight:${fw};">Description</th>
+        <th style="padding:${cellPad};font-weight:${fw};">UOM</th><th style="padding:${cellPad};font-weight:${fw};">Qty</th><th style="padding:${cellPad};font-weight:${fw};">Notes</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    ${rec.reason?`<div style="margin-top:8px;font-size:${fs}px;word-break:break-word;font-weight:${fw};"><strong>Reason:</strong> ${rec.reason}</div>`:''}
+    ${footerBlock}
     </div>
   </div>`;
 }
@@ -16707,14 +16792,15 @@ function printReturnReceipt(size){
   if(!currentRRPreview) return;
   const html = buildReturnReceiptHTML(currentRRPreview, size);
   const isThermal = size==='thermal';
-  const margin = quotSettings.margin||10;
+  const margin = isThermal ? (rrSettings.margin||10) : (quotSettings.margin||10);
   const win = window.open('','_blank');
   win.document.write(`<!DOCTYPE html><html><head><title>Print</title><style>
-    @page{size:${isThermal?(quotSettings.thermalWidth||80)+'mm auto':'A4 portrait'};margin:${margin}mm;}
-    body{margin:0;font-family:Arial,sans-serif;font-size:10px;}
+    @page{size:${isThermal?(rrSettings.thermalWidth||80)+'mm auto':'A4 portrait'};margin:${margin}mm;}
+    html,body{margin:0;font-family:Arial,sans-serif;font-size:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
     table{width:100%;border-collapse:collapse;table-layout:fixed;}
     td,th{word-wrap:break-word;overflow-wrap:break-word;}
     div{max-width:100%;}
+    @media print{ *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color-adjust:exact !important;} }
   </style></head><body>${html}</body></html>`);
   win.document.close();
   setTimeout(()=>win.print(),300);
