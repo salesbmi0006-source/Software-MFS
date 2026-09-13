@@ -894,10 +894,13 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
       <div class="form-group"><label>Date *</label><input type="date" id="rr-date"></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Party *</label><input type="text" id="rr-party" list="rr-party-list" placeholder="Party name"><datalist id="rr-party-list"></datalist></div>
-      <div class="form-group"><label>Against DC/Invoice No (optional)</label><input type="text" id="rr-refno" placeholder="e.g. 1997 or 517"></div>
+      <div class="form-group"><label>Party (optional)</label><input type="text" id="rr-party" list="rr-party-list" placeholder="Party name"><datalist id="rr-party-list"></datalist></div>
+      <div class="form-group"><label>Sender Name (optional)</label><input type="text" id="rr-sender" placeholder="Name of person who sent/brought the goods"></div>
     </div>
-    <div class="form-group"><label>Received By</label><input type="text" id="rr-receivedby" placeholder="Person who received the goods"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Against DC/Invoice No (optional)</label><input type="text" id="rr-refno" placeholder="e.g. 1997 or 517"></div>
+      <div class="form-group"><label>Received By</label><input type="text" id="rr-receivedby" placeholder="Person who received the goods"></div>
+    </div>
     <div class="tbl-wrap">
       <table><thead><tr><th style="width:38%;">Description</th><th>UOM</th><th>Qty</th><th>Notes</th><th></th></tr></thead>
       <tbody id="rr-items-tbody"></tbody></table>
@@ -16535,6 +16538,7 @@ function openReturnReceiptModal(){
   document.getElementById('rr-receiptno').value = nextReturnReceiptNo();
   document.getElementById('rr-date').value = new Date().toISOString().slice(0,10);
   document.getElementById('rr-party').value = '';
+  document.getElementById('rr-sender').value = '';
   document.getElementById('rr-refno').value = '';
   document.getElementById('rr-receivedby').value = '';
   document.getElementById('rr-reason').value = '';
@@ -16569,22 +16573,23 @@ function renderRRItemsTable(){
 }
 function saveReturnReceipt(){
   const party = document.getElementById('rr-party').value.trim();
+  const sender = document.getElementById('rr-sender').value.trim();
   const receiptNo = document.getElementById('rr-receiptno').value.trim();
   const date = document.getElementById('rr-date').value;
   const refNo = document.getElementById('rr-refno').value.trim();
   const receivedBy = document.getElementById('rr-receivedby').value.trim();
   const reason = document.getElementById('rr-reason').value.trim();
-  if(!party){ toast('Party name required','warning'); return; }
+  if(!party && !sender){ toast('Enter at least Party name or Sender name','warning'); return; }
   if(!receiptNo){ toast('Receipt No required','warning'); return; }
   if(!date){ toast('Date required','warning'); return; }
   const validItems = currentRRItems.filter(it=>(it.desc||'').trim() && it.qty>0);
   if(!validItems.length){ toast('Add at least one returned item (with description & qty)','warning'); return; }
   // Deliberately NOT calling ensureDescInMaster() here — descriptions typed in
   // this tab are used on the receipt only and must not grow the master list.
-  const rec = {id:'RR'+uid(), receiptNo, partyName:party, refNo, date, receivedBy, reason, items:JSON.parse(JSON.stringify(validItems))};
+  const rec = {id:'RR'+uid(), receiptNo, partyName:party, senderName:sender, refNo, date, receivedBy, reason, items:JSON.parse(JSON.stringify(validItems))};
   returnReceipts.push(rec);
   saveReturnReceiptsData();
-  logAudit('create','Return Receipt',`Return Receipt ${receiptNo} for ${party}`, undefined, rec);
+  logAudit('create','Return Receipt',`Return Receipt ${receiptNo} for ${party||sender}`, undefined, rec);
   closeModal('returnReceiptModal');
   renderReturnReceiptsTab();
   toast(`Return Receipt ${receiptNo} saved`,'success');
@@ -16601,13 +16606,13 @@ function deleteReturnReceipt(id){
 function renderReturnReceiptsTab(){
   const q = (document.getElementById('rr-search')?.value||'').toLowerCase();
   let list = returnReceipts.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  if(q) list = list.filter(r=>[r.receiptNo,r.partyName,r.refNo].join(' ').toLowerCase().includes(q));
+  if(q) list = list.filter(r=>[r.receiptNo,r.partyName,r.senderName,r.refNo].join(' ').toLowerCase().includes(q));
   const tbody = document.getElementById('rrTbody');
   if(!tbody) return;
   tbody.innerHTML = list.length ? list.map(r=>`<tr>
     <td><strong>${r.receiptNo}</strong></td>
     <td>${fmtDate(r.date)}</td>
-    <td>${r.partyName}</td>
+    <td>${r.partyName||'-'}${r.senderName?` <span style="color:var(--text3);">(Sender: ${r.senderName})</span>`:''}</td>
     <td>${r.refNo||'-'}</td>
     <td>${r.items.length}</td>
     <td>${r.receivedBy||'-'}</td>
@@ -16619,44 +16624,74 @@ function renderReturnReceiptsTab(){
 let currentRRPreview = null;
 function buildReturnReceiptHTML(rec, printSize){
   const isThermal = printSize==='thermal';
-  const fs = isThermal ? 11 : parseInt(quotSettings.fontSize||11);
+  // Thermal paper is narrow (58-80mm) — smaller base font + tighter spacing keeps
+  // things readable instead of wrapping/breaking mid-word all over the receipt.
+  const fs = isThermal ? 9 : parseInt(quotSettings.fontSize||11);
+  const cellPad = isThermal ? '2px 3px' : '4px 5px';
+  // Only company name, address & phone show on this receipt — NTN/STRN deliberately omitted.
   let companyInfoLines = [];
-  if(settings.ntn) companyInfoLines.push(`NTN: ${settings.ntn}`);
-  if(settings.strn) companyInfoLines.push(`STRN: ${settings.strn}`);
   if(settings.phone) companyInfoLines.push(settings.phone);
-  const addressLine = settings.address ? `<div style="font-size:${fs-2}px;">${(settings.address||'').replace(/\n/g,' ')}</div>` : '';
-  const companyInfo = `${companyInfoLines.length ? `<div style="font-size:${fs-2}px;">${companyInfoLines.join(' | ')}</div>` : ''}${addressLine}`;
+  const addressLine = settings.address ? `<div style="font-size:${fs-1}px;line-height:1.3;">${(settings.address||'').replace(/\n/g,' ')}</div>` : '';
+  const companyInfo = `${companyInfoLines.length ? `<div style="font-size:${fs-1}px;">${companyInfoLines.join(' | ')}</div>` : ''}${addressLine}`;
   const rows = (rec.items||[]).map((it,i)=>`<tr style="border-bottom:1px solid #eee;">
-      <td style="padding:3px 5px;">${i+1}</td>
-      <td style="padding:3px 5px;max-width:${isThermal?'140px':'260px'};">${it.desc}</td>
-      <td style="padding:3px 5px;text-align:center;">${it.uom||''}</td>
-      <td style="padding:3px 5px;text-align:right;">${it.qty}</td>
-      <td style="padding:3px 5px;">${it.notes||''}</td>
+      <td style="padding:${cellPad};word-break:break-word;">${i+1}</td>
+      <td style="padding:${cellPad};word-break:break-word;overflow-wrap:break-word;">${it.desc}</td>
+      <td style="padding:${cellPad};text-align:center;word-break:break-word;">${it.uom||''}</td>
+      <td style="padding:${cellPad};text-align:right;word-break:break-word;">${it.qty}</td>
+      <td style="padding:${cellPad};word-break:break-word;overflow-wrap:break-word;">${it.notes||''}</td>
     </tr>`).join('');
+  // Fixed column widths (as %) so the table never stretches wider than the paper —
+  // this is what was causing the "broken/scattered" look on thermal prints.
+  const colgroup = isThermal
+    ? `<colgroup><col style="width:8%;"><col style="width:42%;"><col style="width:14%;"><col style="width:14%;"><col style="width:22%;"></colgroup>`
+    : `<colgroup><col style="width:6%;"><col style="width:44%;"><col style="width:14%;"><col style="width:12%;"><col style="width:24%;"></colgroup>`;
   const width = isThermal ? `${quotSettings.thermalWidth||80}mm` : '190mm';
-  return `<div style="font-family:Arial,sans-serif;font-size:${fs}px;width:${width};max-width:${width};margin:0 auto;padding:${quotSettings.margin||10}mm;">
+  const fromParts = [];
+  if(rec.partyName) fromParts.push(rec.partyName);
+  if(rec.senderName) fromParts.push(`Sender: ${rec.senderName}`);
+  const fromLine = fromParts.length ? fromParts.join(' — ') : '-';
+  // On thermal receipts the "Received From" / "Receipt #" pair used to sit side-by-side
+  // in a flex row, which squeezed and broke long party names on narrow paper — stack
+  // them instead. A4 keeps the original side-by-side layout.
+  const metaBlock = isThermal
+    ? `<div style="font-size:${fs}px;margin-bottom:6px;line-height:1.4;">
+        <div><strong>Received From:</strong> ${fromLine}</div>
+        <div><strong>Receipt #:</strong> ${rec.receiptNo}</div>
+        <div><strong>Date:</strong> ${fmtDate(rec.date)}</div>
+      </div>`
+    : `<div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:${fs}px;">
+        <div><strong>Received From:</strong> ${fromLine}</div>
+        <div style="text-align:right;"><strong>Receipt #:</strong> ${rec.receiptNo}<br><strong>Date:</strong> ${fmtDate(rec.date)}</div>
+      </div>`;
+  // Faint background watermark (company logo if set, else company name) — low
+  // opacity so it never interferes with reading the printed details on top of it.
+  const watermarkHtml = settings.logoBase64
+    ? `<img src="${settings.logoBase64}" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-25deg);width:${isThermal?'75%':'55%'};opacity:0.06;filter:grayscale(100%);z-index:0;pointer-events:none;">`
+    : `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-25deg);font-size:${isThermal?18:48}px;font-weight:800;color:#000;opacity:0.06;white-space:nowrap;z-index:0;pointer-events:none;letter-spacing:1px;">${(settings.companyName||'SAU CORPORATION').toUpperCase()}</div>`;
+  return `<div style="position:relative;overflow:hidden;font-family:Arial,sans-serif;font-size:${fs}px;width:${width};max-width:${width};margin:0 auto;padding:${quotSettings.margin||10}mm;box-sizing:border-box;">
+    ${watermarkHtml}
+    <div style="position:relative;z-index:1;">
     <div style="text-align:center;margin-bottom:8px;">
-      ${settings.logoBase64?`<img src="${settings.logoBase64}" style="max-height:${isThermal?'40px':'55px'};max-width:160px;margin-bottom:4px;">`:''}
-      <div style="font-size:${fs+4}px;font-weight:bold;">${settings.companyName||'SAU CORPORATION'}</div>
+      ${settings.logoBase64?`<img src="${settings.logoBase64}" style="max-height:${isThermal?'36px':'55px'};max-width:${isThermal?'120px':'160px'};margin-bottom:4px;">`:''}
+      <div style="font-size:${fs+3}px;font-weight:bold;line-height:1.3;">${settings.companyName||'SAU CORPORATION'}</div>
       ${companyInfo}
     </div>
-    <div style="text-align:center;font-size:${fs+2}px;font-weight:bold;border-top:2px solid #000;border-bottom:2px solid #000;padding:4px;margin:6px 0;">GOODS RETURN RECEIPT</div>
-    <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:${fs}px;">
-      <div><strong>Received From:</strong> ${rec.partyName}</div>
-      <div style="text-align:right;"><strong>Receipt #:</strong> ${rec.receiptNo}<br><strong>Date:</strong> ${fmtDate(rec.date)}</div>
-    </div>
-    ${rec.refNo?`<div style="font-size:${fs}px;margin-bottom:6px;"><strong>Against DC/Invoice:</strong> ${rec.refNo}</div>`:''}
-    <table style="width:100%;border-collapse:collapse;font-size:${fs}px;margin-top:6px;">
+    <div style="text-align:center;font-size:${fs+1}px;font-weight:bold;border-top:2px solid #000;border-bottom:2px solid #000;padding:4px;margin:6px 0;">GOODS RETURN RECEIPT</div>
+    ${metaBlock}
+    ${rec.refNo?`<div style="font-size:${fs}px;margin-bottom:6px;word-break:break-word;"><strong>Against DC/Invoice:</strong> ${rec.refNo}</div>`:''}
+    <table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:${fs}px;margin-top:6px;">
+      ${colgroup}
       <thead><tr style="background:#f0f0f0;">
-        <th style="padding:4px 5px;">#</th><th style="padding:4px 5px;">Description</th>
-        <th style="padding:4px 5px;">UOM</th><th style="padding:4px 5px;">Qty</th><th style="padding:4px 5px;">Notes</th>
+        <th style="padding:${cellPad};">#</th><th style="padding:${cellPad};text-align:left;">Description</th>
+        <th style="padding:${cellPad};">UOM</th><th style="padding:${cellPad};">Qty</th><th style="padding:${cellPad};">Notes</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    ${rec.reason?`<div style="margin-top:8px;font-size:${fs}px;"><strong>Reason:</strong> ${rec.reason}</div>`:''}
-    <div style="display:flex;justify-content:space-between;margin-top:${isThermal?'24px':'40px'};font-size:${fs}px;">
-      <div>Received By: ${rec.receivedBy||'_______________'}</div>
-      <div>Signature: _______________</div>
+    ${rec.reason?`<div style="margin-top:8px;font-size:${fs}px;word-break:break-word;"><strong>Reason:</strong> ${rec.reason}</div>`:''}
+    <div style="display:flex;justify-content:space-between;margin-top:${isThermal?'24px':'40px'};font-size:${fs}px;gap:8px;">
+      <div style="word-break:break-word;">Received By: ${rec.receivedBy||'_______________'}</div>
+      <div style="white-space:nowrap;">Signature: _______________</div>
+    </div>
     </div>
   </div>`;
 }
