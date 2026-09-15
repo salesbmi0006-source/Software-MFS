@@ -4033,6 +4033,27 @@ Switch Socket"></textarea>
     <div style="text-align:right;margin-top:8px;font-size:13px;font-weight:700;color:var(--neon);">
       Grand Total: <span id="dc-grand-total">0.00</span>
     </div>
+    <!-- FREIGHT CHARGES (separate — never added into Grand Total) -->
+    <div class="form-row mt-8" style="background:var(--bg3);border-radius:8px;padding:8px 10px;">
+      <div class="form-group">
+        <label>🚚 Freight Charges <span style="font-weight:400;color:var(--text3);">(alag — Grand Total mein add NAHI hote)</span></label>
+        <input type="number" step="0.01" id="dc-freight" placeholder="0.00" oninput="updateFreightPreview()">
+      </div>
+      <div class="form-group">
+        <label>Freight Paid By</label>
+        <select id="dc-freight-by" onchange="updateFreightPreview()">
+          <option value="">-- Select --</option>
+          <option value="sender">Sender (Hum)</option>
+          <option value="receiver">Receiver (Party)</option>
+          <option value="topay">To-Pay</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:2;">
+        <label>Freight Note (optional)</label>
+        <input type="text" id="dc-freight-note" placeholder="e.g. Bilty charges, Butt Cargo">
+      </div>
+    </div>
+    <div id="dc-freight-preview" style="display:none;text-align:right;font-size:12px;color:var(--neon2);margin-top:6px;"></div>
     <div class="form-group mt-8"><label>Note</label><textarea id="dc-note" rows="2" placeholder="Optional note..."></textarea></div>
     <div class="divider"></div>
     <!-- DISPATCH INFO -->
@@ -4263,10 +4284,20 @@ Switch Socket"></textarea>
     <div class="form-row">
       <div class="form-group">
         <label>Deduction <span style="font-weight:400;color:var(--text3);">(auto-suggested from linked invoice — editable)</span></label>
-        <input type="number" id="led-deduction" placeholder="0.00" oninput="markDedTouched()">
+        <input type="number" id="led-deduction" placeholder="0.00" oninput="markDedTouched();updateLedFreightSummary();">
         <div id="led-deduction-hint" style="font-size:11px;color:var(--text3);margin-top:4px;"></div>
       </div>
+      <div class="form-group" id="led-freight-wrap">
+        <label>🚚 Freight Charges <span style="font-weight:400;color:var(--text3);">(jo cheque ki total amount mein shaamil hain)</span></label>
+        <input type="number" id="led-freight" placeholder="0.00" oninput="markFreightTouched();updateLedFreightSummary();">
+        <div id="led-freight-hint" style="font-size:11px;color:var(--text3);margin-top:4px;"></div>
+      </div>
     </div>
+    <div class="form-group" id="led-freight-note-wrap">
+      <label>Freight Note (optional)</label>
+      <input type="text" id="led-freight-note" placeholder="e.g. DC 2031 ka bilty freight">
+    </div>
+    <div id="led-freight-summary" style="display:none;font-size:12px;background:var(--bg3);border-radius:8px;padding:8px 10px;margin-bottom:10px;"></div>
     <div class="form-group"><label>Description / Notes</label><input type="text" id="led-narration" placeholder="Description / notes..."></div>
     <div class="form-group">
       <label>Attachment — Receipt / Cheque Photo (optional, max 500KB)</label>
@@ -7182,6 +7213,8 @@ function openModal_addDc(){
   document.getElementById('dc-edit-id').value='';
   document.getElementById('dc-date').value = new Date().toISOString().slice(0,10);
   ['dc-dcno','dc-invno','dc-unit','dc-pono','dc-note'].forEach(id=>document.getElementById(id).value='');
+  ['dc-freight','dc-freight-by','dc-freight-note'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
+  updateFreightPreview();
   document.getElementById('dc-invdate').value='';
   document.getElementById('dc-party').value='';
   document.getElementById('dc-ready').checked=false;
@@ -7208,6 +7241,17 @@ function _editDCOpen(idx){
   document.getElementById('dc-unit').value=rec.unitName||'';
   document.getElementById('dc-pono').value=rec.poNo||'';
   document.getElementById('dc-note').value=rec.note||'';
+  // Freight: top-level field is the source of truth; older records that only had
+  // freight saved inside Dispatch/Courier Info still show it here (read-only fallback).
+  {
+    const fEl=document.getElementById('dc-freight'), fbEl=document.getElementById('dc-freight-by'), fnEl=document.getElementById('dc-freight-note');
+    const legacyF = (rec.dispatch && rec.dispatch.freight) ? rec.dispatch.freight : '';
+    const legacyFb = (rec.dispatch && rec.dispatch.freightBy) ? rec.dispatch.freightBy : '';
+    if(fEl) fEl.value = (rec.freightCharges!==undefined && rec.freightCharges!=='') ? rec.freightCharges : legacyF;
+    if(fbEl) fbEl.value = rec.freightBy || legacyFb || '';
+    if(fnEl) fnEl.value = rec.freightNote || '';
+  }
+  updateFreightPreview();
   document.getElementById('dc-ready').checked=!!rec.readyForInv;
   document.getElementById('dc-cancelled').checked=!!rec.cancelled;
   document.getElementById('dc-void').checked=!!rec.voidOnly;
@@ -7339,6 +7383,55 @@ function updateGrandTotal(){
     tr.querySelector('.item-total').textContent=fmt(basic+basic*tax/100);
   });
   document.getElementById('dc-grand-total').textContent = fmt(total);
+  updateFreightPreview(total);
+}
+// Freight is shown SEPARATELY, on purpose — it is never folded into the DC's
+// Grand Total (the invoice value stays exactly what was billed). This little
+// line under the total just spells out "bill X + freight Y" so whoever is
+// looking at the DC can see at a glance that freight exists on this one.
+function updateFreightPreview(knownTotal){
+  const el = document.getElementById('dc-freight-preview');
+  if(!el) return;
+  const fEl = document.getElementById('dc-freight');
+  const f = fEl ? (parseFloat(fEl.value)||0) : 0;
+  if(f<=0){ el.style.display='none'; el.innerHTML=''; return; }
+  let total = knownTotal;
+  if(total===undefined){
+    const tEl = document.getElementById('dc-grand-total');
+    total = tEl ? (parseFloat(String(tEl.textContent).replace(/,/g,''))||0) : 0;
+  }
+  const byEl = document.getElementById('dc-freight-by');
+  const byMap = {sender:'Sender (Hum)', receiver:'Receiver (Party)', topay:'To-Pay'};
+  const by = byEl && byEl.value ? ` — Paid by: ${byMap[byEl.value]||byEl.value}` : '';
+  const cur = settings.currency||'PKR';
+  el.style.display='';
+  el.innerHTML = `🚚 Freight: <strong>${cur} ${fmt(f)}</strong>${by}
+    <span style="color:var(--text3);"> | Bill ${cur} ${fmt(total)} + Freight ${cur} ${fmt(f)} = ${cur} ${fmt(total+f)}</span>
+    <div style="font-size:10px;color:var(--text3);">(Grand Total mein shaamil nahi — sirf dikhane aur Ledger link ke liye)</div>`;
+}
+// Single source of truth for "how much freight is on this DC" — prefers the new
+// top-level field, falls back to the older Dispatch/Courier Info freight box so
+// records saved before this feature still report their freight correctly.
+function getDCFreight(rec){
+  if(!rec) return 0;
+  if(rec.freightCharges!==undefined && rec.freightCharges!=='') return parseFloat(rec.freightCharges)||0;
+  if(rec.dispatch && rec.dispatch.freight) return parseFloat(rec.dispatch.freight)||0;
+  return 0;
+}
+// Total freight sitting on every DC that carries one of these invoice numbers,
+// for one party. This is what links a DC's freight through to the Ledger, so a
+// cheque that covers "bills + freight" can be reconciled without a mismatch.
+function getFreightForInvoices(partyName, invoices){
+  if(!invoices || !invoices.length) return 0;
+  const want = invoices.map(s=>String(s).trim()).filter(Boolean);
+  let sum = 0;
+  (db||[]).forEach(rec=>{
+    if(rec.partyName!==partyName || rec.cancelled) return;
+    if(!rec.invNo) return;
+    if(!want.includes(String(rec.invNo).trim())) return;
+    sum += getDCFreight(rec);
+  });
+  return sum;
 }
 function getItemsFromTable(){
   const items = [];
@@ -7597,6 +7690,11 @@ async function saveDC(){
     voidOnly:document.getElementById('dc-void').checked,
     readyForInv:document.getElementById('dc-ready').checked,
     note:document.getElementById('dc-note').value.trim(),
+    // Freight is stored alongside the DC but deliberately kept OUT of getDCTotal()
+    // — the invoice/bill amount must stay exactly what was billed.
+    freightCharges: (document.getElementById('dc-freight')?document.getElementById('dc-freight').value.trim():''),
+    freightBy: (document.getElementById('dc-freight-by')?document.getElementById('dc-freight-by').value:''),
+    freightNote: (document.getElementById('dc-freight-note')?document.getElementById('dc-freight-note').value.trim():''),
     dispatch: dispatchInfo
   };
   let oldRec = null;
@@ -7901,7 +7999,10 @@ function addAutoLedger(rec, idx){
     type:'bill', refNo:rec.invNo, invNo:rec.invNo, dcNo:rec.dcNo,
     desc:`Invoice ${rec.invNo} - DC ${rec.dcNo}`,
     amount:getDCTotal(rec), deduction:0, narration:'Auto from DC record',
-    items: rec.items||[], invDate: rec.invDate||'', poNo: rec.poNo||''
+    items: rec.items||[], invDate: rec.invDate||'', poNo: rec.poNo||'',
+    // Freight rides along for display/linking only — `amount` stays the pure bill
+    // total, so nothing about the existing balance maths changes for bills.
+    dcFreight: getDCFreight(rec), freightBy: rec.freightBy||'', freightNote: rec.freightNote||''
   };
   ledgerData.push(entry);
 }
@@ -7945,6 +8046,9 @@ function syncAutoLedgerFromDC(rec, oldRec){
     entry.partyName = rec.partyName;
     entry.dcNo = rec.dcNo;
     entry.desc = `Invoice ${rec.invNo} - DC ${rec.dcNo}`;
+    entry.dcFreight = getDCFreight(rec);
+    entry.freightBy = rec.freightBy||'';
+    entry.freightNote = rec.freightNote||'';
   } else {
     // Koi purani auto-ledger entry na mili — nayi bana do taake amount lost na ho.
     const idx = db.indexOf(rec);
@@ -8107,6 +8211,19 @@ function quickView(idx){
     <td style="text-align:right;color:var(--neon5);">${cur} ${fmt(totTax)}</td>
     <td style="text-align:right;color:var(--neon);font-size:13px;">${cur} ${fmt(totInc)}</td>
   </tr></tfoot></table></div>`;
+  // Freight is shown as its own line below the table, never inside the DC TOTAL row,
+  // so the invoice value on screen always matches what was actually billed.
+  {
+    const frt = getDCFreight(rec);
+    if(frt>0.5){
+      const byMap={sender:'Sender (Hum)',receiver:'Receiver (Party)',topay:'To-Pay'};
+      const by = rec.freightBy||(rec.dispatch&&rec.dispatch.freightBy)||'';
+      html+=`<div class="accent-box mt-8" style="border-color:var(--neon2);">
+        🚚 <strong>Freight Charges:</strong> ${cur} ${fmt(frt)}${by?` &nbsp;|&nbsp; Paid by: ${byMap[by]||by}`:''}${rec.freightNote?` &nbsp;|&nbsp; ${rec.freightNote}`:''}
+        <div style="font-size:11px;color:var(--text3);margin-top:3px;">DC Total ${cur} ${fmt(totInc)} + Freight ${cur} ${fmt(frt)} = ${cur} ${fmt(totInc+frt)} &nbsp;— freight DC total mein shaamil nahi, sirf reference ke liye.</div>
+      </div>`;
+    }
+  }
   if(rec.note) html+=`<div class="accent-box mt-8"><strong>📝 Note:</strong> ${rec.note}</div>`;
   // Show dispatch info
   if(rec.dispatch && rec.dispatch.method){
@@ -8706,7 +8823,7 @@ function renderLedger(){
   if(!isNaN(amtMin)) entries=entries.filter(e=>e.amount>=amtMin);
   if(!isNaN(amtMax)) entries=entries.filter(e=>e.amount<=amtMax);
   entries.sort((a,b)=> (a.date||'').localeCompare(b.date||'') || (a.id||'').localeCompare(b.id||''));
-  let balance=(ob.amount||0), totalBills=0, totalPaid=0, totalDed=0;
+  let balance=(ob.amount||0), totalBills=0, totalPaid=0, totalDed=0, totalFreight=0;
   const cur=settings.currency||'PKR';
   // Which invoice numbers already have a payment entry linked to them (for the green "Paid" tick below) —
   // uses ALL ledger entries for this party (not just the date/search-filtered ones) so the tick stays correct.
@@ -8727,7 +8844,9 @@ function renderLedger(){
     if(!invoicesOfL.length) return;
     // Cheque/cash amount received PLUS deduction (WHT/discount/bank charges withheld) together
     // count as "applied" to the invoice — the deduction is not still outstanding, it's settled.
-    const net = (l.amount||0) + (l.deduction||0);
+    // Freight bundled into the cheque is NOT part of any bill, so it comes back off
+    // first — otherwise an invoice would look over-paid by exactly the freight amount.
+    const net = (l.amount||0) + (l.deduction||0) - (l.freight||0);
     if(l.allocations && l.allocations.length){
       l.allocations.forEach(a=>{ paidAmountMap[a.invNo] = (paidAmountMap[a.invNo]||0) + (a.amount||0); });
     } else if(invoicesOfL.length>1){
@@ -8782,9 +8901,13 @@ function renderLedger(){
     // the outstanding balance — see paidAmountMap note above.
     const credit = !isDebit?e.amount:0;
     const ded = e.deduction||0;
-    balance += debit-credit-ded;
+    // Freight recovered through this cheque is a charge the party genuinely owed,
+    // so it goes back on the debit side — that's what stops the account drifting
+    // into a false credit when the cheque covers "bills + freight".
+    const frt = (!isDebit && e.freight) ? e.freight : 0;
+    balance += debit-credit-ded+frt;
     if(isDebit) totalBills+=e.amount;
-    else { totalPaid+=e.amount; totalDed+=ded; }
+    else { totalPaid+=e.amount; totalDed+=ded; totalFreight+=frt; }
     const typeMap={bill:'<span class="badge badge-invoiced">Bill</span>',payment:'<span class="badge badge-paid">Payment</span>',debit_note:'<span class="badge badge-pending">Debit</span>',credit_note:'<span class="badge badge-paid">Credit Note</span>'};
     let descCell = e.desc||e.narration||'';
     if(e.type==='bill' && e.dcNo) descCell = `<strong>DC:${e.dcNo}</strong>${e.poNo?' | PO:'+e.poNo:''}`;
@@ -8800,12 +8923,22 @@ function renderLedger(){
         const billTotal=getInvoiceBillTotal(e.partyName, invoicesOfE[0]);
         if(billTotal>0) base = billTotal;
       }
+      if(frt>0.5) base = base - frt;
       if(ded>0.5 && base>0){
         const pct=(ded/base*100);
         descCell += `<div style="font-size:10px;color:var(--neon5);">✂️ ${pct.toFixed(2)}% cut (${fmt(ded)}) — ${fmt(e.amount)} received${paymodeLabel?' via '+paymodeLabel:''}</div>`;
       } else if(base>0){
         descCell += `<div style="font-size:10px;color:#1fbf75;">✅ Full amount received${paymodeLabel?' via '+paymodeLabel:''} — no deduction</div>`;
       }
+      if(frt>0.5){
+        descCell += `<div style="font-size:10px;color:var(--neon2);">🚚 Freight in this cheque: ${fmt(frt)}${e.freightNote?' — '+e.freightNote:''}<br><span style="color:var(--text3);">Bills ke against: ${fmt((e.amount||0)-frt+ded)}</span></div>`;
+      }
+    }
+    // Bills carry their DC's freight purely as information — it is never part of
+    // the bill amount, it just flags "is DC par freight bhi hai".
+    if(isDebit && e.dcFreight>0.5){
+      const byMap={sender:'Sender (Hum)',receiver:'Receiver (Party)',topay:'To-Pay'};
+      descCell += `<div style="font-size:10px;color:var(--neon2);">🚚 DC Freight: ${fmt(e.dcFreight)}${e.freightBy?' ('+(byMap[e.freightBy]||e.freightBy)+')':''} <span style="color:var(--text3);">— bill mein shaamil nahi</span></div>`;
     }
     const paidAmt = (e.type==='bill' && e.invNo) ? (paidAmountMap[String(e.invNo).trim()]||0) : 0;
     let invCell = e.invNo||'-';
@@ -8841,7 +8974,9 @@ function renderLedger(){
     document.getElementById('ledgerTbody').closest('table').parentElement.insertBefore(filterWarnEl, document.getElementById('ledgerTbody').closest('table'));
   }
   filterWarnEl.textContent = filtersActive ? '⚠️ Type/Payment Mode/Amount filter active — running Balance column reflects only the filtered rows, not the full account.' : '';
-  const outstanding = (ob.amount||0)+totalBills-totalPaid-totalDed;
+  // Freight recovered through payments was never billed, so it is added back on
+  // the charge side — otherwise Outstanding would understate what the party owes.
+  const outstanding = (ob.amount||0)+totalBills-totalPaid-totalDed+totalFreight;
   const detailMode = (document.getElementById('ledger-mode')||{}).value==='with_details';
   // "Without Details" = pure table only, NO summary cards. "With All Details" = summary cards + item breakdown.
   if(detailMode){
@@ -8858,6 +8993,7 @@ function renderLedger(){
     <div class="ledger-sum-card lsc1"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(totalBills)}</div><div style="font-size:11px;color:var(--text2);">Total Bills (${entries.filter(e=>e.type==='bill').length})</div></div>
     <div class="ledger-sum-card lsc2"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(totalPaid)}</div><div style="font-size:11px;color:var(--text2);">Total Paid</div></div>
     <div class="ledger-sum-card lsc3"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(totalDed)}</div><div style="font-size:11px;color:var(--text2);">Deductions</div></div>
+    ${totalFreight>0.5?`<div class="ledger-sum-card lsc2" style="border-top-color:var(--neon2);"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(totalFreight)}</div><div style="font-size:11px;color:var(--text2);">🚚 Freight (cheques mein)</div></div>`:''}
     <div class="ledger-sum-card lsc4"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(outstanding)}</div><div style="font-size:11px;color:var(--text2);">Outstanding</div></div>
     ${modeCardsHtml}`;
   } else {
@@ -9003,9 +9139,12 @@ function clearLedgerFilters(){
 function openNewLedgerEntry(){
   document.getElementById('led-edit-idx').value='';
   document.getElementById('ledgerModalTitle').textContent='📒 Add Ledger Entry';
-  ['led-ref','led-inv','led-amount','led-deduction','led-narration','led-bank'].forEach(id=>document.getElementById(id).value='');
+  ['led-ref','led-inv','led-amount','led-deduction','led-narration','led-bank','led-freight','led-freight-note'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
   _dedManuallyEdited = false;
+  _freightManuallyEdited = false;
   const dedHint=document.getElementById('led-deduction-hint'); if(dedHint) dedHint.textContent='';
+  const frHint=document.getElementById('led-freight-hint'); if(frHint) frHint.textContent='';
+  updateLedFreightSummary();
   hideLedInvSuggestions();
   const pd=document.getElementById('led-paymode'); if(pd) pd.value='cash';
   const st=document.getElementById('led-status'); if(st) st.value='cleared';
@@ -9038,13 +9177,17 @@ function editLedgerEntry(id){
   document.getElementById('led-inv').value=e.invNo||'';
   document.getElementById('led-amount').value=e.amount||'';
   document.getElementById('led-deduction').value=e.deduction||0;
+  if(document.getElementById('led-freight')) document.getElementById('led-freight').value=e.freight||'';
+  if(document.getElementById('led-freight-note')) document.getElementById('led-freight-note').value=e.freightNote||'';
   document.getElementById('led-narration').value=e.narration||e.desc||'';
   if(document.getElementById('led-paymode')) document.getElementById('led-paymode').value=e.paymode||'cash';
   if(document.getElementById('led-status')) document.getElementById('led-status').value=e.status||'cleared';
   if(document.getElementById('led-bank')) document.getElementById('led-bank').value=e.bankName||'';
   togglePaymodeField();
   _dedManuallyEdited = true; // don't silently overwrite an already-saved deduction on open
+  _freightManuallyEdited = true; // same for a freight figure that was already saved
   renderInvoiceAllocation(e.allocations||[]);
+  updateLedFreightSummary();
   _ledgerAttachment = e.attachment || null;
   document.getElementById('led-attach-file').value='';
   renderLedgerAttachPreview();
@@ -9058,19 +9201,30 @@ function saveLedgerEntry(){
   const ref=document.getElementById('led-ref').value;
   const amount=parseFloat(document.getElementById('led-amount').value)||0;
   const deduction=parseFloat(document.getElementById('led-deduction').value)||0;
+  // Freight only makes sense on a payment — it's the slice of the cheque that
+  // covered freight/bilty rather than the bills themselves.
+  const freightRaw=parseFloat(document.getElementById('led-freight')?document.getElementById('led-freight').value:0)||0;
+  const freight = (type==='payment') ? freightRaw : 0;
+  const freightNote=(type==='payment'&&document.getElementById('led-freight-note'))?document.getElementById('led-freight-note').value.trim():'';
   const narration=document.getElementById('led-narration').value;
   const inv=document.getElementById('led-inv').value;
   const paymode=document.getElementById('led-paymode')?document.getElementById('led-paymode').value:'';
   const status=(type==='payment'&&document.getElementById('led-status'))?document.getElementById('led-status').value:'';
   const bankName=document.getElementById('led-bank')?document.getElementById('led-bank').value.trim():'';
   if(!party||!date||!amount){toast('Party, date, and amount required — entry NOT saved','warning');return;}
+  if(freight > amount + 0.5){
+    toast('Freight charges cheque ki total amount se zyada nahi ho sakte — entry NOT saved','warning');
+    return;
+  }
   const invoicesList = inv ? inv.split(',').map(s=>s.trim()).filter(Boolean) : [];
   let allocations = [];
   if(invoicesList.length>=2){
     allocations = getInvoiceAllocations();
     const sum = allocations.reduce((a,b)=>a+b.amount,0);
-    if(Math.abs(sum-amount) > 0.5){
-      if(!confirm(`Split amounts add up to ${fmt(sum)} but Total Amount is ${fmt(amount)}. Save anyway?`)) return;
+    const applicable = amount - freight;
+    if(Math.abs(sum-applicable) > 0.5){
+      const frTxt = freight>0.5 ? ` (${fmt(amount)} cheque − ${fmt(freight)} freight)` : '';
+      if(!confirm(`Split amounts add up to ${fmt(sum)} but the bill-applicable amount is ${fmt(applicable)}${frTxt}. Save anyway?`)) return;
     }
   }
 
@@ -9086,10 +9240,11 @@ function saveLedgerEntry(){
     entry.invNo=inv; entry.desc=narration; entry.amount=amount; entry.deduction=deduction;
     entry.narration=narration; entry.paymode=paymode; entry.status=status; entry.bankName=bankName;
     entry.allocations=allocations;
+    entry.freight=freight; entry.freightNote=freightNote;
     entry.attachment=_ledgerAttachment;
     logAudit('edit','Ledger',`${type} entry for ${party} — amount ${amount} updated`, before, entry);
   } else {
-    entry = {id:'L'+uid(),partyName:party,date,type,refNo:ref,invNo:inv,dcNo:'',desc:narration,amount,deduction,narration,paymode,status,bankName,allocations,attachment:_ledgerAttachment};
+    entry = {id:'L'+uid(),partyName:party,date,type,refNo:ref,invNo:inv,dcNo:'',desc:narration,amount,deduction,freight,freightNote,narration,paymode,status,bankName,allocations,attachment:_ledgerAttachment};
     ledgerData.push(entry);
     initApprovalForEntity('ledger', entry);
     logAudit('create','Ledger',`${type} entry for ${party} — amount ${amount}`, undefined, entry);
@@ -9105,11 +9260,12 @@ function saveLedgerEntry(){
       ? cheques.find(c=>c.chequeNo===(entry._syncedChequeRef||chequeRef) && c.party===party)
       : cheques.find(c=>c.chequeNo===chequeRef && c.party===party);
     if(!ch){
-      ch = {chequeNo:chequeRef, date, amount, deduction, party, invoices:invoicesList, allocations, notes:narration, paymode, status, bankName, source:'ledger'};
+      ch = {chequeNo:chequeRef, date, amount, deduction, freight, freightNote, party, invoices:invoicesList, allocations, notes:narration, paymode, status, bankName, source:'ledger'};
       cheques.push(ch);
       if(typeof initApprovalForEntity==='function') initApprovalForEntity('cheque', ch);
     } else {
       ch.chequeNo=chequeRef; ch.date=date; ch.amount=amount; ch.deduction=deduction;
+      ch.freight=freight; ch.freightNote=freightNote;
       ch.notes=narration||ch.notes; ch.paymode=paymode||ch.paymode; ch.invoices=invoicesList; ch.allocations=allocations; ch.status=status; ch.bankName=bankName;
     }
     entry._syncedChequeRef = chequeRef;
@@ -9174,7 +9330,8 @@ function getInvoicePaidAmount(partyName, invNo){
       const a = l.allocations.find(x=>x.invNo===invNo);
       if(a) paid += a.amount||0;
     } else {
-      const net = (l.amount||0)+(l.deduction||0);
+      // Freight bundled into the cheque settles no bill, so it comes off first.
+      const net = (l.amount||0)+(l.deduction||0)-(l.freight||0);
       paid += net/invoicesOfL.length;
     }
   });
@@ -9182,7 +9339,9 @@ function getInvoicePaidAmount(partyName, invNo){
 }
 function getPartyOutstandingBalance(partyName){
   const totalInv = db.filter(r=>r.partyName===partyName && r.invNo && !r.cancelled).reduce((s,r)=>s+getDCTotal(r),0);
-  const totalPaid = ledgerData.filter(l=>l.partyName===partyName && l.type==='payment').reduce((s,l)=>s+(l.amount||0)+(l.deduction||0),0);
+  // Only the non-freight part of each payment settles invoices — the freight slice
+  // was recovering a cost, not clearing a bill.
+  const totalPaid = ledgerData.filter(l=>l.partyName===partyName && l.type==='payment').reduce((s,l)=>s+(l.amount||0)+(l.deduction||0)-(l.freight||0),0);
   const opening = (partyOpeningBalances[partyName] && partyOpeningBalances[partyName].amount) || 0;
   return opening + totalInv - totalPaid;
 }
@@ -10089,7 +10248,7 @@ function generateLedgerPDF(party, detailMode, from, to){
   // export starts counting from 0 rather than carrying forward a balance that would
   // otherwise double-count entries excluded by the date range.
   const ob = dateFiltered ? {amount:0, date:''} : (partyOpeningBalances[party] || {amount:0, date:''});
-  let balance=(ob.amount||0), totalBills=0, totalPaid=0, totalDed=0;
+  let balance=(ob.amount||0), totalBills=0, totalPaid=0, totalDed=0, totalFreight=0;
   const cur=settings.currency||'PKR';
   const body=[];
   if(ob.amount){
@@ -10102,7 +10261,8 @@ function generateLedgerPDF(party, detailMode, from, to){
     if(l.allocations && l.allocations.length){
       l.allocations.forEach(a=>{ paidAmountMap[a.invNo]=(paidAmountMap[a.invNo]||0)+(a.amount||0); });
     } else {
-      const net=(l.amount||0)+(l.deduction||0), share=net/invoicesOfL.length;
+      // Freight inside the cheque never settled a bill, so strip it before sharing out.
+      const net=(l.amount||0)+(l.deduction||0)-(l.freight||0), share=net/invoicesOfL.length;
       invoicesOfL.forEach(no=>{ paidAmountMap[no]=(paidAmountMap[no]||0)+share; });
     }
   });
@@ -10111,14 +10271,17 @@ function generateLedgerPDF(party, detailMode, from, to){
     const isDebit=e.type==='bill'||e.type==='debit_note';
     const debit=isDebit?e.amount:0;
     const credit=!isDebit?e.amount:0;
-    balance+=debit-credit-(e.deduction||0);
-    if(isDebit) totalBills+=e.amount; else { totalPaid+=e.amount; totalDed+=(e.deduction||0); }
+    const frt = (!isDebit && e.freight) ? e.freight : 0;
+    balance+=debit-credit-(e.deduction||0)+frt;
+    if(isDebit) totalBills+=e.amount; else { totalPaid+=e.amount; totalDed+=(e.deduction||0); totalFreight+=frt; }
     let desc = e.desc||e.narration||'';
     if(e.type==='bill' && e.dcNo) desc = `DC:${e.dcNo}${e.poNo?' PO:'+e.poNo:''}`;
     if(e.type==='payment'){
       if(e.bankName) desc += (desc?' | ':'')+'Bank: '+e.bankName;
       if(e.status) desc += (desc?' | ':'')+'Status: '+(statusLabel[e.status]||e.status);
+      if(frt>0.5) desc += (desc?' | ':'')+'Freight in cheque: '+fmt(frt)+(e.freightNote?' ('+e.freightNote+')':'');
     }
+    if(isDebit && e.dcFreight>0.5) desc += (desc?' | ':'')+'DC Freight: '+fmt(e.dcFreight)+' (not in bill)';
     let invCell = e.invNo||'-';
     if(e.type==='bill' && e.invNo){
       const paidAmt = paidAmountMap[String(e.invNo).trim()]||0;
@@ -10133,9 +10296,9 @@ function generateLedgerPDF(party, detailMode, from, to){
     body, styles:{fontSize:8}, headStyles:{fillColor:[20,20,40]}
   });
   let fy = doc.lastAutoTable.finalY+8;
-  const outstanding = (ob.amount||0)+totalBills-totalPaid-totalDed;
+  const outstanding = (ob.amount||0)+totalBills-totalPaid-totalDed+totalFreight;
   doc.setFontSize(10); doc.setFont(undefined,'bold');
-  doc.text(`Total Bills: ${cur} ${fmt(totalBills)}   Total Paid: ${cur} ${fmt(totalPaid)}   Deductions: ${cur} ${fmt(totalDed)}   Outstanding: ${cur} ${fmt(outstanding)}`,14,fy);
+  doc.text(`Total Bills: ${cur} ${fmt(totalBills)}   Total Paid: ${cur} ${fmt(totalPaid)}   Deductions: ${cur} ${fmt(totalDed)}${totalFreight>0.5?`   Freight: ${cur} ${fmt(totalFreight)}`:''}   Outstanding: ${cur} ${fmt(outstanding)}`,14,fy);
   fy += 10;
 
   // Detailed Invoice Breakdown (per bill entry with item-level details) — only for "With All Details" mode
@@ -15982,14 +16145,69 @@ function autoFillDeduction(invoices){
   if(type!=='payment' || invoices.length!==1 || !party || !amount){ hintEl.textContent=''; return; }
   const billTotal = getInvoiceBillTotal(party, invoices[0]);
   if(!billTotal){ hintEl.textContent=''; return; }
-  const gap = billTotal - amount;
+  // Freight sitting inside this cheque isn't part of the bill, so strip it out
+  // before working out how much of the invoice the cheque actually covered.
+  const freight = parseFloat(document.getElementById('led-freight')?document.getElementById('led-freight').value:0)||0;
+  const towardsBill = amount - freight;
+  const gap = billTotal - towardsBill;
+  const freightNote = freight>0.5 ? ` (freight ${fmt(freight)} nikal kar)` : '';
   if(gap > 0.5){
-    hintEl.textContent = `Invoice #${invoices[0]} total: ${fmt(billTotal)} — suggested deduction: ${fmt(gap)}`;
+    hintEl.textContent = `Invoice #${invoices[0]} total: ${fmt(billTotal)} — suggested deduction: ${fmt(gap)}${freightNote}`;
     if(!_dedManuallyEdited) dedInput.value = gap.toFixed(2);
   } else {
-    hintEl.textContent = `Invoice #${invoices[0]} total: ${fmt(billTotal)}`;
+    hintEl.textContent = `Invoice #${invoices[0]} total: ${fmt(billTotal)}${freightNote}`;
     if(!_dedManuallyEdited && parseFloat(dedInput.value)>0.5 && gap<=0.5) dedInput.value = '0';
   }
+}
+// ==================== FREIGHT CHARGES IN LEDGER ====================
+// Why this exists: for some parties the cheque they send covers the bills PLUS the
+// freight/bilty charges. The bills reconcile fine on their own, but the freight
+// portion had nowhere to live — so the cheque always came out "extra" against the
+// bills and the party's balance drifted into a false credit.
+//
+// Recording the freight here fixes both sides at once:
+//   • only (amount - freight) is counted as paid against the linked invoices, so
+//     the ✅ Paid / 🟡 Partial tick against each bill stays honest;
+//   • the freight is added back on the debit side of the running balance, because
+//     it is a genuine charge the party owes us — so the account still nets to zero.
+let _freightManuallyEdited = false;
+function markFreightTouched(){ _freightManuallyEdited = true; }
+// Pulls the freight saved on the DC(s) behind the linked invoice numbers and
+// suggests it — this is the DC → Ledger link, so freight entered once on the DC
+// flows through and gets knocked off when the payment arrives.
+function autoFillLedgerFreight(invoices){
+  const fInput = document.getElementById('led-freight');
+  const hintEl = document.getElementById('led-freight-hint');
+  if(!fInput || !hintEl) return;
+  const type = document.getElementById('led-type') ? document.getElementById('led-type').value : '';
+  const party = document.getElementById('led-party').value;
+  if(type!=='payment' || !party || !invoices.length){ hintEl.textContent=''; return; }
+  const dcFreight = getFreightForInvoices(party, invoices);
+  if(dcFreight > 0.5){
+    hintEl.innerHTML = `🔗 In invoices ki DC(s) par <strong>${fmt(dcFreight)}</strong> freight save hai — ye cheque mein shaamil hai to yahan rakhein.`;
+    if(!_freightManuallyEdited) fInput.value = dcFreight.toFixed(2);
+  } else {
+    hintEl.textContent = '';
+  }
+}
+// Plain-language breakdown of the cheque so the operator can see, before saving,
+// exactly how the total splits between bills, deduction and freight.
+function updateLedFreightSummary(){
+  const box = document.getElementById('led-freight-summary');
+  if(!box) return;
+  const type = document.getElementById('led-type') ? document.getElementById('led-type').value : '';
+  const amount = parseFloat(document.getElementById('led-amount').value)||0;
+  const ded = parseFloat(document.getElementById('led-deduction').value)||0;
+  const freight = parseFloat(document.getElementById('led-freight')?document.getElementById('led-freight').value:0)||0;
+  if(type!=='payment' || (!freight && !ded) || !amount){ box.style.display='none'; box.innerHTML=''; return; }
+  const cur = settings.currency||'PKR';
+  const towardsBill = amount - freight + ded;
+  box.style.display='';
+  box.innerHTML = `<div style="font-weight:700;color:var(--neon2);margin-bottom:4px;">🧮 Cheque Breakdown</div>
+    <div>Cheque / cash received: <strong>${cur} ${fmt(amount)}</strong></div>
+    ${freight?`<div>➖ Freight charges (bill ka hissa nahi): <strong style="color:var(--neon2);">${cur} ${fmt(freight)}</strong></div>`:''}
+    ${ded?`<div>➕ Deduction / WHT withheld: <strong style="color:var(--neon5);">${cur} ${fmt(ded)}</strong></div>`:''}
+    <div style="border-top:1px solid var(--bg2);margin-top:4px;padding-top:4px;">Bills ke against count hoga: <strong style="color:#1fbf75;">${cur} ${fmt(towardsBill)}</strong></div>`;
 }
 // Shows a clickable list of this party's outstanding/partial invoices matching what's
 // typed after the last comma — click adds it to the comma-separated Linked Invoice field.
@@ -16034,11 +16252,14 @@ function renderInvoiceAllocation(preset){
   const wrap = document.getElementById('led-alloc-wrap');
   const rowsEl = document.getElementById('led-alloc-rows');
   const totalEl = document.getElementById('led-alloc-total');
-  if(invoices.length < 2){ wrap.style.display='none'; autoFillDeduction(invoices); return; }
+  // Freight first — the deduction suggestion below depends on it.
+  autoFillLedgerFreight(invoices);
+  if(invoices.length < 2){ wrap.style.display='none'; autoFillDeduction(invoices); updateLedFreightSummary(); return; }
   const hintEl = document.getElementById('led-deduction-hint');
   if(hintEl) hintEl.textContent='';
+  updateLedFreightSummary();
   wrap.style.display='';
-  const total = parseFloat(document.getElementById('led-amount').value)||0;
+  const total = getLedBillApplicableAmount();
   const existing = {};
   rowsEl.querySelectorAll('input[data-inv]').forEach(inp=>{ existing[inp.getAttribute('data-inv')] = inp.value; });
   const presetMap = {}; (preset||[]).forEach(a=>{ presetMap[a.invNo]=a.amount; });
@@ -16053,14 +16274,26 @@ function renderInvoiceAllocation(preset){
   }).join('');
   updateAllocTotal();
 }
+// The slice of the cheque that is actually available to settle bills: the total
+// received minus any freight charges bundled into it. Everything that splits a
+// payment across invoices works off this figure, not the raw cheque amount.
+function getLedBillApplicableAmount(){
+  const amount = parseFloat(document.getElementById('led-amount').value)||0;
+  const type = document.getElementById('led-type') ? document.getElementById('led-type').value : '';
+  if(type!=='payment') return amount;
+  const freight = parseFloat(document.getElementById('led-freight')?document.getElementById('led-freight').value:0)||0;
+  return amount - freight;
+}
 function updateAllocTotal(){
-  const total = parseFloat(document.getElementById('led-amount').value)||0;
+  const total = getLedBillApplicableAmount();
+  const freight = parseFloat(document.getElementById('led-freight')?document.getElementById('led-freight').value:0)||0;
   let sum=0;
   document.querySelectorAll('#led-alloc-rows input[data-inv]').forEach(inp=>{ sum+=parseFloat(inp.value)||0; });
   const diff = total-sum;
   const totalEl = document.getElementById('led-alloc-total');
-  if(Math.abs(diff)<0.5){ totalEl.innerHTML = `<span style="color:#1fbf75;">✅ Allocated ${fmt(sum)} of ${fmt(total)}</span>`; }
-  else { totalEl.innerHTML = `<span style="color:#f5a623;">⚠️ Allocated ${fmt(sum)} of ${fmt(total)} — ${fmt(Math.abs(diff))} ${diff>0?'unallocated':'over-allocated'}</span>`; }
+  const frNote = freight>0.5 ? ` <span style="color:var(--neon2);">(freight ${fmt(freight)} alag nikal kar)</span>` : '';
+  if(Math.abs(diff)<0.5){ totalEl.innerHTML = `<span style="color:#1fbf75;">✅ Allocated ${fmt(sum)} of ${fmt(total)}</span>${frNote}`; }
+  else { totalEl.innerHTML = `<span style="color:#f5a623;">⚠️ Allocated ${fmt(sum)} of ${fmt(total)} — ${fmt(Math.abs(diff))} ${diff>0?'unallocated':'over-allocated'}</span>${frNote}`; }
 }
 function getInvoiceAllocations(){
   const rows = document.querySelectorAll('#led-alloc-rows input[data-inv]');
@@ -16119,6 +16352,16 @@ function togglePaymodeField(){
   if(wrap) wrap.style.display = (type==='payment') ? '' : 'none';
   const statusWrap = document.getElementById('led-status-wrap');
   if(statusWrap) statusWrap.style.display = (type==='payment') ? '' : 'none';
+  // Freight only applies to money coming in — hide it on bills/notes so it can't
+  // be filled in somewhere it would have no meaning.
+  ['led-freight-wrap','led-freight-note-wrap'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.style.display = (type==='payment') ? '' : 'none';
+  });
+  if(type!=='payment'){
+    const box=document.getElementById('led-freight-summary');
+    if(box){ box.style.display='none'; box.innerHTML=''; }
+  } else if(typeof updateLedFreightSummary==='function'){ updateLedFreightSummary(); }
   const bankWrap = document.getElementById('led-bank-wrap');
   if(bankWrap){
     const pm = document.getElementById('led-paymode') ? document.getElementById('led-paymode').value : '';
