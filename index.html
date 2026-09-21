@@ -632,14 +632,16 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
   <div class="card">
     <div class="card-header"><div class="card-title">📒 Party Ledger</div>
       <div class="flex-gap">
+        <button class="btn btn-neon btn-sm" onclick="openLedgerSettings()" title="Parties ko combine / uncombine karein">⚙️ Ledger Settings</button>
         <button class="btn btn-green btn-sm" onclick="openNewLedgerEntry()">➕ Add Entry</button>
         <button class="btn btn-purple btn-sm" onclick="exportLedgerPDF()">📄 PDF</button>
       </div>
     </div>
     <div class="flex-gap mb-8" style="flex-wrap:wrap;">
-      <select id="ledgerPartySelect" onchange="renderLedger()" style="width:220px;">
+      <select id="ledgerPartySelect" onchange="renderLedger()" style="width:260px;">
         <option value="">-- Select Party --</option>
       </select>
+      <span id="ledgerUnitWrap" style="display:none;"><select id="ledgerUnitSelect" onchange="renderLedger()" style="width:220px;" title="🏭 Unit-wise ledger — sirf is unit ka ledger dikhayein"></select></span>
       <input type="date" id="ledgerFrom" onchange="renderLedger()" style="width:145px;">
       <span style="color:var(--text2)">to</span>
       <input type="date" id="ledgerTo" onchange="renderLedger()" style="width:145px;">
@@ -670,11 +672,13 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
     </div>
     <div class="flex-gap mb-8" style="flex-wrap:wrap;align-items:center;background:var(--bg2);padding:8px 10px;border-radius:8px;">
       <span style="font-size:12px;color:var(--text2);">📌 Previous Balance (opening balance before ledger entries start):</span>
+      <select id="ledgerOpeningMember" onchange="renderLedger()" style="display:none;width:230px;" title="Combined ledger: kis party ka previous balance edit karna hai"></select>
       <input type="number" step="0.01" id="ledgerOpeningBalance" placeholder="0.00" style="width:150px;">
       <input type="date" id="ledgerOpeningDate" style="width:145px;" title="As of date (optional, used only for sorting)">
       <input type="text" id="ledgerOpeningInvoices" placeholder="Linked Invoice Nos (optional, comma separated)" style="width:240px;" title="Agar ye opening balance kisi purani invoice/invoices se related hai, un k number yahan likhen — jab un invoices per payment aayegi to ye opening balance bhi Paid show hoga">
       <button class="btn btn-green btn-xs" onclick="saveLedgerOpeningBalance()">💾 Save</button>
     </div>
+    <div id="ledgerScopeNote" style="display:none;font-size:12px;background:var(--bg2);border-left:3px solid var(--neon2);padding:8px 10px;border-radius:6px;margin-bottom:8px;line-height:1.5;"></div>
     <div id="ledger-summary" class="ledger-summary"></div>
     <div class="tbl-wrap">
       <table><thead><tr>
@@ -4229,8 +4233,11 @@ Switch Socket"></textarea>
   <div class="modal-body">
     <input type="hidden" id="led-edit-idx">
     <div class="form-row">
-      <div class="form-group"><label>Party</label><select id="led-party" onchange="renderInvoiceAllocation()"><option value="">Select...</option></select></div>
+      <div class="form-group"><label>Party</label><select id="led-party" onchange="renderInvoiceAllocation();lgPopulateModalUnits()"><option value="">Select...</option></select></div>
       <div class="form-group"><label>Date</label><input type="date" id="led-date"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>🏭 Unit <span style="font-weight:400;color:var(--text3);">(optional — unit-wise ledger ke liye; khali chhorein to linked invoice se khud pata chal jayega)</span></label><select id="led-unit"><option value="">Auto (invoice se / koi unit nahi)</option></select></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Type</label>
@@ -4309,6 +4316,30 @@ Switch Socket"></textarea>
     <button class="btn btn-green" onclick="saveLedgerEntry()">💾 Save</button>
     <button class="btn btn-neon" onclick="closeModal('addLedgerModal')">Cancel</button>
   </div>
+</div>
+</div>
+
+<!-- LEDGER SETTINGS MODAL (Combine / Uncombine parties) -->
+<div class="modal-overlay" id="ledgerSettingsModal">
+<div class="modal modal-md">
+  <div class="modal-header"><h3>⚙️ Ledger Settings</h3><button class="close-btn" onclick="closeModal('ledgerSettingsModal')">✕</button></div>
+  <div class="modal-body">
+    <div style="font-size:13px;font-weight:700;color:var(--neon2);margin-bottom:4px;">🔗 Combine Parties — ek ledger banayein</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.5;">Jin parties ka ledger ek chahiye unhein tick karein aur <strong>Combine</strong> dabayein. In ki tamam purani aur aainda ki entries ek hi ledger mein dikhengi (jaise Interloop Faisalabad + Interloop Lahore). Ye sirf ek view hai — koi entry change nahi hoti, is liye kabhi bhi <strong>Uncombine</strong> kar ke dobara alag kar sakte hain.</div>
+    <div class="form-row">
+      <div class="form-group"><label>Combined Ledger Name</label><input type="text" id="lgs-name" placeholder="e.g. Interloop Limited" oninput="_lgsNameTouched=true"></div>
+      <div class="form-group"><label>Search Party</label><input type="text" id="lgs-search" placeholder="🔍 party ka naam..." oninput="lgsRender()"></div>
+    </div>
+    <div id="lgs-party-list" style="max-height:240px;overflow:auto;border:1px solid var(--bg3);border-radius:8px;"></div>
+    <div id="lgs-status" style="font-size:12px;margin:8px 0;color:var(--text2);"></div>
+    <div class="flex-gap" style="flex-wrap:wrap;margin-bottom:14px;">
+      <button class="btn btn-green btn-sm" id="lgs-combine-btn" onclick="lgsCombine()">🔗 Combine Selected</button>
+      <button class="btn btn-neon btn-sm" id="lgs-cancel-edit-btn" style="display:none;" onclick="lgsCancelEdit()">✕ Cancel Edit</button>
+    </div>
+    <div style="font-size:13px;font-weight:700;color:var(--neon2);margin-bottom:6px;border-top:1px solid var(--bg3);padding-top:10px;">📚 Combined Ledgers (Uncombine yahan se)</div>
+    <div id="lgs-group-list"></div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-neon" onclick="closeModal('ledgerSettingsModal')">Close</button></div>
 </div>
 </div>
 
@@ -4738,6 +4769,7 @@ let db = [];
 let cheques = [];
 let ledgerData = [];
 let fbrParties = [];
+let ledgerGroups = []; // [{id, name, parties:[partyName,...]}] — parties combined into ONE ledger view (Ledger Settings). Entries themselves are never modified.
 let partyOpeningBalances = {}; // { partyName: {amount: number, date: 'YYYY-MM-DD'} } — shown at top of Party Ledger as "Previous Balance"
 let descMaster = []; // [{desc, hscode, uom, ts, addedFrom}] — master list of all item descriptions used across DCs/Quotations
 let settings = {};
@@ -4975,6 +5007,7 @@ function loadData(){
   if(p) fbrParties = JSON.parse(p); else fbrParties = EMBEDDED_BACKUP.fbrParties||[];
   const ob = localStorage.getItem('sau_opening_balances');
   partyOpeningBalances = ob ? JSON.parse(ob) : {};
+  try{ const lgRaw = localStorage.getItem('sau_ledger_groups'); ledgerGroups = lgRaw ? JSON.parse(lgRaw) : []; if(!Array.isArray(ledgerGroups)) ledgerGroups = []; }catch(e){ ledgerGroups = []; }
   const emp = localStorage.getItem('sau_employees');
   employees = emp ? JSON.parse(emp) : [];
   let empIdsBackfilled = false;
@@ -5030,6 +5063,7 @@ function saveData(){
     safeSetItem('fbr_parties', JSON.stringify(fbrParties));
     safeSetItem('sau_desc_master', JSON.stringify(descMaster));
     safeSetItem('sau_opening_balances', JSON.stringify(partyOpeningBalances));
+    safeSetItem('sau_ledger_groups', JSON.stringify(ledgerGroups));
     document.getElementById('autosave-dot').style.background = 'var(--success)';
   } catch(err) {
     console.error('saveData error:', err);
@@ -5067,7 +5101,7 @@ async function buildFullBackupData(){
     docsWithBlob.push({...doc, data});
   }
   return {
-    db, cheques, ledgerData:ledgerData, fbrParties, descMaster, settings, partyOpeningBalances,
+    db, cheques, ledgerData:ledgerData, fbrParties, descMaster, settings, partyOpeningBalances, ledgerGroupsJson: JSON.stringify(ledgerGroups),
     digitalInvoices: diWithPdf,
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
     savedQuotations, quotSettings, rrSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
@@ -5256,7 +5290,7 @@ function desanitizeFromFirebase(value){
 
 function buildCloudSyncData(){
   return {
-    db, cheques, ledgerData, fbrParties, descMaster, settings, partyOpeningBalances,
+    db, cheques, ledgerData, fbrParties, descMaster, settings, partyOpeningBalances, ledgerGroupsJson: JSON.stringify(ledgerGroups),
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
     savedQuotations, quotSettings, rrSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
     stockItems, stockMovements, salesReturns, returnReceipts, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
@@ -5961,6 +5995,8 @@ async function applyRestoredBackupData(data){
   else if(data.ledger) ledgerData = data.ledger;
   if(data.fbrParties) fbrParties = data.fbrParties;
   if(data.partyOpeningBalances) partyOpeningBalances = data.partyOpeningBalances;
+  if(typeof data.ledgerGroupsJson==='string'){ try{ const lgp = JSON.parse(data.ledgerGroupsJson); if(Array.isArray(lgp)) ledgerGroups = lgp; }catch(e){} }
+  else if(Array.isArray(data.ledgerGroups)) ledgerGroups = data.ledgerGroups;
   if(data.descMaster) descMaster = data.descMaster;
   if(data.settings) { settings = {...DEFAULT_SETTINGS,...data.settings}; applySettings(); }
   if(data.partyContacts) partyContacts = data.partyContacts;
@@ -6915,14 +6951,7 @@ function populatePartyList(){
     if(cur && allParties.includes(cur)) afp.value = cur;
   }
   // Ledger party - preserve current selection
-  ['ledgerPartySelect','led-party'].forEach(id=>{
-    const el = document.getElementById(id);
-    if(el){
-      const cur = el.value;
-      el.innerHTML = '<option value="">-- Select Party --</option>'+allParties.map(p=>`<option value="${p}">${p}</option>`).join('');
-      if(cur && allParties.includes(cur)) el.value = cur;
-    }
-  });
+  lgPopulatePartySelects(allParties); // combined ledgers + unit-aware selects (see LEDGER: COMBINE PARTIES block)
 }
 function populateMonthFilter(){
   const months = getUniqueMonths();
@@ -7426,7 +7455,7 @@ function getFreightForInvoices(partyName, invoices){
   const want = invoices.map(s=>String(s).trim()).filter(Boolean);
   let sum = 0;
   (db||[]).forEach(rec=>{
-    if(rec.partyName!==partyName || rec.cancelled) return;
+    if(!lgScopeParties(partyName).includes(rec.partyName) || rec.cancelled) return;
     if(!rec.invNo) return;
     if(!want.includes(String(rec.invNo).trim())) return;
     sum += getDCFreight(rec);
@@ -8774,7 +8803,7 @@ function showAmountCards(){
 }
 
 function saveLedgerOpeningBalance(){
-  const party = document.getElementById('ledgerPartySelect').value;
+  const party = lgOpeningEditParty(); // for a combined ledger: the member chosen in the box next to Previous Balance
   if(!party){ toast('Select a party first','warning'); return; }
   const amt = parseFloat(document.getElementById('ledgerOpeningBalance').value)||0;
   const dt = document.getElementById('ledgerOpeningDate').value||'';
@@ -8786,24 +8815,462 @@ function saveLedgerOpeningBalance(){
   toast('Previous balance saved','success');
   renderLedger();
 }
+// ==================== LEDGER: COMBINE PARTIES + UNIT-WISE LEDGER (v75) ====================
+// "Combine" sirf ek VIEW hai: kisi entry ka partyName kabhi badla nahi jata. Isi liye Uncombine karte hi
+// parties bilkul pehle ki tarah alag ledger mein wapis aa jati hain — koi data loss nahi hota, aur baaki
+// modules (outstanding, risk score, cheques, Parties tab) purane tareeqe se hi chalte rehte hain.
+// Unit-wise ledger: bills ka unit DC record ke unitName se aata hai; payments ka unit un ki linked
+// invoices se (ya agar entry par Unit manually select kiya ho to wahi).
+let _lgUnitCtxKey = null;
+let _lgOpenCtxKey = null;
+function _lgEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// "Interloop Limited (Lahore)" -> "Lahore" (used only for compact labels)
+function lgShortParty(p){ const m=String(p||'').match(/\(([^)]+)\)\s*$/); return m ? m[1] : String(p||''); }
+function lgGroupOfParty(p){ return (ledgerGroups||[]).find(g=>(g.parties||[]).includes(p)) || null; }
+// All party names that share one ledger with `p` (just [p] when p is not combined with anything).
+function lgScopeParties(p){ const g=lgGroupOfParty(p); return g ? g.parties.slice() : [p]; }
+function lgSelectValueForParty(p){ const g=lgGroupOfParty(p); return g ? 'grp:'+g.id : p; }
+function lgResolveSelection(val){
+  if(!val) return null;
+  if(String(val).startsWith('grp:')){
+    const g = (ledgerGroups||[]).find(x=>'grp:'+x.id===val);
+    if(!g || !(g.parties||[]).length) return null;
+    return {isGroup:true, group:g, key:val, label:g.name, parties:g.parties.slice()};
+  }
+  return {isGroup:false, group:null, key:val, label:val, parties:[val]};
+}
+
+// ---- Party dropdowns (Ledger tab + Add Entry modal) ----
+function lgPopulatePartySelects(allParties){
+  const grouped = new Set();
+  (ledgerGroups||[]).forEach(g=>(g.parties||[]).forEach(p=>grouped.add(p)));
+  // Ledger tab selector: combined ledgers first, then every party that is NOT part of a combined ledger.
+  const ls = document.getElementById('ledgerPartySelect');
+  if(ls){
+    const cur = ls.value;
+    const groupOpts = (ledgerGroups||[]).filter(g=>(g.parties||[]).length).map(g=>
+      `<option value="grp:${_lgEsc(g.id)}">🔗 ${_lgEsc(g.name)} (${g.parties.map(p=>_lgEsc(lgShortParty(p))).join(' + ')})</option>`).join('');
+    const plain = allParties.filter(p=>!grouped.has(p)).map(p=>`<option value="${_lgEsc(p)}">${_lgEsc(p)}</option>`).join('');
+    ls.innerHTML = '<option value="">-- Select Party --</option>'
+      + (groupOpts ? `<optgroup label="🔗 Combined Ledgers">${groupOpts}</optgroup><optgroup label="Parties">${plain}</optgroup>` : plain);
+    if(cur && Array.from(ls.options).some(o=>o.value===cur)) ls.value = cur;
+  }
+  // Add-Entry modal: always the real parties (an entry must belong to one real party); 🔗 marks combined ones.
+  const ms = document.getElementById('led-party');
+  if(ms){
+    const cur = ms.value;
+    ms.innerHTML = '<option value="">-- Select Party --</option>'
+      + allParties.map(p=>`<option value="${_lgEsc(p)}">${_lgEsc(p)}${lgGroupOfParty(p)?' 🔗':''}</option>`).join('');
+    if(cur && allParties.includes(cur)) ms.value = cur;
+  }
+}
+
+// ---- Unit helpers ----
+function lgCleanUnit(u){
+  const s = String(u==null?'':u).replace(/\s+/g,' ').trim();
+  return /^(undefined|null|nan|n\/a|-|—)$/i.test(s) ? '' : s;
+}
+// Groups spelling variants of the same unit: "HD-05"/"HD-5", "Unit # 03"/"Unit No 3"/"Unit 3", "hd-2 "/"HD-2".
+function lgUnitKey(u){
+  let s = lgCleanUnit(u).toLowerCase();
+  if(!s) return '';
+  s = s.replace(/[#.]/g,' ').replace(/\bno\b/g,' ').replace(/\s+/g,' ').trim();
+  return s.replace(/\b0+(\d)/g,'$1');
+}
+// Works out, for every ledger entry of the selection, which unit(s) it belongs to.
+// key '' = no unit, '?' = cannot be attributed (e.g. payment not linked to any invoice).
+function lgAnalyzeScope(sel){
+  const parties = sel.parties, isGroup = !!sel.isGroup;
+  const inScope = ledgerData.filter(e=>parties.includes(e.partyName));
+  // In a combined ledger the same unit name under two different parties are different units.
+  const mk = (party, raw)=>{ const k = lgUnitKey(raw); return k ? (isGroup ? party+'\u0002'+k : k) : ''; };
+  const dcUnit = {};
+  (db||[]).forEach(r=>{
+    if(!r.dcNo || !parties.includes(r.partyName)) return;
+    const u = lgCleanUnit(r.unitName);
+    dcUnit[r.partyName+'\u0001'+r.dcNo+'\u0001'+String(r.invNo||'').trim()] = u;
+    const k2 = r.partyName+'\u0001'+r.dcNo;
+    if(dcUnit[k2]===undefined) dcUnit[k2] = u;
+  });
+  const billRaw = e=>{
+    const ex = lgCleanUnit(e.unitName); if(ex) return ex;
+    const k1 = e.partyName+'\u0001'+e.dcNo+'\u0001'+String(e.invNo||'').trim();
+    if(dcUnit[k1]!==undefined) return dcUnit[k1];
+    const k2 = e.partyName+'\u0001'+e.dcNo;
+    return dcUnit[k2]!==undefined ? dcUnit[k2] : '';
+  };
+  const votes = {}, owner = {}, billKey = new Map(), invUnitAmt = {};
+  const vote = (key, party, raw)=>{ if(!key) return; votes[key]=votes[key]||{}; votes[key][raw]=(votes[key][raw]||0)+1; owner[key]=party; };
+  inScope.forEach(e=>{
+    if(e.type==='bill'){
+      const raw = billRaw(e), key = mk(e.partyName, raw);
+      billKey.set(e, key); vote(key, e.partyName, raw);
+      const inv = String(e.invNo||'').trim();
+      if(inv){ invUnitAmt[inv]=invUnitAmt[inv]||{}; invUnitAmt[inv][key]=(invUnitAmt[inv][key]||0)+(e.amount||0); }
+    } else {
+      const raw = lgCleanUnit(e.unitName); if(raw) vote(mk(e.partyName, raw), e.partyName, raw);
+    }
+  });
+  // Display name of a unit = its most common spelling.
+  const raws = {}, label = {};
+  Object.keys(votes).forEach(k=>{
+    const best = Object.entries(votes[k]).sort((a,b)=>b[1]-a[1] || a[0].length-b[0].length)[0][0];
+    raws[k] = best;
+    label[k] = isGroup ? best+' · '+lgShortParty(owner[k]) : best;
+  });
+  const sumOf = o=>Object.values(o).reduce((a,b)=>a+b,0);
+  // Payment invoice refs such as "385/349" are looked up token-by-token if the exact string is not a bill.
+  const distFor = n=>{
+    n = String(n).trim();
+    if(invUnitAmt[n]) return invUnitAmt[n];
+    const toks = n.split('/').map(s=>s.trim()).filter(Boolean);
+    if(toks.length<2) return null;
+    const merged = {}; let any = false;
+    toks.forEach(t=>{ if(invUnitAmt[t]){ any=true; Object.keys(invUnitAmt[t]).forEach(k=>{ merged[k]=(merged[k]||0)+invUnitAmt[t][k]; }); } });
+    return any ? merged : null;
+  };
+  const shares = new Map();
+  inScope.forEach(e=>{
+    let sh;
+    const exRaw = lgCleanUnit(e.unitName);
+    if(e.type==='bill'){ sh = {}; sh[billKey.get(e)] = 1; }
+    else if(exRaw){ sh = {}; sh[mk(e.partyName, exRaw)] = 1; }
+    else {
+      const invs = (e.invNo||'').split(',').map(s=>s.trim()).filter(Boolean);
+      if(!invs.length){ sh = {'?':1}; }
+      else {
+        const w = {};
+        if(e.allocations && e.allocations.length){
+          e.allocations.forEach(a=>{ const n=String(a.invNo).trim(); w[n]=(w[n]||0)+(a.amount||0); });
+        } else {
+          invs.forEach(n=>{ const d=distFor(n); w[n] = d ? sumOf(d) : 0; });
+        }
+        const sumW = sumOf(w);
+        if(!(sumW>0)){ sh = {'?':1}; }
+        else {
+          sh = {};
+          Object.keys(w).forEach(n=>{
+            const f = w[n]/sumW; if(!(f>0)) return;
+            const d = distFor(n);
+            if(!d){ sh['?']=(sh['?']||0)+f; return; }
+            const dt = sumOf(d), nk = Object.keys(d).length;
+            Object.keys(d).forEach(k=>{ sh[k]=(sh[k]||0)+f*(dt>0 ? d[k]/dt : 1/nk); });
+          });
+        }
+      }
+    }
+    shares.set(e, sh);
+  });
+  const counts = {};
+  inScope.forEach(e=>{ const sh=shares.get(e); Object.keys(sh).forEach(k=>{ if(k!=='?' && sh[k]>0.0001) counts[k]=(counts[k]||0)+1; }); });
+  const units = Object.keys(counts).map(k=>({
+    key:k, label:(k===''?'No unit / General':(label[k]||k)), rawLabel:(raws[k]||''), party:(owner[k]||''), count:counts[k]
+  })).sort((a,b)=> (a.key===''?1:0)-(b.key===''?1:0) || a.label.localeCompare(b.label, undefined, {numeric:true, sensitivity:'base'}));
+  return {inScope, shares, label, raws, units, hasUnits: units.some(u=>u.key!=='')};
+}
+function lgUnitTag(sh, an){
+  const ks = Object.keys(sh).filter(k=>k && k!=='?' && sh[k]>0.0001);
+  return ks.map(k=>an.raws[k]||k).join(', ');
+}
+// Entries of the selection, optionally narrowed to one unit. Always returns COPIES (never touches ledgerData);
+// in unit view a payment that spans several units is scaled down to this unit's share.
+function lgBuildEntries(sel, unitVal, an){
+  an = an || lgAnalyzeScope(sel);
+  const want = unitVal==='__none__' ? '' : unitVal;
+  const entries = []; const unassigned = {count:0, amount:0};
+  an.inScope.forEach(e=>{
+    const sh = an.shares.get(e);
+    if(!unitVal){
+      entries.push(Object.assign({}, e, {_orig:e, _share:1, _unitTag: lgUnitTag(sh, an)}));
+      return;
+    }
+    const f = sh[want]||0;
+    if(f<0.0001){
+      if((sh['?']||0)>0.5 && e.type!=='bill'){ unassigned.count++; unassigned.amount += (e.amount||0); }
+      return;
+    }
+    const c = Object.assign({}, e, {_orig:e, _share:f, _unitTag:''});
+    if(f<0.9999){
+      c.amount=(e.amount||0)*f; c.deduction=(e.deduction||0)*f; c.freight=(e.freight||0)*f; c._fullAmount=(e.amount||0);
+    } else { c._share = 1; }
+    entries.push(c);
+  });
+  return {entries, unassigned, an};
+}
+// Previous-balance rows that belong in this view (none in unit view — an opening balance is party-level).
+function lgOpeningRows(sel, unitVal){
+  if(unitVal) return [];
+  return sel.parties.map(p=>{
+    const o = partyOpeningBalances[p]; if(!o || !o.amount) return null;
+    return {party:p, amount:o.amount, date:o.date||'', linkedInvoices:o.linkedInvoices||''};
+  }).filter(Boolean);
+}
+function lgRowTags(e, sel){
+  let h = '';
+  if(sel.isGroup) h += `<div style="font-size:10px;color:var(--neon);">🏢 ${_lgEsc(e.partyName)}</div>`;
+  if(e._unitTag) h += `<div style="font-size:10px;color:var(--text3);">🏭 ${_lgEsc(e._unitTag)}</div>`;
+  if(e._share!==undefined && e._share<0.9999) h += `<div style="font-size:10px;color:var(--neon2);">🏭 Is unit ka hissa: ${fmt(e.amount)} (${(e._share*100).toFixed(1)}% of ${fmt(e._fullAmount)} — payment kai units ki invoices ki thi)</div>`;
+  return h;
+}
+function lgPdfTags(e, sel){
+  let t = '';
+  if(sel.isGroup) t += ' | Party: '+e.partyName;
+  if(e._unitTag) t += ' | Unit: '+e._unitTag;
+  if(e._share!==undefined && e._share<0.9999) t += ` | Unit share: ${fmt(e.amount)} of ${fmt(e._fullAmount)}`;
+  return t;
+}
+
+// ---- Unit dropdown on the Ledger tab ----
+function lgSyncUnitSelect(sel, an){
+  const wrap = document.getElementById('ledgerUnitWrap'), el = document.getElementById('ledgerUnitSelect');
+  if(!wrap || !el) return '';
+  if(!sel || !an || !an.hasUnits){
+    wrap.style.display='none'; el.innerHTML=''; el.dataset.sig=''; _lgUnitCtxKey = sel ? sel.key : null; return '';
+  }
+  const changed = _lgUnitCtxKey!==sel.key;          // new party picked -> go back to "All Units"
+  const prev = changed ? '' : el.value;
+  _lgUnitCtxKey = sel.key;
+  const sig = an.units.map(u=>u.key+'|'+u.count).join('~');
+  if(changed || el.dataset.sig!==sig){
+    el.innerHTML = '';
+    const add = (v,t)=>{ const o=document.createElement('option'); o.value=v; o.textContent=t; el.appendChild(o); };
+    add('', 'All Units');
+    an.units.forEach(u=>add(u.key==='' ? '__none__' : u.key, `${u.label} (${u.count})`));
+    el.dataset.sig = sig;
+  }
+  el.value = Array.from(el.options).some(o=>o.value===prev) ? prev : '';
+  wrap.style.display='';
+  return el.value;
+}
+// ---- Previous-balance editor: for a combined ledger, pick which member's balance the boxes edit ----
+function lgSyncOpeningMemberSelect(sel){
+  const el = document.getElementById('ledgerOpeningMember');
+  if(!sel){ if(el) el.style.display='none'; _lgOpenCtxKey=null; return ''; }
+  if(!sel.isGroup){ if(el) el.style.display='none'; _lgOpenCtxKey=sel.key; return sel.parties[0]; }
+  if(!el) return sel.parties[0];
+  const prev = _lgOpenCtxKey===sel.key ? el.value : '';
+  _lgOpenCtxKey = sel.key;
+  el.innerHTML = '';
+  sel.parties.forEach(p=>{
+    const o = document.createElement('option'); o.value = p;
+    const a = (partyOpeningBalances[p] && partyOpeningBalances[p].amount) || 0;
+    o.textContent = lgShortParty(p) + (a ? ` — ${fmt(a)}` : '');
+    el.appendChild(o);
+  });
+  el.value = sel.parties.includes(prev) ? prev : sel.parties[0];
+  el.style.display='';
+  return el.value;
+}
+function lgOpeningEditParty(){
+  const sel = lgResolveSelection(document.getElementById('ledgerPartySelect').value);
+  if(!sel) return '';
+  if(!sel.isGroup) return sel.parties[0];
+  const m = document.getElementById('ledgerOpeningMember');
+  return (m && sel.parties.includes(m.value)) ? m.value : sel.parties[0];
+}
+function lgRenderScopeNote(sel, unitVal, built){
+  const el = document.getElementById('ledgerScopeNote');
+  if(!el) return;
+  if(!sel){ el.style.display='none'; el.innerHTML=''; return; }
+  const parts = [];
+  if(sel.isGroup) parts.push(`🔗 <strong>Combined ledger:</strong> ${sel.parties.map(_lgEsc).join(' + ')} — in sab ki entries ek hi ledger mein hain. Naya entry inmein se kisi bhi party par save ho, yahin dikhegi.`);
+  if(unitVal && built){
+    const u = built.an.units.find(x=>x.key===(unitVal==='__none__'?'':unitVal));
+    parts.push(`🏭 <strong>Unit ledger:</strong> ${_lgEsc(u?u.label:'')} — sirf is unit ke bills aur un se linked payments dikh rahe hain. Previous Balance party-level hota hai, is liye is view mein shaamil nahi.`);
+    if(built.unassigned.count) parts.push(`⚠️ ${built.unassigned.count} payment/note (${fmt(built.unassigned.amount)}) kisi invoice ya unit se linked nahi, is liye yahan nahi dikh rahe — unhe edit kar ke Unit select kar dein.`);
+  }
+  el.style.display = parts.length ? '' : 'none';
+  el.innerHTML = parts.join('<br>');
+}
+
+// ---- Add/Edit Entry modal: Unit field + defaults ----
+function lgModalDefaults(){
+  const sel = lgResolveSelection(document.getElementById('ledgerPartySelect').value);
+  if(!sel) return {party:'', unitLabel:''};
+  const uEl = document.getElementById('ledgerUnitSelect');
+  const uv = uEl ? uEl.value : '';
+  let party = sel.parties[0], unitLabel = '';
+  if(uv && uv!=='__none__'){
+    const u = lgAnalyzeScope(sel).units.find(x=>x.key===uv);
+    if(u){ unitLabel = u.rawLabel; if(u.party) party = u.party; }
+  }
+  return {party, unitLabel};
+}
+function lgPopulateModalUnits(preselect){
+  const el = document.getElementById('led-unit'); if(!el) return;
+  const party = document.getElementById('led-party').value;
+  const keep = preselect!==undefined ? preselect : el.value;
+  el.innerHTML = '';
+  const add = (v,t)=>{ const o=document.createElement('option'); o.value=v; o.textContent=t; el.appendChild(o); };
+  add('', 'Auto (invoice se / koi unit nahi)');
+  if(party){
+    lgAnalyzeScope({isGroup:false, key:party, label:party, parties:[party]}).units
+      .filter(u=>u.key!=='').forEach(u=>add(u.rawLabel, u.rawLabel));
+  }
+  if(keep && !Array.from(el.options).some(o=>o.value===keep)) add(keep, keep);
+  el.value = keep || '';
+}
+// First invoice picked in the modal decides the party when the modal party is part of a combined ledger.
+function lgAutoSwitchPartyForInvoice(no){
+  const ps = document.getElementById('led-party'); if(!ps || !ps.value) return;
+  const scope = lgScopeParties(ps.value); if(scope.length<2) return;
+  const b = ledgerData.find(l=>l.type==='bill' && String(l.invNo||'').trim()===String(no).trim() && scope.includes(l.partyName));
+  if(b && b.partyName!==ps.value){
+    ps.value = b.partyName; lgPopulateModalUnits();
+    toast(`Party "${b.partyName}" select ho gayi (invoice #${no} isi ki hai)`,'info');
+  }
+}
+
+// ==================== LEDGER SETTINGS MODAL (Combine / Uncombine) ====================
+let _lgsChecked = new Set(), _lgsEditingId = null, _lgsNameTouched = false, _lgsAll = [];
+function lgsAllParties(){
+  return [...new Set([...getUniqueParties(), ...fbrParties.map(p=>p.partyName)])].filter(Boolean).sort((a,b)=>a.localeCompare(b));
+}
+function openLedgerSettings(){
+  lgsReset();
+  openModal('ledgerSettingsModal');
+}
+function lgsReset(){
+  _lgsChecked = new Set(); _lgsEditingId = null; _lgsNameTouched = false;
+  const n = document.getElementById('lgs-name'); if(n) n.value = '';
+  const s = document.getElementById('lgs-search'); if(s) s.value = '';
+  lgsRender();
+}
+function lgsSuggestName(list){
+  if(list.length<2) return list[0]||'';
+  const split = list.map(n=>n.trim().split(/\s+/));
+  const common = [];
+  for(let i=0;;i++){
+    const w = split[0][i];
+    if(w===undefined || !split.every(s=>s[i]!==undefined && s[i].toLowerCase()===w.toLowerCase())) break;
+    common.push(w);
+  }
+  const base = common.join(' ').replace(/[\s\-–(]+$/,'').trim();
+  return base.length>=3 ? base : list.join(' + ');
+}
+function lgsToggle(i, checked){
+  const p = _lgsAll[i]; if(p===undefined) return;
+  if(checked) _lgsChecked.add(p); else _lgsChecked.delete(p);
+  if(!_lgsNameTouched && !_lgsEditingId){
+    const n = document.getElementById('lgs-name'); if(n) n.value = lgsSuggestName([..._lgsChecked]);
+  }
+  lgsUpdateStatus();
+}
+function lgsUpdateStatus(){
+  const el = document.getElementById('lgs-status'); if(!el) return;
+  const n = _lgsChecked.size;
+  el.innerHTML = n ? `✅ <strong>${n}</strong> party tick hui: ${[..._lgsChecked].map(_lgEsc).join(' + ')}` : 'Kam az kam 2 parties tick karein.';
+}
+function lgsRender(){
+  _lgsAll = lgsAllParties();
+  const q = ((document.getElementById('lgs-search')||{}).value||'').toLowerCase();
+  const counts = {}; ledgerData.forEach(e=>{ counts[e.partyName]=(counts[e.partyName]||0)+1; });
+  const list = document.getElementById('lgs-party-list');
+  if(list){
+    list.innerHTML = _lgsAll.map((p,i)=>{
+      if(q && !p.toLowerCase().includes(q) && !_lgsChecked.has(p)) return '';
+      const g = lgGroupOfParty(p), locked = g && g.id!==_lgsEditingId;
+      return `<label style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--bg3);cursor:${locked?'not-allowed':'pointer'};opacity:${locked?0.55:1};">
+        <input type="checkbox" style="width:auto;" ${_lgsChecked.has(p)?'checked':''} ${locked?'disabled':''} onchange="lgsToggle(${i},this.checked)">
+        <span style="flex:1;">${_lgEsc(p)}</span>
+        <span style="font-size:10px;color:var(--text3);">${counts[p]||0} entries</span>
+        ${locked?`<span style="font-size:10px;color:var(--neon2);">🔗 ${_lgEsc(g.name)}</span>`:''}
+      </label>`;
+    }).join('') || '<div style="padding:12px;color:var(--text3);font-size:12px;">Koi party nahi mili</div>';
+  }
+  const gl = document.getElementById('lgs-group-list');
+  if(gl){
+    gl.innerHTML = (ledgerGroups||[]).length ? ledgerGroups.map((g,gi)=>{
+      const n = ledgerData.filter(e=>g.parties.includes(e.partyName)).length;
+      return `<div style="background:var(--bg3);border-radius:8px;padding:8px 10px;margin-bottom:6px;">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;">
+          <div><strong>🔗 ${_lgEsc(g.name)}</strong> <span style="font-size:10px;color:var(--text3);">${n} entries</span>
+            <div style="font-size:11px;color:var(--text2);">${g.parties.map(_lgEsc).join(' + ')}</div></div>
+          <div class="flex-gap">
+            <button class="btn btn-yellow btn-xs" onclick="lgsEditGroup(${gi})">✏️ Edit</button>
+            <button class="btn btn-red btn-xs" onclick="lgsUncombine(${gi})">✂️ Uncombine</button>
+          </div>
+        </div></div>`;
+    }).join('') : '<div style="font-size:12px;color:var(--text3);">Abhi koi combined ledger nahi hai.</div>';
+  }
+  const btn = document.getElementById('lgs-combine-btn'); if(btn) btn.textContent = _lgsEditingId ? '💾 Save Changes' : '🔗 Combine Selected';
+  const cb = document.getElementById('lgs-cancel-edit-btn'); if(cb) cb.style.display = _lgsEditingId ? '' : 'none';
+  lgsUpdateStatus();
+}
+function lgsEditGroup(gi){
+  const g = ledgerGroups[gi]; if(!g) return;
+  _lgsEditingId = g.id; _lgsChecked = new Set(g.parties); _lgsNameTouched = true;
+  document.getElementById('lgs-name').value = g.name;
+  document.getElementById('lgs-search').value = '';
+  lgsRender();
+}
+function lgsCancelEdit(){ lgsReset(); }
+function lgsCombine(){
+  const members = [..._lgsChecked];
+  const name = (document.getElementById('lgs-name').value||'').trim();
+  if(members.length<2){ toast('Kam az kam 2 parties tick karein','warning'); return; }
+  if(!name){ toast('Combined ledger ka naam likhein','warning'); return; }
+  if(ledgerGroups.some(g=>g.id!==_lgsEditingId && (g.name||'').toLowerCase()===name.toLowerCase())){ toast('Is naam ka combined ledger pehle se maujood hai','warning'); return; }
+  const clash = members.find(p=>{ const g=lgGroupOfParty(p); return g && g.id!==_lgsEditingId; });
+  if(clash){ toast(`"${clash}" pehle se kisi aur combined ledger mein hai — pehle use Uncombine karein`,'warning'); return; }
+  let g;
+  if(_lgsEditingId){
+    g = ledgerGroups.find(x=>x.id===_lgsEditingId);
+    if(g){ const before = JSON.parse(JSON.stringify(g)); g.name = name; g.parties = members; logAudit('edit','Ledger Settings',`Combined ledger "${name}" updated: ${members.join(' + ')}`, before, g); }
+  } else {
+    g = {id:'G'+uid(), name, parties:members};
+    ledgerGroups.push(g);
+    logAudit('create','Ledger Settings',`Combined ledger "${name}" created: ${members.join(' + ')}`, undefined, g);
+  }
+  saveData();
+  const wasEditing = !!_lgsEditingId;
+  lgsReset();
+  populatePartyList();
+  const ls = document.getElementById('ledgerPartySelect');
+  if(ls && g){ ls.value = 'grp:'+g.id; }
+  renderLedger();
+  toast(wasEditing ? `"${name}" update ho gaya ✓` : `"${name}" combine ho gaya ✓ — ab ye ek hi ledger hai`,'success');
+}
+function lgsUncombine(gi){
+  const g = ledgerGroups[gi]; if(!g) return;
+  if(!confirm(`"${g.name}" ko Uncombine karein?\n\n${g.parties.join('\n')}\n\nYe parties dobara alag alag ledger mein aa jayengi. Koi entry delete ya change nahi hogi.`)) return;
+  ledgerGroups.splice(gi,1);
+  logAudit('delete','Ledger Settings',`Combined ledger "${g.name}" uncombined`, g, undefined);
+  saveData();
+  const ls = document.getElementById('ledgerPartySelect');
+  const wasSelected = ls && ls.value==='grp:'+g.id;
+  if(_lgsEditingId===g.id) lgsReset();
+  populatePartyList();
+  if(wasSelected && ls) ls.value = g.parties[0]||'';
+  renderLedger();
+  lgsRender();
+  toast(`"${g.name}" uncombine ho gaya ✓ — parties alag ho gayin`,'success');
+}
+
 // ==================== LEDGER ====================
 function renderLedgerPartyList(){
   populatePartyList();
 }
 function renderLedger(){
-  const party = document.getElementById('ledgerPartySelect').value;
+  const selVal = document.getElementById('ledgerPartySelect').value;
+  const sel = lgResolveSelection(selVal);              // a single party OR a combined ledger
+  const party = sel ? sel.label : '';
   const obInput = document.getElementById('ledgerOpeningBalance');
   const obDateInput = document.getElementById('ledgerOpeningDate');
   const obInvInput = document.getElementById('ledgerOpeningInvoices');
-  if(!party){
+  const an = sel ? lgAnalyzeScope(sel) : null;
+  const unitVal = lgSyncUnitSelect(sel, an);           // '' = All Units
+  const obEditParty = lgSyncOpeningMemberSelect(sel);  // whose Previous Balance the boxes below edit
+  if(!sel){
     document.getElementById('ledgerTbody').innerHTML='<tr><td colspan="9" class="text-center" style="padding:20px;color:var(--text3);">Select a party to view ledger</td></tr>';
     document.getElementById('ledger-summary').innerHTML='';
+    lgRenderScopeNote(null, '', null);
     if(obInput) obInput.value='';
     if(obDateInput) obDateInput.value='';
     if(obInvInput) obInvInput.value='';
     return;
   }
-  const ob = partyOpeningBalances[party] || {amount:0, date:''};
+  const ob = partyOpeningBalances[obEditParty] || {amount:0, date:''};
   if(obInput) obInput.value = ob.amount || '';
   if(obDateInput) obDateInput.value = ob.date || '';
   if(obInvInput) obInvInput.value = ob.linkedInvoices || '';
@@ -8814,7 +9281,9 @@ function renderLedger(){
   const paymodeFilter = document.getElementById('ledgerPaymodeFilter') ? document.getElementById('ledgerPaymodeFilter').value : '';
   const amtMin = document.getElementById('ledgerAmountMin') ? parseFloat(document.getElementById('ledgerAmountMin').value) : NaN;
   const amtMax = document.getElementById('ledgerAmountMax') ? parseFloat(document.getElementById('ledgerAmountMax').value) : NaN;
-  let entries = ledgerData.filter(e=>e.partyName===party);
+  const built = lgBuildEntries(sel, unitVal, an);      // copies of this view's entries (unit-narrowed if a unit is picked)
+  lgRenderScopeNote(sel, unitVal, built);
+  let entries = built.entries;
   if(from) entries=entries.filter(e=>e.date>=from);
   if(to) entries=entries.filter(e=>e.date<=to);
   if(search) entries=entries.filter(e=>(e.refNo||'').toLowerCase().includes(search)||(e.invNo||'').toLowerCase().includes(search)||(e.dcNo||'').toLowerCase().includes(search));
@@ -8823,23 +9292,27 @@ function renderLedger(){
   if(!isNaN(amtMin)) entries=entries.filter(e=>e.amount>=amtMin);
   if(!isNaN(amtMax)) entries=entries.filter(e=>e.amount<=amtMax);
   entries.sort((a,b)=> (a.date||'').localeCompare(b.date||'') || (a.id||'').localeCompare(b.id||''));
-  let balance=(ob.amount||0), totalBills=0, totalPaid=0, totalDed=0, totalFreight=0;
+  const obRowsSrc = lgOpeningRows(sel, unitVal);       // one row per combined party that has a Previous Balance (none in unit view)
+  const obTotal = obRowsSrc.reduce((s,o)=>s+(o.amount||0),0);
+  let balance = obTotal, totalBills=0, totalPaid=0, totalDed=0, totalFreight=0;
   const cur=settings.currency||'PKR';
   // Which invoice numbers already have a payment entry linked to them (for the green "Paid" tick below) —
-  // uses ALL ledger entries for this party (not just the date/search-filtered ones) so the tick stays correct.
+  // uses ALL ledger entries of this party / combined ledger (not just the date/search/unit-filtered ones)
+  // so the tick stays correct.
+  const scopeAll = an.inScope;
   const paidAmountMap = {};
-  // Bill amount per invoice number for this party — used below to split an
+  // Bill amount per invoice number — used below to split an
   // unallocated multi-invoice payment (comma separated invNo, e.g. "500,501")
   // in proportion to what each invoice actually billed, instead of a flat
   // average. An average split was showing the wrong "paid so far" amount next
   // to each invoice (e.g. an even ₹X/2 next to a ₹50,000 bill and a ₹5,000 bill
   // that were paid together).
   const billAmountByInv = {};
-  ledgerData.filter(l=>l.partyName===party && l.type==='bill' && l.invNo).forEach(l=>{
+  scopeAll.filter(l=>l.type==='bill' && l.invNo).forEach(l=>{
     const key = String(l.invNo).trim();
     billAmountByInv[key] = (billAmountByInv[key]||0) + (l.amount||0);
   });
-  ledgerData.filter(l=>l.partyName===party && l.type==='payment').forEach(l=>{
+  scopeAll.filter(l=>l.type==='payment').forEach(l=>{
     const invoicesOfL = (l.invNo||'').split(',').map(s=>s.trim()).filter(Boolean);
     if(!invoicesOfL.length) return;
     // Cheque/cash amount received PLUS deduction (WHT/discount/bank charges withheld) together
@@ -8869,30 +9342,37 @@ function renderLedger(){
   // balance represents), check whether payments against those invoice numbers have
   // since covered it — so a legacy opening balance can show Paid/Partial like any
   // other invoice once it's actually settled.
-  const obLinkedInvoices = (ob.linkedInvoices||'').split(',').map(s=>s.trim()).filter(Boolean);
-  let obPaidSoFar = 0;
-  if(obLinkedInvoices.length){
-    ledgerData.filter(l=>l.partyName===party && l.type==='payment').forEach(l=>{
-      const invoicesOfL = (l.invNo||'').split(',').map(s=>s.trim()).filter(Boolean);
-      const matched = invoicesOfL.filter(no=>obLinkedInvoices.includes(no));
-      if(matched.length){
-        const net = (l.amount||0)+(l.deduction||0);
-        obPaidSoFar += net * (matched.length/invoicesOfL.length);
-      }
-    });
-  }
-  const obBadge = !obLinkedInvoices.length ? '' :
-    (obPaidSoFar >= (ob.amount||0)-0.5 ? ' <span style="color:#1fbf75;font-weight:800;" title="Fully paid">✅ Paid</span>'
-    : (obPaidSoFar>0.5 ? ` <span style="color:#f5a623;font-weight:800;" title="Partially paid">🟡 Partial (${fmt(obPaidSoFar)}/${fmt(ob.amount)})</span>` : ''));
-  const obDesc = 'Opening balance carried forward' + (obLinkedInvoices.length ? `<div style="font-size:10px;color:var(--text3);">🔗 Linked: ${obLinkedInvoices.join(', ')}</div>` : '');
-  const openingRow = (ob.amount) ? `<tr style="background:var(--bg3);font-style:italic;">
-      <td>${ob.date?fmtDate(ob.date):'-'}</td>
+  // (A combined ledger shows one Previous Balance row per party that has one.)
+  let obRun = 0;
+  const openingRow = obRowsSrc.map(o=>{
+    obRun += (o.amount||0);
+    const obLinkedInvoices = (o.linkedInvoices||'').split(',').map(s=>s.trim()).filter(Boolean);
+    let obPaidSoFar = 0;
+    if(obLinkedInvoices.length){
+      scopeAll.filter(l=>l.type==='payment').forEach(l=>{
+        const invoicesOfL = (l.invNo||'').split(',').map(s=>s.trim()).filter(Boolean);
+        const matched = invoicesOfL.filter(no=>obLinkedInvoices.includes(no));
+        if(matched.length){
+          const net = (l.amount||0)+(l.deduction||0);
+          obPaidSoFar += net * (matched.length/invoicesOfL.length);
+        }
+      });
+    }
+    const obBadge = !obLinkedInvoices.length ? '' :
+      (obPaidSoFar >= (o.amount||0)-0.5 ? ' <span style="color:#1fbf75;font-weight:800;" title="Fully paid">✅ Paid</span>'
+      : (obPaidSoFar>0.5 ? ` <span style="color:#f5a623;font-weight:800;" title="Partially paid">🟡 Partial (${fmt(obPaidSoFar)}/${fmt(o.amount)})</span>` : ''));
+    const obDesc = 'Opening balance carried forward'
+      + (obLinkedInvoices.length ? `<div style="font-size:10px;color:var(--text3);">🔗 Linked: ${obLinkedInvoices.join(', ')}</div>` : '')
+      + (sel.isGroup ? `<div style="font-size:10px;color:var(--neon);">🏢 ${_lgEsc(o.party)}</div>` : '');
+    return `<tr style="background:var(--bg3);font-style:italic;">
+      <td>${o.date?fmtDate(o.date):'-'}</td>
       <td colspan="3">Previous Balance${obBadge}</td>
       <td>${obDesc}</td>
       <td></td><td></td>
-      <td style="text-align:right;font-weight:700;color:${balance<0?'var(--neon4)':'var(--neon3)'};">${fmt(Math.abs(balance))} ${balance<0?'CR':'DR'}</td>
+      <td style="text-align:right;font-weight:700;color:${obRun<0?'var(--neon4)':'var(--neon3)'};">${fmt(Math.abs(obRun))} ${obRun<0?'CR':'DR'}</td>
       <td></td>
-    </tr>` : '';
+    </tr>`;
+  }).join('');
   const rows = entries.map(e=>{
     const isDebit = e.type==='bill'||e.type==='debit_note';
     const debit = isDebit?e.amount:0;
@@ -8940,6 +9420,7 @@ function renderLedger(){
       const byMap={sender:'Sender (Hum)',receiver:'Receiver (Party)',topay:'To-Pay'};
       descCell += `<div style="font-size:10px;color:var(--neon2);">🚚 DC Freight: ${fmt(e.dcFreight)}${e.freightBy?' ('+(byMap[e.freightBy]||e.freightBy)+')':''} <span style="color:var(--text3);">— bill mein shaamil nahi</span></div>`;
     }
+    descCell += lgRowTags(e, sel); // party / unit tags for combined + unit-wise views
     const paidAmt = (e.type==='bill' && e.invNo) ? (paidAmountMap[String(e.invNo).trim()]||0) : 0;
     let invCell = e.invNo||'-';
     if(e.type==='bill' && e.invNo){
@@ -8976,7 +9457,7 @@ function renderLedger(){
   filterWarnEl.textContent = filtersActive ? '⚠️ Type/Payment Mode/Amount filter active — running Balance column reflects only the filtered rows, not the full account.' : '';
   // Freight recovered through payments was never billed, so it is added back on
   // the charge side — otherwise Outstanding would understate what the party owes.
-  const outstanding = (ob.amount||0)+totalBills-totalPaid-totalDed+totalFreight;
+  const outstanding = obTotal+totalBills-totalPaid-totalDed+totalFreight;
   const detailMode = (document.getElementById('ledger-mode')||{}).value==='with_details';
   // "Without Details" = pure table only, NO summary cards. "With All Details" = summary cards + item breakdown.
   if(detailMode){
@@ -9131,7 +9612,7 @@ function viewLedgerInvoice(ledgerId){
 }
 function clearLedgerFilters(){
   ['ledgerFrom','ledgerTo','ledgerSearch','ledgerAmountMin','ledgerAmountMax'].forEach(id=>document.getElementById(id).value='');
-  ['ledgerTypeFilter','ledgerPaymodeFilter'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['ledgerTypeFilter','ledgerPaymodeFilter','ledgerUnitSelect'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   renderLedger();
 }
 // Opens the Add Ledger Entry modal in "fresh add" mode — clears any leftover
@@ -9156,8 +9637,9 @@ function openNewLedgerEntry(){
   document.getElementById('led-attach-file').value='';
   renderLedgerAttachPreview();
   const partySel=document.getElementById('led-party');
-  const currentParty=document.getElementById('ledgerPartySelect').value;
-  if(partySel && currentParty) partySel.value=currentParty;
+  const _ctx = lgModalDefaults(); // combined ledger -> first member (or the selected unit's party); unit -> preselected
+  if(partySel && _ctx.party) partySel.value=_ctx.party;
+  lgPopulateModalUnits(_ctx.unitLabel);
   const dateInput=document.getElementById('led-date');
   if(dateInput) dateInput.value=new Date().toISOString().slice(0,10);
   openModal('addLedgerModal');
@@ -9184,6 +9666,7 @@ function editLedgerEntry(id){
   if(document.getElementById('led-status')) document.getElementById('led-status').value=e.status||'cleared';
   if(document.getElementById('led-bank')) document.getElementById('led-bank').value=e.bankName||'';
   togglePaymodeField();
+  lgPopulateModalUnits(e.unitName||'');
   _dedManuallyEdited = true; // don't silently overwrite an already-saved deduction on open
   _freightManuallyEdited = true; // same for a freight figure that was already saved
   renderInvoiceAllocation(e.allocations||[]);
@@ -9211,6 +9694,7 @@ function saveLedgerEntry(){
   const paymode=document.getElementById('led-paymode')?document.getElementById('led-paymode').value:'';
   const status=(type==='payment'&&document.getElementById('led-status'))?document.getElementById('led-status').value:'';
   const bankName=document.getElementById('led-bank')?document.getElementById('led-bank').value.trim():'';
+  const unitName=(document.getElementById('led-unit')||{}).value||'';
   if(!party||!date||!amount){toast('Party, date, and amount required — entry NOT saved','warning');return;}
   if(freight > amount + 0.5){
     toast('Freight charges cheque ki total amount se zyada nahi ho sakte — entry NOT saved','warning');
@@ -9242,9 +9726,10 @@ function saveLedgerEntry(){
     entry.allocations=allocations;
     entry.freight=freight; entry.freightNote=freightNote;
     entry.attachment=_ledgerAttachment;
+    entry.unitName=unitName;
     logAudit('edit','Ledger',`${type} entry for ${party} — amount ${amount} updated`, before, entry);
   } else {
-    entry = {id:'L'+uid(),partyName:party,date,type,refNo:ref,invNo:inv,dcNo:'',desc:narration,amount,deduction,freight,freightNote,narration,paymode,status,bankName,allocations,attachment:_ledgerAttachment};
+    entry = {id:'L'+uid(),partyName:party,date,type,refNo:ref,invNo:inv,dcNo:'',desc:narration,amount,deduction,freight,freightNote,narration,paymode,status,bankName,allocations,attachment:_ledgerAttachment,unitName};
     ledgerData.push(entry);
     initApprovalForEntity('ledger', entry);
     logAudit('create','Ledger',`${type} entry for ${party} — amount ${amount}`, undefined, entry);
@@ -9298,7 +9783,8 @@ function exportLedgerPDF(){
   const detailMode = (document.getElementById('ledger-mode')||{}).value==='with_details';
   const from = document.getElementById('ledgerFrom') ? document.getElementById('ledgerFrom').value : '';
   const to = document.getElementById('ledgerTo') ? document.getElementById('ledgerTo').value : '';
-  generateLedgerPDF(party, detailMode, from, to);
+  const _uEl = document.getElementById('ledgerUnitSelect');
+  generateLedgerPDF(party, detailMode, from, to, _uEl ? _uEl.value : '');
 }
 
 // ==================== PARTIES ====================
@@ -9323,7 +9809,8 @@ function syncPartiesFromDB(){
 function getInvoicePaidAmount(partyName, invNo){
   invNo = String(invNo).trim();
   let paid = 0;
-  ledgerData.filter(l=>l.type==='payment' && l.partyName===partyName).forEach(l=>{
+  const _scope = lgScopeParties(partyName);
+  ledgerData.filter(l=>l.type==='payment' && _scope.includes(l.partyName)).forEach(l=>{
     const invoicesOfL = (l.invNo||'').split(',').map(s=>s.trim()).filter(Boolean);
     if(!invoicesOfL.includes(invNo)) return;
     if(l.allocations && l.allocations.length){
@@ -10230,32 +10717,47 @@ function generateHSCodePDF(){
   closeModal('hsReportPdfModal');
   toast('HS Code Report PDF generated','success');
 }
-function generateLedgerPDF(party, detailMode, from, to){
-  let entries=ledgerData.filter(e=>e.partyName===party).sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.id||'').localeCompare(b.id||''));
+function generateLedgerPDF(partyVal, detailMode, from, to, unitVal){
+  // partyVal is either a plain party name or a combined-ledger key ("grp:<id>"); unitVal narrows to one unit.
+  const sel = lgResolveSelection(partyVal) || {isGroup:false, group:null, key:partyVal, label:partyVal, parties:[partyVal]};
+  const an = lgAnalyzeScope(sel);
+  unitVal = an.hasUnits ? (unitVal||'') : '';
+  const built = lgBuildEntries(sel, unitVal, an);
+  let entries = built.entries.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.id||'').localeCompare(b.id||''));
   if(!entries.length){toast('No ledger entries for this party','warning');return;}
+  const unitObj = unitVal ? an.units.find(u=>u.key===(unitVal==='__none__'?'':unitVal)) : null;
+  const unitLabelTxt = unitObj ? unitObj.label : '';
+  const party = sel.label + (unitLabelTxt ? ' - '+unitLabelTxt : '');
   const dateFiltered = !!(from || to);
   if(from) entries = entries.filter(e=>(e.date||'')>=from);
   if(to) entries = entries.filter(e=>(e.date||'')<=to);
   if(dateFiltered && !entries.length){toast('No ledger entries for this party in the selected date range','warning');return;}
   const doc=new jspdf.jsPDF();
   let y=pdfHeader(doc,`Party Ledger - ${party}`);
-  if(dateFiltered){
+  if(sel.isGroup || unitLabelTxt || dateFiltered){
     doc.setFontSize(9); doc.setFont(undefined,'normal'); doc.setTextColor(90,90,90);
-    doc.text(`Date range: ${from?fmtDate(from):'Start'} to ${to?fmtDate(to):'Today'}`, 14, y);
-    y += 6;
+    if(sel.isGroup){ doc.text(`Combined ledger: ${sel.parties.join(' + ')}`, 14, y); y += 5; }
+    if(unitLabelTxt){ doc.text(`Unit: ${unitLabelTxt} (unit-wise ledger - party previous balance not included)`, 14, y); y += 5; }
+    if(dateFiltered){ doc.text(`Date range: ${from?fmtDate(from):'Start'} to ${to?fmtDate(to):'Today'}`, 14, y); y += 5; }
+    doc.setTextColor(0,0,0);
+    y += 1;
   }
   // Opening balance only makes sense for a full, unfiltered ledger — a date-filtered
   // export starts counting from 0 rather than carrying forward a balance that would
-  // otherwise double-count entries excluded by the date range.
-  const ob = dateFiltered ? {amount:0, date:''} : (partyOpeningBalances[party] || {amount:0, date:''});
-  let balance=(ob.amount||0), totalBills=0, totalPaid=0, totalDed=0, totalFreight=0;
+  // otherwise double-count entries excluded by the date range. (Unit view: an opening
+  // balance is party-level, so it is left out there too.)
+  const obRows = dateFiltered ? [] : lgOpeningRows(sel, unitVal);
+  const obTotal = obRows.reduce((s,o)=>s+(o.amount||0),0);
+  let balance=obTotal, totalBills=0, totalPaid=0, totalDed=0, totalFreight=0;
   const cur=settings.currency||'PKR';
   const body=[];
-  if(ob.amount){
-    body.push([ob.date?fmtDate(ob.date):'-','Previous Balance','-','-','Opening balance carried forward','','','',fmt(Math.abs(balance))+(balance<0?' CR':' DR')]);
-  }
+  let obRun = 0;
+  obRows.forEach(o=>{
+    obRun += (o.amount||0);
+    body.push([o.date?fmtDate(o.date):'-','Previous Balance','-','-','Opening balance carried forward'+(sel.isGroup?' | Party: '+o.party:''),'','','',fmt(Math.abs(obRun))+(obRun<0?' CR':' DR')]);
+  });
   const paidAmountMap = {};
-  entries.filter(l=>l.type==='payment').forEach(l=>{
+  entries.filter(l=>l.type==='payment').map(l=>l._orig||l).forEach(l=>{
     const invoicesOfL = (l.invNo||'').split(',').map(s=>s.trim()).filter(Boolean);
     if(!invoicesOfL.length) return;
     if(l.allocations && l.allocations.length){
@@ -10282,6 +10784,7 @@ function generateLedgerPDF(party, detailMode, from, to){
       if(frt>0.5) desc += (desc?' | ':'')+'Freight in cheque: '+fmt(frt)+(e.freightNote?' ('+e.freightNote+')':'');
     }
     if(isDebit && e.dcFreight>0.5) desc += (desc?' | ':'')+'DC Freight: '+fmt(e.dcFreight)+' (not in bill)';
+    desc += lgPdfTags(e, sel);
     let invCell = e.invNo||'-';
     if(e.type==='bill' && e.invNo){
       const paidAmt = paidAmountMap[String(e.invNo).trim()]||0;
@@ -10296,7 +10799,7 @@ function generateLedgerPDF(party, detailMode, from, to){
     body, styles:{fontSize:8}, headStyles:{fillColor:[20,20,40]}
   });
   let fy = doc.lastAutoTable.finalY+8;
-  const outstanding = (ob.amount||0)+totalBills-totalPaid-totalDed+totalFreight;
+  const outstanding = obTotal+totalBills-totalPaid-totalDed+totalFreight;
   doc.setFontSize(10); doc.setFont(undefined,'bold');
   doc.text(`Total Bills: ${cur} ${fmt(totalBills)}   Total Paid: ${cur} ${fmt(totalPaid)}   Deductions: ${cur} ${fmt(totalDed)}${totalFreight>0.5?`   Freight: ${cur} ${fmt(totalFreight)}`:''}   Outstanding: ${cur} ${fmt(outstanding)}`,14,fy);
   fy += 10;
@@ -16125,7 +16628,8 @@ function _allocKey(invNo){ return String(invNo).trim().replace(/[^a-zA-Z0-9]/g,'
 // invoice numbers appear against more than one DC, e.g. split deliveries).
 function getInvoiceBillTotal(partyName, invNo){
   invNo = String(invNo).trim();
-  return ledgerData.filter(l=>l.type==='bill' && l.partyName===partyName && String(l.invNo||'').trim()===invNo)
+  const _scope = lgScopeParties(partyName); // a combined ledger shares invoices across its parties
+  return ledgerData.filter(l=>l.type==='bill' && _scope.includes(l.partyName) && String(l.invNo||'').trim()===invNo)
     .reduce((s,l)=>s+(l.amount||0),0);
 }
 // Once the person edits the Deduction box by hand, stop silently overwriting it.
@@ -16221,7 +16725,8 @@ function showLedInvSuggestions(){
   const frag = (parts[parts.length-1]||'').trim().toLowerCase();
   const already = new Set(parts.slice(0,-1).map(s=>s.trim()).filter(Boolean));
   const billTotals = {};
-  ledgerData.filter(l=>l.type==='bill' && l.partyName===party && l.invNo).forEach(l=>{
+  const _lgScope = lgScopeParties(party);
+  ledgerData.filter(l=>l.type==='bill' && _lgScope.includes(l.partyName) && l.invNo).forEach(l=>{
     const k=String(l.invNo).trim(); billTotals[k]=(billTotals[k]||0)+(l.amount||0);
   });
   let list = Object.keys(billTotals).filter(no=>!already.has(no));
@@ -16240,7 +16745,9 @@ function hideLedInvSuggestions(){ const wrap=document.getElementById('led-inv-su
 function pickLedInvoice(no){
   const inp = document.getElementById('led-inv');
   let parts = inp.value.split(',').map(s=>s.trim()).filter(Boolean);
+  const _firstInvoice = parts.length===0;
   if(!parts.includes(no)) parts.push(no);
+  if(_firstInvoice) lgAutoSwitchPartyForInvoice(no);
   inp.value = parts.join(',');
   hideLedInvSuggestions();
   renderInvoiceAllocation();
@@ -19818,7 +20325,7 @@ function jumpToPartyLedger(partyName){
   closeGlobalSearch();
   document.getElementById('globalSearchInput').value = '';
   showTab('ledger');
-  setTimeout(()=>{ const sel=document.getElementById('ledgerPartySelect'); if(sel){ sel.value=partyName; renderLedger(); } }, 60);
+  setTimeout(()=>{ const sel=document.getElementById('ledgerPartySelect'); if(sel){ sel.value=lgSelectValueForParty(partyName); renderLedger(); } }, 60);
 }
 function jumpToDCFromSearch(idx){
   closeGlobalSearch();
