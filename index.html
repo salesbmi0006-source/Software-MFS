@@ -465,6 +465,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
     <div class="tab" onclick="showTab('quotation')" id="tab-quotation">💬 Quotation</div>
     <div class="tab" onclick="showTab('descriptions')" id="tab-descriptions">📄 Descriptions</div>
     <div class="tab" onclick="showTab('digitalinvoices')" id="tab-digitalinvoices">📎 D.Invoices</div>
+    <div class="tab" onclick="showTab('commercialbills')" id="tab-commercialbills">🧾 Comm. Bills</div>
     <div class="tab" onclick="showTab('docmanager')" id="tab-docmanager">📁 Documents</div>
 
     <div class="tab-group-label">Parties &amp; Communication</div>
@@ -1387,6 +1388,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
         <button class="btn btn-green btn-sm" onclick="document.getElementById('di-file-input').click()">📂 Import PDFs</button>
         <input type="file" id="di-file-input" accept=".pdf" multiple style="display:none;" onchange="importDigitalInvoiceFiles(event)">
         <button class="btn btn-neon btn-sm" onclick="autoLinkDigitalInvoices()">🔗 Re-Link All</button>
+        <button class="btn btn-purple btn-sm" onclick="cbSyncFbrNumbersUI()" title="PDF ke FBR numbers DC records mein pakka save karo (PDF hatne ke baad bhi number rahe)">🧾 Save FBR Nos to DCs</button>
         <button class="btn btn-yellow btn-sm" onclick="renderDigitalInvoices()">🔄 Refresh</button>
       </div>
     </div>
@@ -1434,6 +1436,49 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
     </div>
     <div class="accent-box mt-8" style="font-size:11px;color:var(--text2);">
       <strong>How it works:</strong> Import PDF invoice files (multiple at once) → System reads each PDF and auto-extracts Invoice #, DC #, PO #, FBR Invoice #, Party Name → Auto-links to matching DC records → Files persist permanently (saved in browser's IndexedDB) until you manually delete them, even after refresh or restart → Included in JSON backup/restore.
+    </div>
+  </div>
+</div>
+
+<!-- ====== COMMERCIAL BILLS TAB ====== -->
+<div class="tab-panel" id="panel-commercialbills">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">🧾 Commercial Bills — DC + Freight</div>
+      <div class="flex-gap">
+        <button class="btn btn-yellow btn-sm" onclick="cbScanNow()" title="DC records dobara scan karo + PDF se FBR numbers DC mein save karo">🔄 Scan Now</button>
+        <button class="btn btn-green btn-sm" id="cb-sel-btn" onclick="cbBulkPDF('selected')">📄 Selected PDF (0)</button>
+        <button class="btn btn-purple btn-sm" onclick="cbBulkPDF('all')" title="Jo bills abhi list mein dikh rahe hain un sab ki ek PDF">📄 All Shown PDF</button>
+      </div>
+    </div>
+    <div class="accent-box" style="font-size:11px;color:var(--text2);margin-bottom:10px;line-height:1.6;">
+      <strong>Auto-scan:</strong> jis DC mein <strong>Freight Charges</strong> hain wo yahan khud aa jati hai — DC ki tafseel wahi rehti hai, sab se oper <strong>COMMERCIAL BILL</strong> likha hota hai aur aakhir mein Freight add ho kar <strong>Grand Total</strong> aata hai (digital invoice ke sath laga kar bhejne ke liye).<br>
+      <strong>FBR Numbers:</strong> D.Invoices mein PDF import karte hi FBR invoice number DC record mein <strong>pakka save</strong> ho jata hai — PDF baad mein hat bhi jaye to number yahan check ho sakta hai.
+    </div>
+    <div class="search-bar">
+      <input type="text" id="cb-search" placeholder="Search DC no, invoice no, FBR no, party, PO..." oninput="cbRender()" style="max-width:340px;">
+      <select id="cb-party" onchange="cbRender()" style="width:200px;"><option value="">All Parties</option></select>
+      <select id="cb-month" onchange="cbRender()" style="width:150px;"><option value="">All Months</option></select>
+      <select id="cb-scope" onchange="cbRender()" style="width:200px;">
+        <option value="freight">Freight wali DCs</option>
+        <option value="all">Sab invoiced DCs</option>
+      </select>
+      <select id="cb-fbr" onchange="cbRender()" style="width:190px;">
+        <option value="">FBR No: All</option>
+        <option value="missing">FBR No missing</option>
+        <option value="has">FBR No saved</option>
+      </select>
+    </div>
+    <div id="cb-stats" class="stats-grid" style="margin-bottom:12px;"></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th style="width:30px;"><input type="checkbox" id="cb-check-all" style="width:auto;" onchange="cbToggleAll(this.checked)"></th>
+          <th>DC No</th><th>Date</th><th>Party</th><th>Invoice No</th><th>FBR Invoice No</th>
+          <th style="text-align:right;">Bill Amount</th><th style="text-align:right;">Freight</th><th style="text-align:right;">Grand Total</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="cb-tbody"></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -3824,6 +3869,27 @@ Switch Socket"></textarea>
   <div class="modal-footer">
     <button class="btn btn-green" onclick="printDCChallan()">🖨️ Print DC</button>
     <button class="btn btn-neon" onclick="closeModal('dcPrintModal')">Close</button>
+  </div>
+</div>
+</div>
+
+<!-- COMMERCIAL BILL MODAL -->
+<div class="modal-overlay" id="commBillModal">
+<div class="modal modal-lg">
+  <div class="modal-header"><h3 id="cb-modal-title">🧾 Commercial Bill</h3><button class="close-btn" onclick="closeModal('commBillModal')">✕</button></div>
+  <div class="modal-body">
+    <div id="cb-frame" style="background:#fff;border:1px solid #ddd;padding:6px;overflow-x:auto;"></div>
+    <div class="settings-section" style="margin-top:12px;">
+      <div class="settings-section-title">🧾 FBR Invoice Number (DC record mein pakka save hota hai)</div>
+      <div id="cb-fbr-editor"></div>
+      <button class="btn btn-yellow btn-sm" onclick="cbSaveFbr()">💾 Save FBR No.</button>
+      <span style="font-size:11px;color:var(--text3);margin-left:8px;">PDF import se ye khud bhar jata hai; PDF na ho to yahan haath se likh sakte hain.</span>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="cbPrint()">🖨️ Print</button>
+    <button class="btn btn-purple" onclick="cbDownloadPDF()">📄 Download PDF</button>
+    <button class="btn btn-neon" onclick="closeModal('commBillModal')">Close</button>
   </div>
 </div>
 </div>
@@ -6363,7 +6429,7 @@ const DZ_MODULES = [
   {key:'fastbilling',label:'⚡ Fast Billing'},
   {key:'records',label:'📋 Records'},{key:'dashboard',label:'📊 Dashboard'},{key:'analytics',label:'📊 Analytics'},
   {key:'ledger',label:'📒 Ledger'},{key:'fbr',label:'🧾 FBR/Tax'},{key:'reports',label:'📄 Reports'},
-  {key:'quotation',label:'💬 Quotation'},{key:'descriptions',label:'📄 Descriptions'},{key:'digitalinvoices',label:'📎 D.Invoices'},{key:'docmanager',label:'📁 Documents'},
+  {key:'quotation',label:'💬 Quotation'},{key:'descriptions',label:'📄 Descriptions'},{key:'digitalinvoices',label:'📎 D.Invoices'},{key:'commercialbills',label:'🧾 Comm. Bills'},{key:'docmanager',label:'📁 Documents'},
   {key:'parties',label:'👥 Parties'},{key:'partylookup',label:'📨 Party Lookup'},{key:'crm',label:'🤝 CRM'},
   {key:'sendcenter',label:'📤 Send Center'},{key:'dispatch',label:'🚚 Dispatch'},
   {key:'employees',label:'👔 Employees'},{key:'stock',label:'📦 Stock'},{key:'purchaseorders',label:'📝 Purchase Orders'},
@@ -6733,7 +6799,8 @@ function renderTabContent(id){
   if(id==='cheques') { renderCheques(); renderAllPayments(); }
   if(id==='hscodes'){ renderHSCodes(); renderHsStockComparison(); }
   if(id==='settings') { applySettings(); renderAutoNumberConfig(); const abf=document.getElementById('ab-frequency'); if(abf) abf.value = advancedBackupSettings.frequency; renderBackupVersionsList(); const ape=document.getElementById('ap-enabled'); if(ape) ape.checked = !!settings.approvalWorkflowEnabled; const apPo=document.getElementById('ap-po-enabled'); if(apPo) apPo.checked = !!settings.poApprovalWorkflowEnabled; const apExp=document.getElementById('ap-exp-enabled'); if(apExp) apExp.checked = !!settings.expApprovalWorkflowEnabled; const apChq=document.getElementById('ap-chq-enabled'); if(apChq) apChq.checked = !!settings.chqApprovalWorkflowEnabled; const apLed=document.getElementById('ap-led-enabled'); if(apLed) apLed.checked = !!settings.ledgerApprovalWorkflowEnabled; refreshGDriveSettingsUI(); if(typeof refreshDzOwnerPanel==='function') refreshDzOwnerPanel(); }
-  if(id==='digitalinvoices'){ renderDigitalInvoices(); updateDiCount(); }
+  if(id==='digitalinvoices'){ cbSyncFbrNumbers({silent:true}); renderDigitalInvoices(); updateDiCount(); }
+  if(id==='commercialbills'){ cbOnOpen(); }
   if(id==='security') renderSecuritySettings();
   if(id==='quotation'){
     renderSavedQuotations(); renderQuotationDashboard();
@@ -6804,7 +6871,7 @@ const MOBILE_MORE_GROUPS = [
     {id:'fastbilling',label:'Fast Billing',icon:'⚡'},
     {id:'ledger',label:'Ledger',icon:'📒'},{id:'fbr',label:'FBR/Tax',icon:'🧾'},
     {id:'quotation',label:'Quotation',icon:'💬'},{id:'descriptions',label:'Descriptions',icon:'📄'},
-    {id:'digitalinvoices',label:'D.Invoices',icon:'📎'},{id:'docmanager',label:'Documents',icon:'📁'}
+    {id:'digitalinvoices',label:'D.Invoices',icon:'📎'},{id:'commercialbills',label:'Comm. Bills',icon:'🧾'},{id:'docmanager',label:'Documents',icon:'📁'}
   ]},
   {label:'Parties & Communication', tabs:[
     {id:'partylookup',label:'Party Lookup',icon:'📨'},{id:'crm',label:'CRM',icon:'🤝'},
@@ -6981,6 +7048,7 @@ function getFilteredRecords(){
              (r.dcNo||'').toLowerCase().includes(search) ||
              (r.invNo||'').toLowerCase().includes(search) ||
              (r.poNo||'').toLowerCase().includes(search) ||
+             cbFbrText(r).toLowerCase().includes(search) ||
              itemText.includes(search);
     });
   }
@@ -7737,6 +7805,7 @@ async function saveDC(){
   if(rec.invNo && editingDcIdx===null){ addAutoLedger(rec, db.length-1); }
   else if(rec.invNo && editingDcIdx!==null){ syncAutoLedgerFromDC(rec, oldRec); }
   syncPartiesFromDB();
+  cbSyncFbrNumbers({silent:true, noSave:true}); // a DC that just got its invoice no. picks up the FBR no. of an already-imported PDF
   saveData(); renderRecords(); closeDcModal();
   // A DC's status (Pending/Ready/Invoiced) also drives the Dashboard's stat
   // cards and "Ready for Invoice" mini-summary. Without this, adding an
@@ -8272,11 +8341,15 @@ function quickView(idx){
     <button class="btn btn-green btn-sm" onclick="openDigitalInvoice('${di.id}')">📄 Open PDF Invoice</button>
     ${di.fbrInvNo?`<span style="font-size:11px;color:var(--text2);">FBR: ${di.fbrInvNo}</span>`:''}
   </div>`;
+  // FBR invoice number saved on the DC record itself (stays even when the PDF is no longer in the D.Invoices list)
+  { const _fbrTxt = cbFbrText(rec);
+    if(_fbrTxt && !(di && di.fbrInvNo)) html += `<div class="accent-box mt-8" style="border-color:var(--neon4);">🧾 <strong>FBR Invoice No:</strong> ${_lgEsc(_fbrTxt)} <span style="font-size:10px;color:var(--text3);">(DC record mein saved)</span></div>`; }
   // DC Print button
   html+=approvalWorkflowHtml(idx);
   html+=`<div class="flex-gap mt-8">
     <button class="btn btn-yellow btn-sm" onclick="closeModal('quickViewModal');editDC(${idx})">✏️ Edit DC</button>
     <button class="btn btn-neon btn-sm" onclick="closeModal('quickViewModal');openDCPrint(${idx})">🖨️ Print Delivery Challan</button>
+    ${rec.cancelled ? '' : `<button class="btn btn-green btn-sm" onclick="closeModal('quickViewModal');openCommercialBill(${idx})">🧾 Commercial Bill${getDCFreight(rec)>0?' (+ Freight)':''}</button>`}
     <button class="btn btn-neon btn-sm" onclick="showRecordTimeline(${idx})">🕐 Activity Timeline</button>
     ${(rec.dispatch && rec.dispatch.method) ? `<button class="btn btn-neon btn-sm" onclick="generateDispatchFullPDF(${idx})">📄 Full Dispatch/Bilty PDF</button>` : ''}
   </div>`;
@@ -10950,6 +11023,7 @@ function renderAll(){
   populatePartyList(); populateMonthFilter(); populateChequeList();
   populateDescList();
   renderRecords(); renderDashboard();
+  if(typeof cbRefreshIfActive==='function') cbRefreshIfActive();
 }
 function applyDefaultFilter(){
   const f = settings.defaultFilter;
@@ -11751,10 +11825,11 @@ async function importDigitalInvoiceFileList(files, opts){
   // Auto-link all newly added + existing unlinked
   autoLinkDigitalInvoices(true);
   saveDigitalInvoices();
+  const _cbSync = cbSyncFbrNumbers({silent:true}); // FBR nos -> DC records, so they survive after the PDF list is gone
   renderDigitalInvoices();
   updateDiCount();
-  if(!opts.silent) toast(`Imported: ${added} | Skipped (duplicates): ${skipped}${errors?' | Errors: '+errors:''}`, added>0?'success':'warning');
-  return {added, skipped, errors};
+  if(!opts.silent) toast(`Imported: ${added} | Skipped (duplicates): ${skipped}${errors?' | Errors: '+errors:''}${_cbSync.changed?' | FBR nos saved in DCs: '+_cbSync.changed:''}`, added>0?'success':'warning');
+  return {added, skipped, errors, fbrSynced:_cbSync.changed};
 }
 
 // ==================== FOLDER AUTO-IMPORT (link a computer folder, then 1-click re-import) ====================
@@ -11832,7 +11907,7 @@ async function importFromLinkedFolder(){
     const result = await importDigitalInvoiceFileList(files);
     diLastFolderImport = new Date().toLocaleString();
     await updateFolderLinkUI();
-    toast(`Folder auto-import done — Imported: ${result.added} | Skipped (duplicates): ${result.skipped}${result.errors?' | Errors: '+result.errors:''}`, result.added>0?'success':'info');
+    toast(`Folder auto-import done — Imported: ${result.added} | Skipped (duplicates): ${result.skipped}${result.errors?' | Errors: '+result.errors:''}${result.fbrSynced?' | FBR nos saved in DCs: '+result.fbrSynced:''}`, result.added>0?'success':'info');
   }catch(err){
     console.error(err);
     toast('Folder auto-import failed — you may need to re-link the folder','error');
@@ -11851,8 +11926,9 @@ function autoLinkDigitalInvoices(silent){
   });
   saveDigitalInvoices();
   if(!silent){
+    const _r = cbSyncFbrNumbers({silent:true});
     renderDigitalInvoices();
-    toast(`Auto-linked ${linked} digital invoice(s) to DC records`,'success');
+    toast(`Auto-linked ${linked} digital invoice(s) to DC records${_r.changed?' | FBR nos saved in DCs: '+_r.changed:''}`,'success');
   }
 }
 function renderDigitalInvoices(){
@@ -11901,7 +11977,7 @@ function renderDigitalInvoices(){
 }
 function updateDiFbrNo(id, val){
   const di = digitalInvoices.find(d=>d.id===id);
-  if(di){ di.fbrInvNo=val.trim(); saveDigitalInvoices(); }
+  if(di){ di.fbrInvNo=val.trim(); saveDigitalInvoices(); cbSyncFbrNumbers({toast:true}); }
 }
 async function openDigitalInvoice(id){
   const di = digitalInvoices.find(d=>d.id===id);
@@ -11923,7 +11999,7 @@ function linkDigitalInvoice(id){
   di.manualInvNo = invNo.trim();
   const idx = db.findIndex(r=>r.invNo===invNo.trim()||r.dcNo===invNo.trim());
   di.linkedDcIdx = idx;
-  saveDigitalInvoices(); renderDigitalInvoices();
+  saveDigitalInvoices(); cbSyncFbrNumbers({silent:true}); renderDigitalInvoices();
   toast(idx>=0?`Linked to DC record: ${db[idx].dcNo}`:'Saved (no matching DC found yet)','info');
 }
 async function deleteDigitalInvoice(id){
@@ -11940,7 +12016,21 @@ function searchFBRInvoice(){
   const di = digitalInvoices.find(d=>(d.fbrInvNo||'').toLowerCase()===q.toLowerCase());
   const res = document.getElementById('di-fbr-result');
   if(!di){
-    if(res) res.innerHTML=`<div class="accent-box" style="border-color:var(--neon3);color:var(--neon3);">❌ No digital invoice found with FBR No: "${q}"</div>`;
+    // PDF library may be empty (it is not kept in the cloud) — the FBR no. is still saved inside the DC records.
+    const dcHit = db.findIndex(r=>cbFbrText(r).toLowerCase().split(' / ').includes(q.toLowerCase()));
+    if(dcHit>=0){
+      const r = db[dcHit];
+      if(res) res.innerHTML=`<div class="accent-box" style="border-color:var(--neon4);">
+        <strong class="green">✅ Found in DC records</strong> <span style="font-size:11px;color:var(--text3);">(PDF is library mein nahi, lekin FBR number DC mein saved hai)</span><br>
+        FBR No: <strong>${_lgEsc(cbFbrText(r))}</strong><br>
+        DC: ${_lgEsc(r.dcNo)} | Invoice: ${_lgEsc(r.invNo||'-')} | Party: ${_lgEsc(r.partyName)}
+        <div class="flex-gap" style="margin-top:8px;">
+          <button class="btn btn-yellow btn-sm" onclick="quickView(${dcHit})">🔍 View DC</button>
+          <button class="btn btn-green btn-sm" onclick="openCommercialBill(${dcHit})">🧾 Commercial Bill</button>
+        </div></div>`;
+      return;
+    }
+    if(res) res.innerHTML=`<div class="accent-box" style="border-color:var(--neon3);color:var(--neon3);">❌ No digital invoice found with FBR No: "${_lgEsc(q)}"</div>`;
     return;
   }
   const rec = di.linkedDcIdx>=0?db[di.linkedDcIdx]:null;
@@ -14054,6 +14144,409 @@ function saveTermsFromSettings(){
 }
 
 
+// ==================== COMMERCIAL BILL (DC + Freight) & FBR INVOICE NUMBER SYNC (v76) ====================
+// Commercial Bill = DC ki wahi tafseel (items, qty, rate, tax) + neeche Freight Charges add ho kar Grand Total.
+// Digital (FBR) invoice ke sath laga kar bhejne ke liye.
+//
+// FBR NUMBERS: D.Invoices ki PDF list sirf is browser mein hoti hai (cloud mein nahi jati), isliye reload / PDF hatne
+// ke baad FBR numbers ghayab ho jate the. Ab jab bhi PDF import hoti hai (ya FBR no. edit / link hota hai) to number
+// DC record ke andar (rec.fbrInvMap / rec.fbrInvNo) save ho jata hai — DC records cloud + backup mein jate hain,
+// is liye PDF na bhi rahe to FBR number hamesha mehfooz rehta hai.
+function cbTokens(s){ return String(s==null?'':s).split(/[\/,&]+/).map(x=>x.trim()).filter(Boolean); }
+// All FBR invoice numbers of a DC as one text ("A / B" when the DC was billed on two invoices, e.g. 522/523).
+function cbFbrText(rec){
+  if(!rec) return '';
+  const m = rec.fbrInvMap || {}, toks = cbTokens(rec.invNo), vals = [];
+  toks.forEach(t=>{ if(m[t] && !vals.includes(m[t])) vals.push(m[t]); });
+  Object.keys(m).forEach(k=>{ if(!toks.includes(k) && m[k] && !vals.includes(m[k])) vals.push(m[k]); });
+  return vals.length ? vals.join(' / ') : (rec.fbrInvNo||'');
+}
+// Copies FBR invoice numbers from imported digital-invoice PDFs onto the matching DC records.
+// A number typed in by hand (source "manual") is never overwritten by a PDF.
+function cbSyncFbrNumbers(opts){
+  opts = opts || {};
+  let changed = 0, matched = 0, already = 0; const unmatched = [];
+  (typeof digitalInvoices!=='undefined' ? digitalInvoices : []).forEach(di=>{
+    const fbr = String(di.fbrInvNo||'').trim(); if(!fbr) return;
+    const invTok = String(di.manualInvNo||di.invNo||'').trim();
+    let targets = [];
+    if(invTok) targets = db.filter(r=>!r.voidOnly && !r.cancelled && cbTokens(r.invNo).includes(invTok)).map(r=>({r, tok:invTok}));
+    if(!targets.length){ // fallback: match by DC number (the PDF's own DC # or the value typed in "link")
+      const dcs = [di.dcNo, invTok].map(x=>String(x||'').trim()).filter(Boolean);
+      db.forEach(r=>{
+        if(r.voidOnly || r.cancelled || !dcs.includes(String(r.dcNo||'').trim())) return;
+        const t = cbTokens(r.invNo); if(t.length===1) targets.push({r, tok:t[0]});
+      });
+    }
+    if(!targets.length){ unmatched.push(fbr); return; }
+    targets.forEach(({r,tok})=>{
+      matched++;
+      r.fbrInvMap = r.fbrInvMap || {}; r.fbrInvSrc = r.fbrInvSrc || {};
+      if(r.fbrInvSrc[tok]==='manual' && r.fbrInvMap[tok] && r.fbrInvMap[tok]!==fbr) return;
+      if(r.fbrInvMap[tok]===fbr){ already++; }
+      else { r.fbrInvMap[tok] = fbr; r.fbrInvSrc[tok] = 'pdf'; r.fbrInvSyncedAt = new Date().toISOString(); changed++; }
+      const txt = cbFbrText(r);
+      if(r.fbrInvNo!==txt) r.fbrInvNo = txt;
+    });
+  });
+  if(changed && !opts.noSave){
+    saveData();
+    if(typeof logAudit==='function') logAudit('edit','DC/Invoice',`FBR invoice numbers saved into ${changed} DC record(s) from digital invoice PDFs`, undefined, undefined);
+  }
+  if(changed) cbRefreshIfActive();
+  const res = {changed, matched, already, unmatched};
+  if(opts.toast){
+    if(changed) toast(`✅ ${changed} DC record(s) mein FBR invoice number save ho gaye${already?` (${already} pehle se save the)`:''}`,'success');
+    else toast(matched ? `Sab FBR numbers pehle se DC records mein save hain (${already})` : 'Koi FBR number sync karne ke liye nahi mila','info');
+    if(unmatched.length) toast(`⚠️ ${unmatched.length} FBR number ka DC/invoice no. nahi mila`,'warning');
+  }
+  return res;
+}
+function cbSyncFbrNumbersUI(){ cbSyncFbrNumbers({toast:true}); renderDigitalInvoices(); }
+function cbRefreshIfActive(){
+  const p = document.getElementById('panel-commercialbills');
+  if(p && p.classList.contains('active')) cbRender();
+}
+
+// ---- Amount in words (Pakistani lakh/crore system) ----
+function cbWords(n){
+  n = Math.round((parseFloat(n)||0)*100)/100;
+  const rupees = Math.floor(n), paisa = Math.round((n-rupees)*100);
+  const ones = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+  const tens = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+  const two = x=> x<20 ? ones[x] : tens[Math.floor(x/10)] + (x%10 ? ' '+ones[x%10] : '');
+  const three = x=>{ let s=''; if(x>=100){ s+=ones[Math.floor(x/100)]+' Hundred'; x%=100; if(x) s+=' '; } if(x) s+=two(x); return s; };
+  const conv = x=>{
+    if(x===0) return 'Zero';
+    const parts = [];
+    const crore = Math.floor(x/1e7); x%=1e7;
+    const lakh = Math.floor(x/1e5); x%=1e5;
+    const th = Math.floor(x/1e3); x%=1e3;
+    if(crore) parts.push(three(crore)+' Crore');
+    if(lakh) parts.push(two(lakh)+' Lakh');
+    if(th) parts.push(two(th)+' Thousand');
+    if(x) parts.push(three(x));
+    return parts.join(' ');
+  };
+  const cur = settings.currency||'PKR';
+  const unit = cur==='PKR' ? 'Rupees' : cur;
+  return `${unit} ${conv(rupees)}${paisa?` and ${conv(paisa)} Paisa`:''} Only`;
+}
+
+// ---- Everything a commercial bill needs, worked out once (used by preview, print and PDF) ----
+function cbData(rec){
+  const items = (rec.items||[]).map(it=>{
+    const qty = parseFloat(it.qty||0), rate = parseFloat(it.rate||0), tax = parseFloat(it.tax||0);
+    const gross = qty*rate, taxAmt = gross*tax/100;
+    return {desc:it.desc||'', hscode:it.hscode||'', uom:it.uom||'', qtyTxt:String(it.qty==null?'':it.qty), rate, tax, gross, taxAmt, total:gross+taxAmt};
+  });
+  const gross = items.reduce((s,i)=>s+i.gross,0), taxAmt = items.reduce((s,i)=>s+i.taxAmt,0);
+  const total = gross + taxAmt;
+  const freight = getDCFreight(rec);
+  const party = fbrParties.find(p=>p.partyName===rec.partyName) || {};
+  const disp = rec.dispatch && rec.dispatch.method ? rec.dispatch : null;
+  let dispatchTxt = '';
+  if(disp){
+    const label = disp.method==='leopards' ? 'Leopards Courier' : (disp.method==='bilty' ? 'Bilty / Cargo' : (COURIER_LABELS[disp.method]||disp.method));
+    dispatchTxt = 'Dispatch: '+String(label).replace(/^[^A-Za-z]+/,'') + (disp.trackingNo?` | ${disp.method==='leopards'?'Tracking':'Bilty'} #: ${disp.trackingNo}`:'') + (disp.addaName?` | Adda: ${disp.addaName}`:'');
+  }
+  return {rec, items, gross, taxAmt, total, freight, grand: total+freight, party, dispatchTxt, cur: settings.currency||'PKR',
+    fbr: cbFbrText(rec), note: rec.freightNote||''};
+}
+function cbFileName(rec){
+  const base = 'Commercial_Bill_' + (rec.invNo ? 'Inv'+String(rec.invNo).replace(/[^A-Za-z0-9]+/g,'-') : 'DC'+String(rec.dcNo||'').replace(/[^A-Za-z0-9]+/g,'-')) + '_' + String(rec.partyName||'').replace(/[^A-Za-z0-9]+/g,'_').slice(0,30);
+  return base.replace(/_+$/,'') + '.pdf';
+}
+
+// ---- HTML version (preview + print) ----
+function cbBuildHTML(rec){
+  const d = cbData(rec), E = _lgEsc, c = d.cur;
+  const td = 'border:1px solid #000;padding:4px 6px;';
+  const rows = d.items.map((it,i)=>`<tr>
+    <td style="${td}text-align:center;">${i+1}</td><td style="${td}">${E(it.desc)}</td><td style="${td}text-align:center;">${E(it.hscode)}</td>
+    <td style="${td}text-align:center;">${E(it.uom)}</td><td style="${td}text-align:center;">${E(it.qtyTxt)}</td>
+    <td style="${td}text-align:right;">${fmt(it.rate)}</td><td style="${td}text-align:center;">${it.tax}%</td>
+    <td style="${td}text-align:right;">${fmt(it.gross)}</td><td style="${td}text-align:right;">${fmt(it.taxAmt)}</td><td style="${td}text-align:right;font-weight:bold;">${fmt(it.total)}</td></tr>`).join('');
+  const ntnLine = [];
+  if(settings.showNtn!==false && settings.ntn) ntnLine.push('NTN: '+E(settings.ntn));
+  if(settings.showStrn!==false && settings.strn) ntnLine.push('STRN: '+E(settings.strn));
+  const tot = (label, val, strong)=>`<tr><td style="padding:3px 8px;${strong?'font-weight:bold;':''}">${label}</td><td style="padding:3px 8px;text-align:right;${strong?'font-weight:bold;':''}">${val}</td></tr>`;
+  return `<div id="cb-print-area" style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;padding:18px;color:#000;font-size:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:8px;">
+      <div>
+        <div style="font-size:20px;font-weight:bold;">${E(settings.companyName||'SAU CORPORATION')}</div>
+        ${settings.pdfFullDetails!==false?`<div style="font-size:11px;line-height:1.5;">${ntnLine.join(' &nbsp; ')}${ntnLine.length?'<br>':''}${E((settings.address||'').replace(/\n/g,' '))}<br>${settings.phone?'Phone: '+E(settings.phone):''}${settings.email?' &nbsp; Email: '+E(settings.email):''}</div>`:''}
+      </div>
+      ${settings.logoBase64?`<img src="${settings.logoBase64}" style="max-height:60px;max-width:150px;">`:''}
+    </div>
+    <div style="text-align:center;font-size:20px;font-weight:bold;letter-spacing:3px;margin:10px 0;border:2px solid #000;padding:5px;">COMMERCIAL BILL</div>
+    <div style="display:flex;justify-content:space-between;gap:16px;margin-bottom:10px;font-size:12px;">
+      <div style="flex:1;"><strong>M/s:</strong> ${E(rec.partyName||'')}
+        ${d.party.address?`<br>${E(d.party.address)}`:''}${d.party.ntn?`<br><strong>NTN:</strong> ${E(d.party.ntn)}`:''}${rec.unitName?`<br><strong>Unit:</strong> ${E(rec.unitName)}`:''}</div>
+      <div style="text-align:right;line-height:1.6;">
+        <strong>Date:</strong> ${E(fmtDate(rec.date))}<br>
+        <strong>Invoice #:</strong> ${E(rec.invNo||'-')}${rec.invDate?` (${E(rec.invDate)})`:''}<br>
+        ${d.fbr?`<strong>FBR Invoice #:</strong> <span style="font-size:11px;">${E(d.fbr)}</span><br>`:''}
+        <strong>DC #:</strong> ${E(rec.dcNo||'')}<br><strong>PO #:</strong> ${E(rec.poNo||'-')}
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px;">
+      <thead><tr style="background:#eee;">
+        <th style="${td}">Sr#</th><th style="${td}">Description</th><th style="${td}">HS Code</th><th style="${td}">UOM</th><th style="${td}">Qty</th>
+        <th style="${td}">Rate</th><th style="${td}">Tax%</th><th style="${td}">Gross Amt</th><th style="${td}">Sales Tax</th><th style="${td}">Total (Incl.)</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+      <table style="border-collapse:collapse;min-width:300px;font-size:12px;">
+        ${tot('Sub Total (Excl. Tax)', c+' '+fmt(d.gross))}
+        ${tot('Sales Tax', c+' '+fmt(d.taxAmt))}
+        ${tot('Invoice Total (Incl. Tax)', c+' '+fmt(d.total), true)}
+        ${d.freight>0?tot('🚚 Freight Charges'+(d.note?` <span style="font-size:10px;">(${E(d.note)})</span>`:''), c+' '+fmt(d.freight)):''}
+        <tr style="background:#eee;border-top:2px solid #000;border-bottom:2px solid #000;"><td style="padding:5px 8px;font-weight:bold;font-size:13px;">GRAND TOTAL</td><td style="padding:5px 8px;text-align:right;font-weight:bold;font-size:14px;">${c} ${fmt(d.grand)}</td></tr>
+      </table>
+    </div>
+    <div style="margin-top:8px;font-size:11px;"><strong>Amount in words:</strong> ${E(cbWords(d.grand))}</div>
+    ${d.dispatchTxt?`<div style="margin-top:4px;font-size:11px;">${E(d.dispatchTxt)}</div>`:''}
+    <div style="display:flex;justify-content:space-between;margin-top:46px;font-size:12px;">
+      <div>Prepared By: ______________________</div><div>Authorized Signature: ______________________</div>
+    </div>
+  </div>`;
+}
+
+// ---- PDF version ----
+function cbDrawBill(doc, rec){
+  const d = cbData(rec), W = doc.internal.pageSize.getWidth(), c = d.cur;
+  if(settings.logoBase64){
+    try{ doc.addImage(settings.logoBase64, settings.logoBase64.includes('image/png')?'PNG':'JPEG', W-34, 8, 20, 16); }catch(e){}
+  }
+  doc.setTextColor(0,0,0);
+  doc.setFont(undefined,'bold'); doc.setFontSize(15); doc.text(settings.companyName||'SAU CORPORATION', 14, 15);
+  let y = 21; doc.setFont(undefined,'normal'); doc.setFontSize(8.5);
+  if(settings.pdfFullDetails!==false){
+    const nt = []; if(settings.showNtn!==false && settings.ntn) nt.push('NTN: '+settings.ntn); if(settings.showStrn!==false && settings.strn) nt.push('STRN: '+settings.strn);
+    if(nt.length){ doc.text(nt.join('   '), 14, y); y += 4.5; }
+    if(settings.address){ doc.splitTextToSize(String(settings.address).replace(/\n/g,' '), W-60).forEach(l=>{ doc.text(l, 14, y); y += 4.2; }); }
+    const cp = []; if(settings.phone) cp.push('Phone: '+settings.phone); if(settings.email) cp.push('Email: '+settings.email);
+    if(cp.length){ doc.text(cp.join('   '), 14, y); y += 4.5; }
+  }
+  y += 1; doc.setDrawColor(0); doc.setLineWidth(0.5); doc.line(14, y, W-14, y); y += 9;
+  doc.setFont(undefined,'bold'); doc.setFontSize(16); doc.text('COMMERCIAL BILL', W/2, y, {align:'center'});
+  doc.setLineWidth(0.4); doc.rect(W/2-40, y-7, 80, 10); y += 9;
+  // party (left) + document details (right)
+  const topY = y;
+  doc.setFontSize(9.5); doc.setFont(undefined,'bold'); doc.text('M/s:', 14, y);
+  doc.setFont(undefined,'normal');
+  let ly = y;
+  doc.splitTextToSize(String(rec.partyName||''), 86).forEach(l=>{ doc.text(l, 24, ly); ly += 4.6; });
+  doc.setFontSize(8.5);
+  if(d.party.address) doc.splitTextToSize(String(d.party.address), 90).forEach(l=>{ doc.text(l, 14, ly); ly += 4; });
+  if(d.party.ntn){ doc.text('NTN: '+d.party.ntn, 14, ly); ly += 4; }
+  if(rec.unitName){ doc.text('Unit: '+rec.unitName, 14, ly); ly += 4; }
+  const kv = [['Date', fmtDate(rec.date)], ['Invoice #', (rec.invNo||'-')+(rec.invDate?` (${rec.invDate})`:'')]];
+  if(d.fbr) kv.push(['FBR Invoice #', d.fbr]);
+  kv.push(['DC #', rec.dcNo||''], ['PO #', rec.poNo||'-']);
+  let ry = topY; doc.setFontSize(9);
+  kv.forEach(([k,v])=>{
+    doc.setFont(undefined,'bold'); doc.text(k+':', 118, ry);
+    doc.setFont(undefined,'normal');
+    const lines = doc.splitTextToSize(String(v), 58);
+    lines.forEach((l,i)=>{ doc.text(l, 145, ry + i*4.2); });
+    ry += Math.max(5, lines.length*4.2 + 0.8);
+  });
+  y = Math.max(ly, ry) + 3;
+  doc.autoTable({
+    startY:y, margin:{left:14,right:14},
+    head:[['Sr#','Description','HS Code','UOM','Qty','Rate','Tax%','Gross Amt','Sales Tax','Total (Incl.)']],
+    body:d.items.map((it,i)=>[i+1, it.desc, it.hscode, it.uom, it.qtyTxt, fmt(it.rate), it.tax+'%', fmt(it.gross), fmt(it.taxAmt), fmt(it.total)]),
+    styles:{fontSize:7.5, cellPadding:1.6, lineColor:[0,0,0], lineWidth:0.15, textColor:[0,0,0]},
+    headStyles:{fillColor:[235,235,235], textColor:[0,0,0], fontStyle:'bold', halign:'center', fontSize:7},
+    columnStyles:{0:{cellWidth:9,halign:'center'},2:{cellWidth:17,halign:'center'},3:{cellWidth:11,halign:'center'},4:{cellWidth:11,halign:'center'},5:{cellWidth:15,halign:'right'},6:{cellWidth:11,halign:'center'},7:{cellWidth:21,halign:'right'},8:{cellWidth:18,halign:'right'},9:{cellWidth:22,halign:'right',fontStyle:'bold'}}
+  });
+  y = doc.lastAutoTable.finalY + 5;
+  if(y > 225){ doc.addPage(); y = 20; }
+  const body = [['Sub Total (Excl. Tax)', c+' '+fmt(d.gross)], ['Sales Tax', c+' '+fmt(d.taxAmt)], ['Invoice Total (Incl. Tax)', c+' '+fmt(d.total)]];
+  if(d.freight>0) body.push(['Freight Charges'+(d.note?' ('+d.note+')':''), c+' '+fmt(d.freight)]);
+  body.push(['GRAND TOTAL', c+' '+fmt(d.grand)]);
+  const lastRow = body.length-1;
+  doc.autoTable({
+    startY:y, margin:{left:100,right:14}, theme:'plain', tableWidth:96,
+    body, styles:{fontSize:9, cellPadding:1.8, textColor:[0,0,0]},
+    columnStyles:{0:{cellWidth:56},1:{cellWidth:40,halign:'right'}},
+    didParseCell:(h)=>{
+      if(h.section!=='body') return;
+      if(h.row.index===2) h.cell.styles.fontStyle='bold';
+      if(h.row.index===lastRow){ h.cell.styles.fontStyle='bold'; h.cell.styles.fontSize=11; h.cell.styles.fillColor=[235,235,235]; }
+    }
+  });
+  y = doc.lastAutoTable.finalY + 6;
+  doc.setFont(undefined,'bold'); doc.setFontSize(8.5); doc.text('Amount in words:', 14, y);
+  doc.setFont(undefined,'normal');
+  const wl = doc.splitTextToSize(cbWords(d.grand), W-62);
+  wl.forEach((l,i)=>doc.text(l, 42, y + i*4.4)); y += wl.length*4.4 + 2;
+  if(d.dispatchTxt){ doc.setFontSize(8); doc.text(d.dispatchTxt, 14, y); y += 5; }
+  if(y > 262){ doc.addPage(); y = 30; } else { y = Math.max(y + 22, 255); }
+  doc.setFontSize(9); doc.setDrawColor(0); doc.setLineWidth(0.3);
+  doc.line(14, y, 74, y); doc.line(W-74, y, W-14, y);
+  doc.text('Prepared By', 14, y+4.5); doc.text('Authorized Signature', W-74, y+4.5);
+}
+function cbMakePdf(recs){
+  const doc = new jspdf.jsPDF();
+  recs.forEach((rec,i)=>{ if(i>0) doc.addPage(); cbDrawBill(doc, rec); });
+  if(typeof stampBrandLogoOnAllPages==='function') { try{ stampBrandLogoOnAllPages(doc); }catch(e){} }
+  return doc;
+}
+
+// ---- Preview modal (opened from the DC quick-view popup and from the Commercial Bills tab) ----
+let cbCurrentIdx = -1;
+function openCommercialBill(idx){
+  const rec = db[idx];
+  if(!rec){ toast('Record not found','error'); return; }
+  cbCurrentIdx = idx;
+  cbRenderModal();
+  openModal('commBillModal');
+}
+function cbRenderModal(){
+  const rec = db[cbCurrentIdx]; if(!rec) return;
+  document.getElementById('cb-frame').innerHTML = cbBuildHTML(rec);
+  document.getElementById('cb-modal-title').textContent = `🧾 Commercial Bill — DC ${rec.dcNo}`;
+  const toks = cbTokens(rec.invNo); const keys = toks.length ? toks : ['_'];
+  const m = rec.fbrInvMap || {}; const src = rec.fbrInvSrc || {};
+  document.getElementById('cb-fbr-editor').innerHTML = keys.map(t=>`
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+      <label style="min-width:130px;font-size:12px;">${t==='_'?'FBR Invoice No':`FBR No (Invoice #${_lgEsc(t)})`}</label>
+      <input type="text" class="cb-fbr-in" data-tok="${_lgEsc(t)}" value="${_lgEsc(m[t]||'')}" placeholder="e.g. 3310082639283DI5BI0A3068971" style="flex:1;min-width:220px;max-width:380px;">
+      <span style="font-size:10px;color:var(--text3);">${m[t]?(src[t]==='manual'?'✍️ manual':'📎 PDF se sync'):'⚠️ abhi save nahi'}</span>
+    </div>`).join('');
+}
+function cbSaveFbr(){
+  const rec = db[cbCurrentIdx]; if(!rec) return;
+  rec.fbrInvMap = rec.fbrInvMap || {}; rec.fbrInvSrc = rec.fbrInvSrc || {};
+  document.querySelectorAll('#cb-fbr-editor .cb-fbr-in').forEach(inp=>{
+    const t = inp.getAttribute('data-tok'), v = inp.value.trim();
+    if(v){ if(rec.fbrInvMap[t]!==v){ rec.fbrInvMap[t] = v; rec.fbrInvSrc[t] = 'manual'; rec.fbrInvSyncedAt = new Date().toISOString(); } }
+    else { delete rec.fbrInvMap[t]; delete rec.fbrInvSrc[t]; }
+  });
+  rec.fbrInvNo = cbFbrText(rec);
+  saveData();
+  cbRenderModal(); cbRefreshIfActive();
+  toast('FBR invoice number DC record mein save ho gaya ✓','success');
+}
+function cbPrint(){
+  const el = document.getElementById('cb-print-area'); if(!el){ return; }
+  const win = window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>Commercial Bill</title><style>@page{size:A4;margin:10mm;} body{margin:0;}</style></head><body>${el.outerHTML}</body></html>`);
+  win.document.close();
+  setTimeout(()=>win.print(),300);
+}
+function cbDownloadPDF(idx){
+  const rec = db[idx===undefined ? cbCurrentIdx : idx];
+  if(!rec){ toast('Record not found','error'); return; }
+  try{ cbMakePdf([rec]).save(cbFileName(rec)); toast('Commercial Bill PDF ban gayi ✓','success'); }
+  catch(e){ console.error(e); toast('PDF banane mein masla aaya','error'); }
+}
+
+// ---- Commercial Bills TAB (auto-scans DC records) ----
+let cbSelected = new Set();
+function cbKey(rec){ return (rec.dcNo||'')+'||'+(rec.partyName||'')+'||'+(rec.invNo||''); }
+// Auto-scan: every DC that carries freight (or, with the switch, every invoiced DC) — always read live from the DC records.
+function cbCandidates(scope){
+  return db.filter(r=>!r.cancelled && !r.voidOnly && (scope==='all' ? !!r.invNo : getDCFreight(r)>0));
+}
+function cbOnOpen(){
+  cbSyncFbrNumbers({silent:true});
+  cbRender();
+}
+function cbScanNow(){
+  const r = cbSyncFbrNumbers({silent:true});
+  cbRender();
+  const n = cbCandidates('freight').length;
+  toast(`🔄 Scan complete — ${n} freight wali DC mili${r.changed?` | ${r.changed} FBR number DC records mein save hue`:''}`,'success');
+}
+function cbFillSelect(id, values, allLabel){
+  const el = document.getElementById(id); if(!el) return;
+  const sig = values.join('|');
+  if(el.dataset.sig===sig) return;
+  const cur = el.value;
+  el.innerHTML = `<option value="">${allLabel}</option>` + values.map(v=>`<option value="${_lgEsc(v)}">${_lgEsc(v)}</option>`).join('');
+  el.dataset.sig = sig;
+  if(values.includes(cur)) el.value = cur;
+}
+function cbGetShown(){
+  const g = id=>((document.getElementById(id)||{}).value||'');
+  const scope = g('cb-scope')||'freight';
+  const q = g('cb-search').trim().toLowerCase(), party = g('cb-party'), month = g('cb-month'), fbrF = g('cb-fbr');
+  const all = cbCandidates(scope);
+  cbFillSelect('cb-party', [...new Set(all.map(r=>r.partyName).filter(Boolean))].sort(), 'All Parties');
+  cbFillSelect('cb-month', [...new Set(all.map(r=>(r.date||'').slice(0,7)).filter(Boolean))].sort().reverse(), 'All Months');
+  let list = all.filter(r=>{
+    if(party && r.partyName!==party) return false;
+    if(month && !(r.date||'').startsWith(month)) return false;
+    const f = cbFbrText(r);
+    if(fbrF==='missing' && (f || !r.invNo)) return false;
+    if(fbrF==='has' && !f) return false;
+    if(q){
+      const hay = [r.dcNo, r.invNo, r.poNo, r.partyName, r.unitName, f].join(' ').toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  list.sort((a,b)=>{ const na=dcNoSortValue(a.dcNo), nb=dcNoSortValue(b.dcNo); return nb!==na ? nb-na : db.indexOf(b)-db.indexOf(a); });
+  return list;
+}
+function cbRender(){
+  const tb = document.getElementById('cb-tbody'); if(!tb) return;
+  const list = cbGetShown(), cur = settings.currency||'PKR';
+  let sBill=0, sFrt=0, missing=0;
+  list.forEach(r=>{ sBill += getDCTotal(r); sFrt += getDCFreight(r); if(r.invNo && !cbFbrText(r)) missing++; });
+  const st = document.getElementById('cb-stats');
+  if(st) st.innerHTML = `<div class="stat-card c1"><div class="stat-val">${list.length}</div><div class="stat-label">Commercial Bills</div></div>
+    <div class="stat-card c2"><div class="stat-val" style="font-size:17px;">${cur} ${fmt(sBill)}</div><div class="stat-label">Bill Amount</div></div>
+    <div class="stat-card c3"><div class="stat-val" style="font-size:17px;">${cur} ${fmt(sFrt)}</div><div class="stat-label">Freight</div></div>
+    <div class="stat-card c4"><div class="stat-val" style="font-size:17px;">${cur} ${fmt(sBill+sFrt)}</div><div class="stat-label">Grand Total</div></div>
+    <div class="stat-card c5"><div class="stat-val" style="color:${missing?'var(--neon3)':'var(--neon4)'};">${missing}</div><div class="stat-label">FBR No. Missing</div></div>`;
+  const shownKeys = new Set(list.map(cbKey));
+  [...cbSelected].forEach(k=>{ if(!shownKeys.has(k)) cbSelected.delete(k); });
+  if(!list.length){
+    tb.innerHTML = '<tr><td colspan="10" class="text-center" style="padding:20px;color:var(--text3);">Koi commercial bill nahi mila. Freight wali DCs yahan khud aa jati hain (DC mein Freight Charges bharein).</td></tr>';
+  } else {
+    tb.innerHTML = list.map(r=>{
+      const idx = db.indexOf(r), k = cbKey(r), fbr = cbFbrText(r), frt = getDCFreight(r), tot = getDCTotal(r);
+      const fbrCell = fbr ? `<span style="font-size:11px;word-break:break-all;">${_lgEsc(fbr)}</span>`
+        : (r.invNo ? '<span style="color:var(--neon3);font-size:11px;">⚠️ Missing</span>' : '<span style="color:var(--text3);font-size:11px;">Invoice pending</span>');
+      return `<tr>
+        <td><input type="checkbox" style="width:auto;" ${cbSelected.has(k)?'checked':''} onchange="cbToggle(${idx},this.checked)"></td>
+        <td><strong>${_lgEsc(r.dcNo)}</strong></td><td>${fmtDate(r.date)}</td>
+        <td>${_lgEsc(r.partyName)}${r.unitName?`<div style="font-size:10px;color:var(--text3);">🏭 ${_lgEsc(r.unitName)}</div>`:''}</td>
+        <td>${_lgEsc(r.invNo||'-')}</td><td>${fbrCell}</td>
+        <td style="text-align:right;">${fmt(tot)}</td><td style="text-align:right;">${fmt(frt)}</td>
+        <td style="text-align:right;font-weight:700;color:var(--neon);">${fmt(tot+frt)}</td>
+        <td style="white-space:nowrap;">
+          <button class="btn btn-neon btn-xs" onclick="openCommercialBill(${idx})" title="Preview / Print / FBR no.">👁️ View</button>
+          <button class="btn btn-green btn-xs" onclick="cbDownloadPDF(${idx})" title="PDF download">📄 PDF</button>
+        </td></tr>`;
+    }).join('');
+  }
+  const b = document.getElementById('cb-sel-btn'); if(b) b.textContent = `📄 Selected PDF (${cbSelected.size})`;
+  const ca = document.getElementById('cb-check-all'); if(ca) ca.checked = list.length>0 && list.every(r=>cbSelected.has(cbKey(r)));
+}
+function cbToggle(idx, on){
+  const r = db[idx]; if(!r) return;
+  if(on) cbSelected.add(cbKey(r)); else cbSelected.delete(cbKey(r));
+  const b = document.getElementById('cb-sel-btn'); if(b) b.textContent = `📄 Selected PDF (${cbSelected.size})`;
+}
+function cbToggleAll(on){
+  cbGetShown().forEach(r=>{ if(on) cbSelected.add(cbKey(r)); else cbSelected.delete(cbKey(r)); });
+  cbRender();
+}
+function cbBulkPDF(which){
+  const shown = cbGetShown();
+  const recs = which==='selected' ? shown.filter(r=>cbSelected.has(cbKey(r))) : shown;
+  if(!recs.length){ toast(which==='selected' ? 'Pehle kuch bills tick karein' : 'Koi bill nahi hai','warning'); return; }
+  const ordered = recs.slice().sort((a,b)=>dcNoSortValue(a.dcNo)-dcNoSortValue(b.dcNo));
+  try{ cbMakePdf(ordered).save(`Commercial_Bills_${new Date().toISOString().slice(0,10)}.pdf`); toast(`${ordered.length} commercial bill(s) ki ek PDF ban gayi ✓`,'success'); }
+  catch(e){ console.error(e); toast('PDF banane mein masla aaya','error'); }
+}
+
 // ==================== DC DELIVERY CHALLAN PRINT ====================
 let currentDCPrintIdx = -1;
 function openDCPrint(idx){
@@ -14210,7 +14703,7 @@ let securityData = {enabled:true,adminUsers:[{username:'saif@g.com',password:'63
 const PERM_LABELS = {
   records:'📋 Records (View/Add/Edit)',dashboard:'📊 Dashboard',ledger:'📒 Ledger',
   fbr:'🧾 FBR/Tax',reports:'📄 Reports',quotation:'💬 Quotation',parties:'👥 Parties',cheques:'🏦 Cheques',
-  hscodes:'🏷️ HS Codes',tools:'🔧 Tools',settings:'⚙️ Settings',digitalinvoices:'📎 Digital Invoices',
+  hscodes:'🏷️ HS Codes',tools:'🔧 Tools',settings:'⚙️ Settings',digitalinvoices:'📎 Digital Invoices',commercialbills:'🧾 Commercial Bills',
   partylookup:'📨 Party Lookup', dispatch:'🚚 Dispatch', employees:'👔 Employees',
   docmanager:'📁 Documents', crm:'🤝 CRM', sendcenter:'📤 Send Center', stock:'📦 Stock',
   purchaseorders:'📝 Purchase Orders', warehouses:'🏭 Warehouses', expenses:'💸 Expenses', pantry:'🍵 Pantry',
@@ -14221,8 +14714,8 @@ const PERM_ALL = Object.keys(PERM_LABELS);
 const ROLE_PRESETS = {
   'Super Admin': PERM_ALL,
   'Admin': PERM_ALL,
-  'Accounts': ['dashboard','ledger','fbr','reports','cheques','bank','expenses','pantry','auditlog'],
-  'Sales': ['dashboard','records','quotation','parties','crm','sendcenter','digitalinvoices'],
+  'Accounts': ['dashboard','ledger','fbr','reports','cheques','bank','expenses','pantry','auditlog','commercialbills'],
+  'Sales': ['dashboard','records','quotation','parties','crm','sendcenter','digitalinvoices','commercialbills'],
   'Store': ['dashboard','stock','purchaseorders','warehouses','hscodes'],
   'Dispatch': ['dashboard','dispatch','records','employees','pantry'],
   'Viewer': ['dashboard','reports']
@@ -14319,7 +14812,7 @@ function applyUserPermissions(){
   const allowed = user.permissions||[];
   const tabMap = {records:'tab-records',dashboard:'tab-dashboard',ledger:'tab-ledger',fbr:'tab-fbr',
     reports:'tab-reports',parties:'tab-parties',cheques:'tab-cheques',hscodes:'tab-hscodes',
-    tools:'tab-tools',settings:'tab-settings',digitalinvoices:'tab-digitalinvoices',
+    tools:'tab-tools',settings:'tab-settings',digitalinvoices:'tab-digitalinvoices',commercialbills:'tab-commercialbills',
     quotation:'tab-quotation',partylookup:'tab-partylookup',security:'tab-security'};
   Object.entries(tabMap).forEach(([perm,tabId])=>{
     const el=document.getElementById(tabId);
