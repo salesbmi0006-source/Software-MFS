@@ -480,6 +480,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
     <div class="tab" onclick="showTab('employees')" id="tab-employees">👔 Employees</div>
     <div class="tab" onclick="showTab('stock')" id="tab-stock">📦 Stock</div>
     <div class="tab" onclick="showTab('purchaseorders')" id="tab-purchaseorders">📝 Purchase Orders</div>
+    <div class="tab" onclick="showTab('supplierpo')" id="tab-supplierpo">📥 Supplier PO</div>
     <div class="tab" onclick="showTab('warehouses')" id="tab-warehouses">🏭 Warehouses</div>
     <div class="tab" onclick="showTab('hscodes')" id="tab-hscodes">🏷️ HS Codes</div>
 
@@ -2617,6 +2618,109 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
   <div class="modal-footer">
     <button class="btn btn-green" onclick="savePOReceive()">💾 Save Received Qty</button>
     <button class="btn btn-neon" onclick="closeModal('poReceiveModal')">Cancel</button>
+  </div>
+</div>
+</div>
+
+<!-- ====== SUPPLIER PO TAB (New module — POs sent TO suppliers e.g. Fast Cable & Lights) ====== -->
+<div class="tab-panel" id="panel-supplierpo">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">📥 Supplier Purchase Orders</div>
+      <div class="flex-gap">
+        <button class="btn btn-neon btn-sm" onclick="openSupplierPOSettingsModal()">⚙️ Settings</button>
+        <button class="btn btn-green btn-sm" onclick="openSupplierPOModal()">➕ New PO</button>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Purchase Orders sent to your supplier (e.g. Fast Cable &amp; Lights). Description auto-fills from the Fast rate list, PO No auto-numbers (0001, 0002…), and Expiry Date auto-sets 1 month from the PO date — everything stays editable.</div>
+    <div class="search-bar" style="display:flex;gap:8px;flex-wrap:wrap;">
+      <input type="text" id="spo-search" placeholder="Search PO no, supplier, item..." oninput="renderSupplierPOTab()" style="flex:1;min-width:200px;">
+    </div>
+    <div style="overflow-x:auto;margin-top:10px;">
+      <table class="items-table">
+        <thead><tr><th>PO No</th><th>Date</th><th>Supplier</th><th>Expiry</th><th>Items</th><th>Status</th><th></th></tr></thead>
+        <tbody id="spoTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- SUPPLIER PO ADD/EDIT MODAL -->
+<div class="modal-overlay" id="spoModal">
+<div class="modal modal-lg">
+  <div class="modal-header"><h3 id="spoModalTitle">➕ New Supplier PO</h3><button class="close-btn" onclick="closeModal('spoModal')">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="spo-edit-idx" value="-1">
+    <div class="form-row">
+      <div class="form-group"><label>PO No *</label><input type="text" id="spo-no" placeholder="0001"></div>
+      <div class="form-group"><label>PO Date</label><input type="date" id="spo-date" onchange="spoRecalcExpiry()"></div>
+      <div class="form-group"><label>Expiry Date <span style="font-weight:400;color:var(--text3);">(auto = date + 1 month, editable)</span></label><input type="date" id="spo-expiry"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2;"><label>Supplier</label><input type="text" id="spo-supplier" placeholder="Fast Cable & Lights"></div>
+      <div class="form-group" style="flex:2;"><label>Supplier Address</label><input type="text" id="spo-supplier-address" placeholder="Supplier address"></div>
+    </div>
+    <div class="divider"></div>
+    <div style="font-weight:700;color:var(--neon2);margin-bottom:8px;">Items <span style="font-weight:400;font-size:11px;color:var(--text3);">— type Description, it auto-fills Product Detail &amp; UOM from the rate list; enter total Qty and packing (cartons/pcs) is calculated automatically.</span></div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2;"><label>Description</label><input type="text" id="spo-item-desc" list="spo-desc-list" placeholder="e.g. DL10 7W 4080" oninput="spoAutoFillItem()"></div>
+      <div class="form-group" style="flex:3;"><label>Product Detail</label><input type="text" id="spo-item-detail" placeholder="Full product description"></div>
+      <div class="form-group"><label>UOM</label><input type="text" id="spo-item-uom" value="Pcs"></div>
+      <div class="form-group"><label>Qty</label><input type="number" id="spo-item-qty" placeholder="0" oninput="spoUpdatePackingPreview()"></div>
+      <div class="form-group" style="align-self:flex-end;"><button type="button" class="btn btn-neon btn-sm" onclick="addSupplierPOItemRow()">➕ Add</button></div>
+    </div>
+    <div id="spo-packing-preview" style="font-size:11px;color:var(--neon2);margin:-6px 0 8px;"></div>
+    <datalist id="spo-desc-list"></datalist>
+    <div style="overflow-x:auto;">
+      <table class="items-table"><thead><tr><th>Sr#</th><th>Description</th><th>Product Detail</th><th>UOM</th><th>Qty</th><th>Packing</th><th></th></tr></thead><tbody id="spo-items-tbody"></tbody></table>
+    </div>
+    <div class="form-group"><label>Notes</label><textarea id="spo-notes" rows="2"></textarea></div>
+    <div class="form-group"><label>Terms &amp; Conditions <span style="font-weight:400;color:var(--text3);">(from Settings — editable per PO)</span></label><textarea id="spo-terms" rows="4"></textarea></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="saveSupplierPO()">💾 Save PO</button>
+    <button class="btn btn-neon" onclick="exportSupplierPOPDF(document.getElementById('spo-edit-idx').value)">📄 Save &amp; Export PDF</button>
+    <button class="btn btn-neon" onclick="closeModal('spoModal')">Cancel</button>
+  </div>
+</div>
+</div>
+
+<!-- SUPPLIER PO SETTINGS MODAL -->
+<div class="modal-overlay" id="spoSettingsModal">
+<div class="modal modal-lg">
+  <div class="modal-header"><h3>⚙️ Supplier PO Settings</h3><button class="close-btn" onclick="closeModal('spoSettingsModal')">✕</button></div>
+  <div class="modal-body">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">These control the header, footer, default terms and signatures shown on every Supplier PO and its PDF. Company name/address/phone/NTN are pulled from your main Settings tab by default — override here only if this document should show something different.</div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2;"><label>Header Company Name</label><input type="text" id="spos-header-name" placeholder="Leave blank to use main Settings company name"></div>
+      <div class="form-group" style="flex:2;"><label>Header Address</label><input type="text" id="spos-header-address" placeholder="Leave blank to use main Settings address"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Header Phone</label><input type="text" id="spos-header-phone" placeholder="Leave blank to use main Settings phone"></div>
+      <div class="form-group"><label>Header NTN</label><input type="text" id="spos-header-ntn" placeholder="Leave blank to use main Settings NTN"></div>
+      <div class="form-group"><label>Default Expiry (months from PO date)</label><input type="number" id="spos-expiry-months" value="1" min="1"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2;"><label>Default Supplier Name</label><input type="text" id="spos-default-supplier" placeholder="Fast Cable & Lights"></div>
+      <div class="form-group" style="flex:2;"><label>Default Supplier Address</label><input type="text" id="spos-default-supplier-address" placeholder="Supplier address"></div>
+    </div>
+    <div class="form-group"><label>Footer Note</label><input type="text" id="spos-footer" placeholder="e.g. Thank you for your business."></div>
+    <div class="form-group"><label>Default Notes</label><textarea id="spos-default-notes" rows="2"></textarea></div>
+    <div class="form-group"><label>Default Terms &amp; Conditions <span style="font-weight:400;color:var(--text3);">(one per line)</span></label><textarea id="spos-terms" rows="8"></textarea></div>
+    <div class="divider"></div>
+    <div style="font-weight:700;color:var(--neon2);margin-bottom:8px;">Signatures <span style="font-weight:400;font-size:11px;color:var(--text3);">(both appear at the bottom of the PDF, side by side, so the PO still fits on one A4 page)</span></div>
+    <div class="form-row">
+      <div class="form-group"><label>Signature 1 Label</label><input type="text" id="spos-sig1-label" placeholder="Accounts Department"></div>
+      <div class="form-group"><label>Signature 2 Label</label><input type="text" id="spos-sig2-label" placeholder="Admin / CEO"></div>
+    </div>
+    <div class="divider"></div>
+    <div style="font-weight:700;color:var(--neon2);margin-bottom:4px;">New options added for this module <span style="font-weight:400;font-size:11px;color:var(--text3);">(off by default — turn on only what you want to use)</span></div>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><input type="checkbox" id="spos-show-logo"> Show company logo box on PDF header (if you add a logo later)</label>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><input type="checkbox" id="spos-auto-carton"> Auto-round Qty up to the nearest full carton when saving</label>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="saveSupplierPOSettings()">💾 Save Settings</button>
+    <button class="btn btn-neon" onclick="closeModal('spoSettingsModal')">Cancel</button>
   </div>
 </div>
 </div>
@@ -6821,6 +6925,7 @@ function renderTabContent(id){
   if(id==='salesreturns') renderSalesReturnsTab();
   if(id==='returnreceipts') renderReturnReceiptsTab();
   if(id==='purchaseorders') renderPOTab();
+  if(id==='supplierpo') renderSupplierPOTab();
   if(id==='warehouses') renderWarehousesTab();
   if(id==='expenses') renderExpensesTab();
   if(id==='pantry') renderPantryTab();
@@ -6880,6 +6985,7 @@ const MOBILE_MORE_GROUPS = [
   ]},
   {label:'Operations', tabs:[
     {id:'employees',label:'Employees',icon:'👔'},{id:'stock',label:'Stock',icon:'📦'},
+    {id:'supplierpo',label:'Supplier PO',icon:'📥'},
     {id:'warehouses',label:'Warehouses',icon:'🏭'},{id:'hscodes',label:'HS Codes',icon:'🏷️'}
   ]},
   {label:'Finance', tabs:[
@@ -25153,4 +25259,347 @@ function fbPrintA4Doc(docId, docType){
 }
 </script>
 
+<script>
+// ==================== SUPPLIER PO MODULE (New) ====================
+// Purchase Orders sent OUT to a supplier (e.g. Fast Cable & Lights) to order
+// stock, as opposed to the existing "Purchase Orders" tab which tracks POs
+// received FROM customers. Auto-numbers, auto-expiry, and carton/pcs
+// breakdown are computed from the Fast rate list's cartonQty field.
+let supplierPOs = [];
+let supplierPOSettings = {};
+let spoCurrentItems = [];
+
+function loadSupplierPOData(){
+  try{ supplierPOs = JSON.parse(localStorage.getItem('sau_supplier_pos')||'[]'); }catch(e){ supplierPOs = []; }
+  try{ supplierPOSettings = JSON.parse(localStorage.getItem('sau_supplier_po_settings')||'null') || {}; }catch(e){ supplierPOSettings = {}; }
+  if(supplierPOSettings.terms===undefined){
+    supplierPOSettings = Object.assign({
+      headerName:'', headerAddress:'', headerPhone:'', headerNtn:'',
+      expiryMonths:1,
+      defaultSupplier:'Fast Cable & Lights', defaultSupplierAddress:'',
+      footer:'Thank you for your business.',
+      defaultNotes:'',
+      terms:'Payment as per agreed terms.\nGoods must match the description, UOM and quantity specified above.\nAny quality or quantity issue must be reported within 3 days of delivery.\nThis PO is valid until the expiry date shown above.\nPrices are as mutually agreed and subject to confirmation on delivery.',
+      sig1Label:'Accounts Department', sig2Label:'Admin / CEO',
+      showLogo:false, autoCarton:false,
+      nextPoNumber:1
+    }, supplierPOSettings);
+    saveSupplierPOSettings(true);
+  }
+}
+function saveSupplierPOData(){ safeSetItem('sau_supplier_pos', JSON.stringify(supplierPOs)); }
+function saveSupplierPOSettingsData(){ safeSetItem('sau_supplier_po_settings', JSON.stringify(supplierPOSettings)); }
+
+// Flattens the Fast rate list (rateLists[list][brand].categories[cat] = [{desc,rate,consumerRate,cartonQty}])
+// into a simple searchable array, so Supplier PO items can auto-fill product detail + packing size.
+function spoFlattenRateList(){
+  const out = [];
+  const seen = new Set();
+  try{
+    Object.values(rateLists||{}).forEach(brands=>{
+      Object.values(brands||{}).forEach(brand=>{
+        Object.values((brand&&brand.categories)||{}).forEach(cat=>{
+          (cat||[]).forEach(it=>{
+            const d = (it.desc||'').trim();
+            if(!d || seen.has(d.toLowerCase())) return;
+            seen.add(d.toLowerCase());
+            out.push({desc:d, cartonQty: parseFloat(it.cartonQty)||0, rate:it.rate});
+          });
+        });
+      });
+    });
+  }catch(e){}
+  return out;
+}
+function spoFindRateListItem(desc){
+  const q = (desc||'').trim().toLowerCase();
+  if(!q) return null;
+  const flat = spoFlattenRateList();
+  // exact match first, then partial (so a short code like "DL10 7W 4080" still finds
+  // "FAST SMD Down Lights Eco Downlight DL10 7W 4080 3\"")
+  let hit = flat.find(it=>it.desc.toLowerCase()===q);
+  if(!hit) hit = flat.find(it=>it.desc.toLowerCase().includes(q));
+  return hit||null;
+}
+function spoAutoFillItem(){
+  const desc = document.getElementById('spo-item-desc').value;
+  const hit = spoFindRateListItem(desc);
+  if(hit){
+    document.getElementById('spo-item-detail').value = hit.desc;
+    document.getElementById('spo-item-uom').value = 'Pcs';
+    document.getElementById('spo-item-desc').dataset.cartonQty = hit.cartonQty||'';
+  } else {
+    document.getElementById('spo-item-desc').dataset.cartonQty = '';
+  }
+  spoUpdatePackingPreview();
+}
+function spoPopulateDescList(){
+  const dl = document.getElementById('spo-desc-list');
+  if(!dl) return;
+  dl.innerHTML = spoFlattenRateList().slice(0,2000).map(it=>`<option value="${String(it.desc).replace(/"/g,'&quot;')}">`).join('');
+}
+// Given a total quantity and the item's pieces-per-carton, works out how many
+// full cartons plus leftover pieces that quantity makes — e.g. 600 pcs at
+// 48/carton = "12 Ctn + 24 Pcs (48/Ctn)"; if the item has no known carton size
+// it just shows the plain quantity.
+function spoComputePacking(qty, cartonQty){
+  qty = parseFloat(qty)||0;
+  cartonQty = parseFloat(cartonQty)||0;
+  if(!qty) return '';
+  if(!cartonQty) return `${qty} Pcs`;
+  const cartons = Math.floor(qty/cartonQty);
+  const rem = Math.round((qty - cartons*cartonQty)*100)/100;
+  if(cartons>0 && rem>0) return `${cartons} Ctn + ${rem} Pcs (${cartonQty}/Ctn)`;
+  if(cartons>0) return `${cartons} Ctn (${cartonQty}/Ctn)`;
+  return `${qty} Pcs`;
+}
+function spoUpdatePackingPreview(){
+  const qty = document.getElementById('spo-item-qty').value;
+  const cartonQty = document.getElementById('spo-item-desc').dataset.cartonQty || '';
+  const prev = document.getElementById('spo-packing-preview');
+  if(!prev) return;
+  prev.textContent = qty ? ('Packing: '+ spoComputePacking(qty, cartonQty)) : '';
+}
+function addSupplierPOItemRow(){
+  const desc = document.getElementById('spo-item-desc').value.trim();
+  const detail = document.getElementById('spo-item-detail').value.trim();
+  const uom = document.getElementById('spo-item-uom').value.trim()||'Pcs';
+  let qty = parseFloat(document.getElementById('spo-item-qty').value)||0;
+  const cartonQty = parseFloat(document.getElementById('spo-item-desc').dataset.cartonQty)||0;
+  if(!desc || !qty){ toast('Enter description and qty','warning'); return; }
+  if(supplierPOSettings.autoCarton && cartonQty>0){
+    qty = Math.ceil(qty/cartonQty)*cartonQty;
+  }
+  spoCurrentItems.push({desc, detail: detail||desc, uom, qty, cartonQty, packing: spoComputePacking(qty, cartonQty)});
+  document.getElementById('spo-item-desc').value='';
+  document.getElementById('spo-item-desc').dataset.cartonQty='';
+  document.getElementById('spo-item-detail').value='';
+  document.getElementById('spo-item-qty').value='';
+  document.getElementById('spo-packing-preview').textContent='';
+  renderSpoItemsTable();
+}
+function removeSpoItemRow(idx){ spoCurrentItems.splice(idx,1); renderSpoItemsTable(); }
+function renderSpoItemsTable(){
+  const tb = document.getElementById('spo-items-tbody');
+  if(!tb) return;
+  tb.innerHTML = spoCurrentItems.map((it,i)=>`<tr>
+    <td>${i+1}</td><td>${it.desc}</td><td>${it.detail}</td><td>${it.uom}</td><td>${it.qty}</td><td>${it.packing}</td>
+    <td><button class="btn btn-xs" onclick="removeSpoItemRow(${i})">✕</button></td>
+  </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text3);">No items added yet</td></tr>';
+}
+function spoNextPoNumber(){
+  const n = supplierPOSettings.nextPoNumber||1;
+  return String(n).padStart(4,'0');
+}
+function spoRecalcExpiry(){
+  const dateVal = document.getElementById('spo-date').value;
+  if(!dateVal) return;
+  const months = supplierPOSettings.expiryMonths||1;
+  const d = new Date(dateVal+'T00:00:00');
+  d.setMonth(d.getMonth()+months);
+  document.getElementById('spo-expiry').value = d.toISOString().slice(0,10);
+}
+function openSupplierPOModal(editIdx){
+  spoPopulateDescList();
+  document.getElementById('spo-edit-idx').value = editIdx!==undefined ? editIdx : -1;
+  if(editIdx!==undefined && supplierPOs[editIdx]){
+    const po = supplierPOs[editIdx];
+    document.getElementById('spoModalTitle').textContent = '✏️ Edit Supplier PO';
+    document.getElementById('spo-no').value = po.poNo;
+    document.getElementById('spo-date').value = po.date;
+    document.getElementById('spo-expiry').value = po.expiry;
+    document.getElementById('spo-supplier').value = po.supplier;
+    document.getElementById('spo-supplier-address').value = po.supplierAddress||'';
+    document.getElementById('spo-notes').value = po.notes||'';
+    document.getElementById('spo-terms').value = po.terms||supplierPOSettings.terms||'';
+    spoCurrentItems = JSON.parse(JSON.stringify(po.items||[]));
+  } else {
+    document.getElementById('spoModalTitle').textContent = '➕ New Supplier PO';
+    document.getElementById('spo-no').value = spoNextPoNumber();
+    const today = new Date().toISOString().slice(0,10);
+    document.getElementById('spo-date').value = today;
+    spoRecalcExpiry();
+    document.getElementById('spo-supplier').value = supplierPOSettings.defaultSupplier||'Fast Cable & Lights';
+    document.getElementById('spo-supplier-address').value = supplierPOSettings.defaultSupplierAddress||'';
+    document.getElementById('spo-notes').value = supplierPOSettings.defaultNotes||'';
+    document.getElementById('spo-terms').value = supplierPOSettings.terms||'';
+    spoCurrentItems = [];
+  }
+  document.getElementById('spo-item-desc').value='';
+  document.getElementById('spo-item-detail').value='';
+  document.getElementById('spo-item-uom').value='Pcs';
+  document.getElementById('spo-item-qty').value='';
+  document.getElementById('spo-packing-preview').textContent='';
+  renderSpoItemsTable();
+  openModal('spoModal');
+}
+function saveSupplierPO(){
+  const poNo = document.getElementById('spo-no').value.trim();
+  const date = document.getElementById('spo-date').value;
+  const expiry = document.getElementById('spo-expiry').value;
+  const supplier = document.getElementById('spo-supplier').value.trim();
+  if(!poNo || !date || !supplier){ toast('PO No, Date and Supplier are required','warning'); return; }
+  if(!spoCurrentItems.length){ toast('Add at least one item','warning'); return; }
+  const po = {
+    poNo, date, expiry, supplier,
+    supplierAddress: document.getElementById('spo-supplier-address').value.trim(),
+    notes: document.getElementById('spo-notes').value,
+    terms: document.getElementById('spo-terms').value,
+    items: spoCurrentItems
+  };
+  const idx = parseInt(document.getElementById('spo-edit-idx').value);
+  if(idx>=0){ supplierPOs[idx] = po; }
+  else {
+    supplierPOs.push(po);
+    // only advance the auto-number counter for genuinely new, sequentially-numbered POs
+    if(poNo === spoNextPoNumber()){ supplierPOSettings.nextPoNumber = (supplierPOSettings.nextPoNumber||1)+1; saveSupplierPOSettingsData(); }
+  }
+  saveSupplierPOData();
+  closeModal('spoModal');
+  renderSupplierPOTab();
+  toast('Supplier PO saved','success');
+  return supplierPOs.length-1;
+}
+function deleteSupplierPO(idx){
+  if(!confirm('Delete this Supplier PO?')) return;
+  supplierPOs.splice(idx,1);
+  saveSupplierPOData();
+  renderSupplierPOTab();
+}
+function renderSupplierPOTab(){
+  loadSupplierPOData();
+  const tb = document.getElementById('spoTableBody');
+  if(!tb) return;
+  const q = (document.getElementById('spo-search')?document.getElementById('spo-search').value:'').toLowerCase();
+  const today = new Date().toISOString().slice(0,10);
+  let rows = supplierPOs.map((po,idx)=>({po,idx}));
+  if(q){
+    rows = rows.filter(({po})=> (po.poNo||'').toLowerCase().includes(q) || (po.supplier||'').toLowerCase().includes(q) || (po.items||[]).some(it=>(it.desc||'').toLowerCase().includes(q)) );
+  }
+  tb.innerHTML = rows.map(({po,idx})=>{
+    const expired = po.expiry && po.expiry < today;
+    return `<tr>
+      <td>${po.poNo}</td><td>${po.date}</td><td>${po.supplier}</td><td>${po.expiry||'-'}</td>
+      <td>${(po.items||[]).length}</td>
+      <td><span class="badge ${expired?'badge-cancelled':'badge-invoiced'}">${expired?'Expired':'Active'}</span></td>
+      <td>
+        <button class="btn btn-xs" onclick="openSupplierPOModal(${idx})">✏️</button>
+        <button class="btn btn-xs" onclick="exportSupplierPOPDF(${idx})">📄</button>
+        <button class="btn btn-xs" onclick="deleteSupplierPO(${idx})">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:16px;">No Supplier POs yet — click "New PO" to create one</td></tr>';
+}
+function openSupplierPOSettingsModal(){
+  loadSupplierPOData();
+  document.getElementById('spos-header-name').value = supplierPOSettings.headerName||'';
+  document.getElementById('spos-header-address').value = supplierPOSettings.headerAddress||'';
+  document.getElementById('spos-header-phone').value = supplierPOSettings.headerPhone||'';
+  document.getElementById('spos-header-ntn').value = supplierPOSettings.headerNtn||'';
+  document.getElementById('spos-expiry-months').value = supplierPOSettings.expiryMonths||1;
+  document.getElementById('spos-default-supplier').value = supplierPOSettings.defaultSupplier||'';
+  document.getElementById('spos-default-supplier-address').value = supplierPOSettings.defaultSupplierAddress||'';
+  document.getElementById('spos-footer').value = supplierPOSettings.footer||'';
+  document.getElementById('spos-default-notes').value = supplierPOSettings.defaultNotes||'';
+  document.getElementById('spos-terms').value = supplierPOSettings.terms||'';
+  document.getElementById('spos-sig1-label').value = supplierPOSettings.sig1Label||'Accounts Department';
+  document.getElementById('spos-sig2-label').value = supplierPOSettings.sig2Label||'Admin / CEO';
+  document.getElementById('spos-show-logo').checked = !!supplierPOSettings.showLogo;
+  document.getElementById('spos-auto-carton').checked = !!supplierPOSettings.autoCarton;
+  openModal('spoSettingsModal');
+}
+function saveSupplierPOSettings(silent){
+  if(!silent){
+    supplierPOSettings.headerName = document.getElementById('spos-header-name').value.trim();
+    supplierPOSettings.headerAddress = document.getElementById('spos-header-address').value.trim();
+    supplierPOSettings.headerPhone = document.getElementById('spos-header-phone').value.trim();
+    supplierPOSettings.headerNtn = document.getElementById('spos-header-ntn').value.trim();
+    supplierPOSettings.expiryMonths = parseInt(document.getElementById('spos-expiry-months').value)||1;
+    supplierPOSettings.defaultSupplier = document.getElementById('spos-default-supplier').value.trim();
+    supplierPOSettings.defaultSupplierAddress = document.getElementById('spos-default-supplier-address').value.trim();
+    supplierPOSettings.footer = document.getElementById('spos-footer').value.trim();
+    supplierPOSettings.defaultNotes = document.getElementById('spos-default-notes').value;
+    supplierPOSettings.terms = document.getElementById('spos-terms').value;
+    supplierPOSettings.sig1Label = document.getElementById('spos-sig1-label').value.trim()||'Accounts Department';
+    supplierPOSettings.sig2Label = document.getElementById('spos-sig2-label').value.trim()||'Admin / CEO';
+    supplierPOSettings.showLogo = document.getElementById('spos-show-logo').checked;
+    supplierPOSettings.autoCarton = document.getElementById('spos-auto-carton').checked;
+  }
+  saveSupplierPOSettingsData();
+  if(!silent){ closeModal('spoSettingsModal'); toast('Supplier PO settings saved','success'); }
+}
+// Builds and downloads a single-page A4 PDF for the given Supplier PO (by index,
+// or index string from the modal). Saves the form first if it was called from
+// the "Save & Export PDF" button on an open modal.
+function exportSupplierPOPDF(idxOrArg){
+  let idx = parseInt(idxOrArg);
+  const modalOpen = document.getElementById('spoModal') && document.getElementById('spoModal').classList.contains('active');
+  if(modalOpen){ const savedIdx = saveSupplierPO(); if(savedIdx===undefined) return; idx = savedIdx; }
+  const po = supplierPOs[idx];
+  if(!po){ toast('PO not found','error'); return; }
+  const companyName = supplierPOSettings.headerName || settings.companyName || 'SAU CORPORATION';
+  const companyAddress = supplierPOSettings.headerAddress || settings.address || '';
+  const companyPhone = supplierPOSettings.headerPhone || settings.phone || '';
+  const companyNtn = supplierPOSettings.headerNtn || settings.ntn || '';
+  const doc = new jspdf.jsPDF();
+  let y = 14;
+  doc.setFont(undefined,'bold'); doc.setFontSize(15);
+  doc.text(companyName, 14, y); y+=6;
+  doc.setFont(undefined,'normal'); doc.setFontSize(9);
+  if(companyAddress){ doc.splitTextToSize(companyAddress, 180).forEach(l=>{ doc.text(l,14,y); y+=4.2; }); }
+  const contactLine = [companyPhone?('Ph: '+companyPhone):'', companyNtn?('NTN: '+companyNtn):''].filter(Boolean).join('   ');
+  if(contactLine){ doc.text(contactLine,14,y); y+=4.2; }
+  y+=3;
+  doc.setDrawColor(180); doc.line(14,y,196,y); y+=7;
+  doc.setFont(undefined,'bold'); doc.setFontSize(13); doc.text('PURCHASE ORDER',14,y);
+  doc.setFontSize(9); doc.setFont(undefined,'normal');
+  doc.text(`PO No: ${po.poNo}`,140,y-4);
+  doc.text(`Date: ${po.date}`,140,y);
+  doc.text(`Expiry: ${po.expiry||'-'}`,140,y+4.5);
+  y+=9;
+  doc.setFont(undefined,'bold'); doc.text('Supplier:',14,y); doc.setFont(undefined,'normal');
+  doc.text(po.supplier||'',34,y); y+=4.5;
+  if(po.supplierAddress){ doc.splitTextToSize(po.supplierAddress,150).forEach(l=>{ doc.text(l,14,y); y+=4.2; }); }
+  y+=3;
+  doc.autoTable({
+    startY:y,
+    head:[['Sr#','Description','Product Detail','UOM','Qty','Packing']],
+    body: (po.items||[]).map((it,i)=>[i+1, it.desc, it.detail, it.uom, it.qty, it.packing||'']),
+    styles:{fontSize:8, cellPadding:2},
+    headStyles:{fillColor:[40,40,40]},
+    columnStyles:{0:{cellWidth:8},3:{cellWidth:16},4:{cellWidth:16},5:{cellWidth:34}},
+    margin:{left:14,right:14}
+  });
+  y = doc.lastAutoTable.finalY + 6;
+  if(po.notes){
+    doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.text('Notes:',14,y); doc.setFont(undefined,'normal');
+    y+=4.5;
+    doc.splitTextToSize(po.notes,180).forEach(l=>{ doc.text(l,14,y); y+=4.2; });
+    y+=2;
+  }
+  if(po.terms){
+    doc.setFont(undefined,'bold'); doc.text('Terms & Conditions:',14,y); doc.setFont(undefined,'normal');
+    y+=4.5;
+    String(po.terms).split('\n').filter(Boolean).forEach((line,i)=>{
+      doc.splitTextToSize(`${i+1}. ${line}`,180).forEach(l=>{ doc.text(l,14,y); y+=4.2; });
+    });
+  }
+  // Keep both signatures on the same row so the whole PO stays on one A4 page.
+  const sigY = 268;
+  doc.setDrawColor(120);
+  doc.line(20,sigY,80,sigY); doc.line(120,sigY,180,sigY);
+  doc.setFontSize(9);
+  doc.text(supplierPOSettings.sig1Label||'Accounts Department',20,sigY+5);
+  doc.text(supplierPOSettings.sig2Label||'Admin / CEO',120,sigY+5);
+  if(supplierPOSettings.footer){
+    doc.setFontSize(8); doc.setTextColor(120);
+    doc.text(supplierPOSettings.footer,14,290);
+    doc.setTextColor(0);
+  }
+  doc.save(`SupplierPO_${po.poNo}.pdf`);
+}
+// Initialise on first load so the tab, settings and auto-number are ready
+// before the user ever opens the module.
+loadSupplierPOData();
+</script>
 </body></html>
