@@ -480,7 +480,6 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
     <div class="tab" onclick="showTab('employees')" id="tab-employees">👔 Employees</div>
     <div class="tab" onclick="showTab('stock')" id="tab-stock">📦 Stock</div>
     <div class="tab" onclick="showTab('purchaseorders')" id="tab-purchaseorders">📝 Purchase Orders</div>
-    <div class="tab" onclick="showTab('supplierpo')" id="tab-supplierpo">📥 Supplier PO</div>
     <div class="tab" onclick="showTab('warehouses')" id="tab-warehouses">🏭 Warehouses</div>
     <div class="tab" onclick="showTab('hscodes')" id="tab-hscodes">🏷️ HS Codes</div>
 
@@ -2622,30 +2621,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
 </div>
 </div>
 
-<!-- ====== SUPPLIER PO TAB (New module — POs sent TO suppliers e.g. Fast Cable & Lights) ====== -->
-<div class="tab-panel" id="panel-supplierpo">
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">📥 Supplier Purchase Orders</div>
-      <div class="flex-gap">
-        <button class="btn btn-neon btn-sm" onclick="openSupplierPOSettingsModal()">⚙️ Settings</button>
-        <button class="btn btn-green btn-sm" onclick="openSupplierPOModal()">➕ New PO</button>
-      </div>
-    </div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Purchase Orders sent to your supplier (e.g. Fast Cable &amp; Lights). Description auto-fills from the Fast rate list, PO No auto-numbers (0001, 0002…), and Expiry Date auto-sets 1 month from the PO date — everything stays editable.</div>
-    <div class="search-bar" style="display:flex;gap:8px;flex-wrap:wrap;">
-      <input type="text" id="spo-search" placeholder="Search PO no, supplier, item..." oninput="renderSupplierPOTab()" style="flex:1;min-width:200px;">
-    </div>
-    <div style="overflow-x:auto;margin-top:10px;">
-      <table class="items-table">
-        <thead><tr><th>PO No</th><th>Date</th><th>Supplier</th><th>Expiry</th><th>Items</th><th>Status</th><th></th></tr></thead>
-        <tbody id="spoTableBody"></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<!-- SUPPLIER PO ADD/EDIT MODAL -->
+<!-- SUPPLIER PO ADD/EDIT MODAL (panel now lives inside Fast Billing — see fb-sec-supplierpo) -->
 <div class="modal-overlay" id="spoModal">
 <div class="modal modal-lg">
   <div class="modal-header"><h3 id="spoModalTitle">➕ New Supplier PO</h3><button class="close-btn" onclick="closeModal('spoModal')">✕</button></div>
@@ -3256,6 +3232,30 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
     <button type="button" class="btn btn-neon" id="fb-nav-settings" onclick="fbShowSection('settings')">⚙️ Settings</button>
     <button type="button" class="btn btn-neon" id="fb-nav-reports" onclick="fbShowSection('reports')">📊 Reports</button>
     <button type="button" class="btn btn-neon" id="fb-nav-stock" onclick="fbShowSection('stock')">🗄️ Stock</button>
+    <button type="button" class="btn btn-neon" id="fb-nav-supplierpo" onclick="fbShowSection('supplierpo')">📥 Supplier PO</button>
+  </div>
+
+  <!-- Supplier PO (POs sent OUT to Fast, so we can order stock — everything here uses the Fast rate list above) -->
+  <div id="fb-sec-supplierpo" class="settings-section" style="display:none;">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📥 Supplier Purchase Orders</div>
+        <div class="flex-gap">
+          <button class="btn btn-neon btn-sm" onclick="openSupplierPOSettingsModal()">⚙️ Settings</button>
+          <button class="btn btn-green btn-sm" onclick="openSupplierPOModal()">➕ New PO</button>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Purchase Orders you send to Fast to order stock. Description auto-fills from the Fast Billing rate list above, PO No auto-numbers (0001, 0002…), and Expiry Date auto-sets 1 month from the PO date — everything stays editable.</div>
+      <div class="search-bar" style="display:flex;gap:8px;flex-wrap:wrap;">
+        <input type="text" id="spo-search" placeholder="Search PO no, supplier, item..." oninput="renderSupplierPOTab()" style="flex:1;min-width:200px;">
+      </div>
+      <div style="overflow-x:auto;margin-top:10px;">
+        <table class="items-table">
+          <thead><tr><th>PO No</th><th>Date</th><th>Supplier</th><th>Expiry</th><th>Items</th><th>Status</th><th></th></tr></thead>
+          <tbody id="spoTableBody"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <!-- New Bill -->
@@ -6925,7 +6925,6 @@ function renderTabContent(id){
   if(id==='salesreturns') renderSalesReturnsTab();
   if(id==='returnreceipts') renderReturnReceiptsTab();
   if(id==='purchaseorders') renderPOTab();
-  if(id==='supplierpo') renderSupplierPOTab();
   if(id==='warehouses') renderWarehousesTab();
   if(id==='expenses') renderExpensesTab();
   if(id==='pantry') renderPantryTab();
@@ -6985,7 +6984,6 @@ const MOBILE_MORE_GROUPS = [
   ]},
   {label:'Operations', tabs:[
     {id:'employees',label:'Employees',icon:'👔'},{id:'stock',label:'Stock',icon:'📦'},
-    {id:'supplierpo',label:'Supplier PO',icon:'📥'},
     {id:'warehouses',label:'Warehouses',icon:'🏭'},{id:'hscodes',label:'HS Codes',icon:'🏷️'}
   ]},
   {label:'Finance', tabs:[
@@ -21958,6 +21956,7 @@ function renderFastBillingTab(){
   fbRenderSamples();
   fbRenderAllQuots();
   fbRenderStock();
+  renderSupplierPOTab();
 }
 function fbRenderNewQuotForm(){
   if(!fbQuotCurrentItems || !fbQuotCurrentItems.length) fbQuotCurrentItems = [{desc:'',qty:1,rate:0}];
@@ -21967,7 +21966,7 @@ function fbRenderNewQuotForm(){
 }
 function fbShowSection(sec){
   fbActiveSection = sec;
-  ['newbill','allbills','samples','ledger','customers','descriptions','newquot','allquots','settings','reports','stock'].forEach(s=>{
+  ['newbill','allbills','samples','ledger','customers','descriptions','newquot','allquots','settings','reports','stock','supplierpo'].forEach(s=>{
     const el = document.getElementById('fb-sec-'+s);
     if(el) el.style.display = (s===sec)?'':'none';
     const btn = document.getElementById('fb-nav-'+s);
@@ -21982,6 +21981,7 @@ function fbShowSection(sec){
   if(sec==='settings'){ fbLoadHeaderSettingsIntoForm(); fbRenderUnitAlertDefaults(); }
   if(sec==='reports') fbRenderReports();
   if(sec==='stock') fbRenderStock();
+  if(sec==='supplierpo') renderSupplierPOTab();
 }
 
 // ---- New Bill ----
@@ -25290,23 +25290,18 @@ function loadSupplierPOData(){
 function saveSupplierPOData(){ safeSetItem('sau_supplier_pos', JSON.stringify(supplierPOs)); }
 function saveSupplierPOSettingsData(){ safeSetItem('sau_supplier_po_settings', JSON.stringify(supplierPOSettings)); }
 
-// Flattens the Fast rate list (rateLists[list][brand].categories[cat] = [{desc,rate,consumerRate,cartonQty}])
-// into a simple searchable array, so Supplier PO items can auto-fill product detail + packing size.
+// Flattens the Fast Billing rate list (fbDescriptions — the same live, editable list shown
+// under Fast Billing > Rate List, including anything added/edited there) into a simple
+// searchable array, so Supplier PO items can auto-fill product detail + packing size.
 function spoFlattenRateList(){
   const out = [];
   const seen = new Set();
   try{
-    Object.values(rateLists||{}).forEach(brands=>{
-      Object.values(brands||{}).forEach(brand=>{
-        Object.values((brand&&brand.categories)||{}).forEach(cat=>{
-          (cat||[]).forEach(it=>{
-            const d = (it.desc||'').trim();
-            if(!d || seen.has(d.toLowerCase())) return;
-            seen.add(d.toLowerCase());
-            out.push({desc:d, cartonQty: parseFloat(it.cartonQty)||0, rate:it.rate});
-          });
-        });
-      });
+    (fbDescriptions||[]).forEach(it=>{
+      const d = (it.desc||'').trim();
+      if(!d || seen.has(d.toLowerCase())) return;
+      seen.add(d.toLowerCase());
+      out.push({desc:d, cartonQty: parseFloat(it.cartonQty)||0, rate:it.rate});
     });
   }catch(e){}
   return out;
