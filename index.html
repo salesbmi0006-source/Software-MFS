@@ -1515,8 +1515,22 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
       <div class="form-group"><label>Project</label><input type="text" id="qb-project" placeholder="e.g. Cable+Lights"></div>
     </div>
     <div class="form-row">
+      <div class="form-group" style="flex:2;min-width:220px;"><label>Customer Address</label><input type="text" id="qb-custaddress" placeholder="Customer address"></div>
+      <div class="form-group"><label>Contact No</label><input type="text" id="qb-custcontact" placeholder="Customer contact no"></div>
+      <div class="form-group"><label>Email</label><input type="text" id="qb-custemail" placeholder="Customer email"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Sales Person</label><input type="text" id="qb-salesperson" placeholder="Sales person"></div>
+      <div class="form-group"><label>Payment Terms</label><input type="text" id="qb-paymentterms" placeholder="e.g. 50% Advance"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Delivery Time</label><input type="text" id="qb-deliverytime" placeholder="e.g. 3-5 Days"></div>
+      <div class="form-group"><label>Mode of Delivery</label><input type="text" id="qb-modeofdelivery" placeholder="e.g. Courier / Self Pickup"></div>
+    </div>
+    <div class="form-row">
       <div class="form-group"><label>Our Ref</label><input type="text" id="qb-ourref" placeholder="Auto e.g. SAU/LHR/Q/1"></div>
       <div class="form-group"><label>Date</label><input type="date" id="qb-date"></div>
+      <div class="form-group"><label>Validity</label><input type="text" id="qb-validity" value="7 Days" placeholder="e.g. 7 Days"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Contact Person</label><input type="text" id="qb-contactperson" placeholder="Contact person"></div>
@@ -1527,6 +1541,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
           <option value="off">No Tax (Off)</option>
         </select>
       </div>
+      <div class="form-group"><label>Other Charges</label><input type="number" id="qb-othercharges" value="0" onchange="renderQbItemsTable()"></div>
     </div>
 
     <div class="accent-box mb-8" style="font-size:11px;">➕ Description type karte hi neeche is item ki last rate history show ho jayegi.</div>
@@ -13745,16 +13760,19 @@ function renderQbItemsTable(){
     }).join('');
   }
   const t = computeQbTotals();
+  const otherCharges = parseFloat((document.getElementById('qb-othercharges')||{}).value)||0;
   const totEl = document.getElementById('qb-totals');
   if(totEl){
     if(!qbItems.length){ totEl.innerHTML=''; }
     else if(t.mixed){
       totEl.innerHTML = `Mixed tax rates — har item ka tax alag calculate ho ga.<br>
-      <strong>Grand Total: <span class="neon-text">${cur} ${fmt(t.grandTotal)}</span></strong>`;
+      ${otherCharges>0?`Other Charges: ${cur} ${fmt(otherCharges)}<br>`:''}
+      <strong>Grand Total: <span class="neon-text">${cur} ${fmt(t.grandTotal+otherCharges)}</span></strong>`;
     } else {
       totEl.innerHTML = `Sub Total: ${cur} ${fmt(t.subTotal)}<br>
       ${t.rate>0?`GST ${t.rate}%: ${cur} ${fmt(t.taxAmt)}<br>`:''}
-      <strong style="font-size:15px;">Total: <span class="neon-text">${cur} ${fmt(t.grandTotal)}</span></strong>`;
+      ${otherCharges>0?`Other Charges: ${cur} ${fmt(otherCharges)}<br>`:''}
+      <strong style="font-size:15px;">Total: <span class="neon-text">${cur} ${fmt(t.grandTotal+otherCharges)}</span></strong>`;
     }
   }
 }
@@ -13782,6 +13800,15 @@ function clearQbBuilder(){
   if(document.getElementById('qb-ourref')) document.getElementById('qb-ourref').value='';
   if(document.getElementById('qb-contactperson')) document.getElementById('qb-contactperson').value='';
   if(document.getElementById('qb-date')) document.getElementById('qb-date').value = new Date().toISOString().slice(0,10);
+  if(document.getElementById('qb-custaddress')) document.getElementById('qb-custaddress').value='';
+  if(document.getElementById('qb-custcontact')) document.getElementById('qb-custcontact').value='';
+  if(document.getElementById('qb-custemail')) document.getElementById('qb-custemail').value='';
+  if(document.getElementById('qb-salesperson')) document.getElementById('qb-salesperson').value='';
+  if(document.getElementById('qb-paymentterms')) document.getElementById('qb-paymentterms').value='';
+  if(document.getElementById('qb-deliverytime')) document.getElementById('qb-deliverytime').value='';
+  if(document.getElementById('qb-modeofdelivery')) document.getElementById('qb-modeofdelivery').value='';
+  if(document.getElementById('qb-validity')) document.getElementById('qb-validity').value='7 Days';
+  if(document.getElementById('qb-othercharges')) document.getElementById('qb-othercharges').value='0';
   renderQbItemsTable();
   toast('Builder clear ho gaya','info');
 }
@@ -13799,17 +13826,28 @@ function saveQbQuotation(){
   const date = document.getElementById('qb-date').value || new Date().toISOString().slice(0,10);
   const contactPerson = document.getElementById('qb-contactperson').value.trim();
   const taxMode = document.getElementById('qb-taxmode').value;
+  const custAddress = (document.getElementById('qb-custaddress')||{}).value?.trim()||'';
+  const custContact = (document.getElementById('qb-custcontact')||{}).value?.trim()||'';
+  const custEmail = (document.getElementById('qb-custemail')||{}).value?.trim()||'';
+  const salesPerson = (document.getElementById('qb-salesperson')||{}).value?.trim()||'';
+  const paymentTerms = (document.getElementById('qb-paymentterms')||{}).value?.trim()||'';
+  const deliveryTime = (document.getElementById('qb-deliverytime')||{}).value?.trim()||'';
+  const modeOfDelivery = (document.getElementById('qb-modeofdelivery')||{}).value?.trim()||'';
+  const validity = (document.getElementById('qb-validity')||{}).value?.trim()||'7 Days';
+  const otherCharges = parseFloat((document.getElementById('qb-othercharges')||{}).value)||0;
   const t = computeQbTotals();
   const srNo = qbEditingSavedId ? ((savedQuotations.find(q=>q.id===qbEditingSavedId)||{}).srNo || nextQuotNoForDate()) : nextQuotNoForDate();
   const templateSnapshot = qbSelectedTemplate==='custom' ? collectCustomTemplateFromForm() : quotTemplates[qbSelectedTemplate];
   const q = {
     id: qbEditingSavedId || ('QB'+Date.now()),
     srNo, date, party, project, ourRef, contactPerson,
+    custAddress, custContact, custEmail,
+    salesPerson, paymentTerms, deliveryTime, modeOfDelivery, validity,
     templateKey: qbSelectedTemplate, templateSnapshot,
     taxMode,
     items: qbItems.map(it=>({...it})),
     terms: getQbTermsForRender(),
-    subTotal:t.subTotal, taxAmt:t.taxAmt, grandTotal:t.grandTotal, mixedTax:t.mixed
+    subTotal:t.subTotal, taxAmt:t.taxAmt, otherCharges, grandTotal:t.grandTotal+otherCharges, mixedTax:t.mixed
   };
   if(qbEditingSavedId){
     savedQuotations = savedQuotations.map(x=>x.id===qbEditingSavedId?q:x);
@@ -13836,13 +13874,25 @@ function buildQbCurrentQuotObj(){
   const date = document.getElementById('qb-date').value || new Date().toISOString().slice(0,10);
   const contactPerson = document.getElementById('qb-contactperson').value.trim();
   const taxMode = document.getElementById('qb-taxmode').value;
+  const custAddress = (document.getElementById('qb-custaddress')||{}).value?.trim()||'';
+  const custContact = (document.getElementById('qb-custcontact')||{}).value?.trim()||'';
+  const custEmail = (document.getElementById('qb-custemail')||{}).value?.trim()||'';
+  const salesPerson = (document.getElementById('qb-salesperson')||{}).value?.trim()||'';
+  const paymentTerms = (document.getElementById('qb-paymentterms')||{}).value?.trim()||'';
+  const deliveryTime = (document.getElementById('qb-deliverytime')||{}).value?.trim()||'';
+  const modeOfDelivery = (document.getElementById('qb-modeofdelivery')||{}).value?.trim()||'';
+  const validity = (document.getElementById('qb-validity')||{}).value?.trim()||'7 Days';
+  const otherCharges = parseFloat((document.getElementById('qb-othercharges')||{}).value)||0;
   const t = computeQbTotals();
   const templateSnapshot = qbSelectedTemplate==='custom' ? collectCustomTemplateFromForm() : quotTemplates[qbSelectedTemplate];
   return {
     id:'PREVIEW', srNo: qbEditingSavedId ? (savedQuotations.find(x=>x.id===qbEditingSavedId)||{}).srNo : nextQuotNoForDate(),
-    date, party, project, ourRef, contactPerson, templateKey:qbSelectedTemplate, templateSnapshot, taxMode,
+    date, party, project, ourRef, contactPerson,
+    custAddress, custContact, custEmail,
+    salesPerson, paymentTerms, deliveryTime, modeOfDelivery, validity,
+    templateKey:qbSelectedTemplate, templateSnapshot, taxMode,
     items:qbItems.map(it=>({...it})), terms:getQbTermsForRender(),
-    subTotal:t.subTotal, taxAmt:t.taxAmt, grandTotal:t.grandTotal, mixedTax:t.mixed
+    subTotal:t.subTotal, taxAmt:t.taxAmt, otherCharges, grandTotal:t.grandTotal+otherCharges, mixedTax:t.mixed
   };
 }
 function previewQbQuotation(){
@@ -13877,10 +13927,147 @@ function buildQuotHeaderHtml(q, fs){
     <div style="text-align:right;">${logosRight}${tpl.authorizedText?`<div style="font-size:${fs-2}px;color:#555;text-align:right;margin-top:2px;">${tpl.authorizedText}</div>`:''}</div>
   </div>`;
 }
+// Reference no. shown as "QT-0001-2025" style, built from the saved serial number + year of the quotation date.
+function formatQuotRefNo(q){
+  const yr = (q.date||'').slice(0,4) || new Date().getFullYear();
+  return `QT-${String(q.srNo||0).padStart(4,'0')}-${yr}`;
+}
+// ---- New "Quotation" document design (blue header/box template) ----
+const QUOT_BLUE_DARK = '#0f4c8c', QUOT_BLUE = '#1a63a8', QUOT_BLUE_LIGHT = '#eaf3fc', QUOT_BLUE_BORDER = '#a9c9e8';
+function buildQuotHTMLv2New(q, fs){
+  const cur = settings.currency||'PKR';
+  const tpl = q.templateSnapshot || quotTemplates[q.templateKey] || QUOT_TEMPLATE_DEFAULT.sau;
+  const title = (quotSettings.titleText||'QUOTATION').toUpperCase();
+
+  // ---- Top header: logo/company left, address block right ----
+  let logoLeft;
+  if(tpl.companyLogoImg){
+    logoLeft = `<img src="${tpl.companyLogoImg}" style="max-height:52px;max-width:190px;display:block;">`;
+  } else {
+    const nameLines = (tpl.companyName||'Company').split('\n');
+    logoLeft = `<div style="font-size:${fs+11}px;font-weight:800;color:${QUOT_BLUE_DARK};letter-spacing:.3px;line-height:1.15;">${nameLines.join('<br>')}</div>`;
+  }
+  const tagline = tpl.tagline || quotSettings.tagline || '';
+  const addrRight = `<div style="text-align:right;font-size:${fs-2}px;color:#333;line-height:1.6;">
+    ${tpl.address? `<div>${(tpl.address||'').replace(/\n/g,'<br>')}</div>`:''}
+    ${tpl.cell? `<div>${tpl.cell}</div>`:''}
+    ${tpl.email? `<div>${tpl.email}</div>`:''}
+  </div>`;
+  const headerTop = `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:8px;">
+    <div>${logoLeft}${tagline?`<div style="font-size:${fs-3}px;color:${QUOT_BLUE};letter-spacing:2px;font-weight:700;margin-top:2px;">${tagline.toUpperCase()}</div>`:''}</div>
+    ${addrRight}
+  </div>`;
+
+  // ---- Title bar with Quotation No / Date / Validity ----
+  const titleBar = `<div style="display:flex;align-items:stretch;margin-bottom:12px;">
+    <div style="background:${QUOT_BLUE_DARK};color:#fff;font-size:${fs+13}px;font-weight:800;letter-spacing:1px;padding:14px 26px;flex:1;">${title}</div>
+    <div style="background:${QUOT_BLUE_LIGHT};border:1px solid ${QUOT_BLUE_BORDER};border-left:none;padding:8px 18px;font-size:${fs}px;display:flex;flex-direction:column;justify-content:center;gap:3px;min-width:230px;">
+      <div><strong>Quotation No</strong> : ${formatQuotRefNo(q)}</div>
+      <div><strong>Date</strong> : ${q.date||''}</div>
+      <div><strong>Validity</strong> : ${q.validity||'7 Days'}</div>
+    </div>
+  </div>`;
+
+  // ---- Customer Details + Reference boxes ----
+  const boxHeader = (label)=>`<div style="background:${QUOT_BLUE_DARK};color:#fff;font-weight:700;font-size:${fs}px;padding:6px 10px;">${label}</div>`;
+  const custRows = [
+    ['Customer Name', q.party||'-'],
+    ['Address', q.custAddress||'-'],
+    ['Contact No', q.custContact||'-'],
+    ['Email', q.custEmail||'-']
+  ];
+  const refRows = [
+    ['Sales Person', q.salesPerson||'-'],
+    ['Payment Terms', q.paymentTerms||'-'],
+    ['Delivery Time', q.deliveryTime||'-'],
+    ['Mode of Delivery', q.modeOfDelivery||'-']
+  ];
+  if(q.project) refRows.push(['Project', q.project]);
+  if(q.contactPerson) refRows.push(['Contact Person', q.contactPerson]);
+  const boxRowsHtml = rows=>`<table style="width:100%;font-size:${fs-1}px;border-collapse:collapse;">
+    ${rows.map(r=>`<tr><td style="padding:4px 8px;font-weight:700;white-space:nowrap;vertical-align:top;width:38%;">${r[0]}</td><td style="padding:4px 8px;vertical-align:top;">: ${r[1]}</td></tr>`).join('')}
+  </table>`;
+  const twoBoxes = `<div style="display:flex;gap:12px;margin-bottom:12px;">
+    <div style="flex:1;border:1px solid ${QUOT_BLUE_BORDER};">${boxHeader('👤 Customer Details')}<div style="background:${QUOT_BLUE_LIGHT};">${boxRowsHtml(custRows)}</div></div>
+    <div style="flex:1;border:1px solid ${QUOT_BLUE_BORDER};">${boxHeader('📋 Reference')}<div style="background:#fff;">${boxRowsHtml(refRows)}</div></div>
+  </div>`;
+
+  // ---- Items table ----
+  const rows = (q.items||[]).map((it,i)=>{
+    const line=(it.qty||0)*(it.unitPrice||0);
+    const shade = i%2? QUOT_BLUE_LIGHT : '#fff';
+    return `<tr style="background:${shade};">
+      <td style="padding:5px 6px;border:1px solid ${QUOT_BLUE_BORDER};text-align:center;">${i+1}</td>
+      <td style="padding:5px 6px;border:1px solid ${QUOT_BLUE_BORDER};">${it.desc}${it.hscode?` <span style="color:#777;font-size:${fs-3}px;">(HS: ${it.hscode})</span>`:''}</td>
+      <td style="padding:5px 6px;border:1px solid ${QUOT_BLUE_BORDER};text-align:center;">${it.unit}</td>
+      <td style="padding:5px 6px;border:1px solid ${QUOT_BLUE_BORDER};text-align:center;">${it.qty}</td>
+      <td style="padding:5px 6px;border:1px solid ${QUOT_BLUE_BORDER};text-align:right;">${fmt(it.unitPrice)}</td>
+      <td style="padding:5px 6px;border:1px solid ${QUOT_BLUE_BORDER};text-align:right;font-weight:700;">${fmt(line)}</td>
+    </tr>`;
+  }).join('');
+  const head = `<tr style="background:${QUOT_BLUE_DARK};color:#fff;">
+    <th style="padding:7px 6px;border:1px solid ${QUOT_BLUE_BORDER};">Sr No</th>
+    <th style="padding:7px 6px;border:1px solid ${QUOT_BLUE_BORDER};text-align:left;">Description of Goods / Services</th>
+    <th style="padding:7px 6px;border:1px solid ${QUOT_BLUE_BORDER};">Unit</th>
+    <th style="padding:7px 6px;border:1px solid ${QUOT_BLUE_BORDER};">Qty</th>
+    <th style="padding:7px 6px;border:1px solid ${QUOT_BLUE_BORDER};">Unit Price (${cur})</th>
+    <th style="padding:7px 6px;border:1px solid ${QUOT_BLUE_BORDER};">Total Amount (${cur})</th>
+  </tr>`;
+  const tableHtml = `<table style="width:100%;border-collapse:collapse;font-size:${fs-1}px;margin-bottom:12px;">
+    <thead>${head}</thead><tbody>${rows||`<tr><td colspan="6" style="padding:12px;text-align:center;border:1px solid ${QUOT_BLUE_BORDER};color:#888;">No items</td></tr>`}</tbody>
+  </table>`;
+
+  // ---- Terms & totals side by side ----
+  const termsHtml = (q.terms||[]).map(t=>`<div style="margin-bottom:2px;">${t.label} : ${t.value}</div>`).join('');
+  const taxRate = (q.items&&q.items[0]&&q.items[0].taxPct)||0;
+  const totalsRows = [
+    ['Sub Total', fmt(q.subTotal)],
+    q.taxAmt>0?[`Sales Tax ${taxRate?`(${taxRate}%)`:''}`, fmt(q.taxAmt)]:null,
+    q.otherCharges>0?['Other Charges', fmt(q.otherCharges)]:null
+  ].filter(Boolean);
+  const totalsHtml = `<table style="width:100%;border-collapse:collapse;font-size:${fs-1}px;">
+    ${totalsRows.map(r=>`<tr><td style="padding:5px 10px;border:1px solid ${QUOT_BLUE_BORDER};font-weight:700;">${r[0]}</td><td style="padding:5px 10px;border:1px solid ${QUOT_BLUE_BORDER};text-align:right;">${r[1]}</td></tr>`).join('')}
+    <tr style="background:${QUOT_BLUE_DARK};color:#fff;"><td style="padding:7px 10px;border:1px solid ${QUOT_BLUE_DARK};font-weight:800;font-size:${fs}px;">Grand Total</td><td style="padding:7px 10px;border:1px solid ${QUOT_BLUE_DARK};text-align:right;font-weight:800;font-size:${fs}px;">${cur} ${fmt(q.grandTotal)}</td></tr>
+  </table>`;
+  const termsAndTotals = `<div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:16px;">
+    <div style="flex:1.3;border:1px solid ${QUOT_BLUE_BORDER};background:${QUOT_BLUE_LIGHT};padding:8px 10px;">
+      <div style="font-weight:700;color:${QUOT_BLUE_DARK};margin-bottom:4px;">📌 Terms &amp; Conditions</div>
+      <div style="font-size:${fs-2}px;color:#333;">${termsHtml}</div>
+    </div>
+    <div style="flex:1;">${totalsHtml}</div>
+  </div>`;
+
+  // ---- Closing note + signature ----
+  const closingText = (quotSettings.closingText||'Looking forward to your valued order.\nThank you for your business!').replace(/\n/g,'<br>');
+  const footerBlock = `<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px;">
+    <div style="font-size:${fs-1}px;font-weight:700;color:${QUOT_BLUE_DARK};">${closingText}</div>
+    <div style="text-align:center;font-size:${fs-1}px;">
+      <div style="border-top:1px solid #333;padding-top:4px;min-width:170px;">Authorized Signature</div>
+      <div style="font-weight:700;margin-top:2px;">${tpl.footerName||tpl.companyName||''}</div>
+    </div>
+  </div>`;
+  const bottomBar = `<div style="background:${QUOT_BLUE_DARK};color:#fff;text-align:center;padding:7px;font-size:${fs-1}px;letter-spacing:3px;font-weight:700;">${(quotSettings.footerTagline||'YOUR TRUST OUR PRIORITY').toUpperCase()}</div>`;
+
+  return `<div style="font-family:Arial,sans-serif;font-size:${fs}px;width:190mm;max-width:190mm;margin:0 auto;color:#111;background:#fff;border:1px solid ${QUOT_BLUE_BORDER};">
+    <div style="padding:14px 16px 0;">
+      ${headerTop}
+      ${titleBar}
+      ${twoBoxes}
+      ${tableHtml}
+      ${termsAndTotals}
+      ${footerBlock}
+    </div>
+    ${bottomBar}
+  </div>`;
+}
 function buildQuotHTMLv2(q, isBill, printSize){
   const cur = settings.currency||'PKR';
   const isThermal = printSize==='thermal';
   const fs = isThermal?11:parseInt(quotSettings.fontSize||12);
+  // The new blue-box template applies to A4 Quotations only; Bills and thermal prints keep the compact classic layout.
+  if(!isBill && !isThermal){
+    return buildQuotHTMLv2New(q, fs);
+  }
   const tpl = q.templateSnapshot || quotTemplates[q.templateKey] || QUOT_TEMPLATE_DEFAULT.sau;
   const header = buildQuotHeaderHtml(q, fs);
   const width = isThermal? `${quotSettings.thermalWidth||80}mm`:'190mm';
@@ -13969,6 +14156,7 @@ function previewQuotationV2(q, isBill){
 }
 function downloadQuotationPDFv2(q, isBill){
   const doc = new jspdf.jsPDF();
+  if(!isBill){ downloadQuotPDFBlueTemplate(doc, q); return; }
   const cur = settings.currency||'PKR';
   const tpl = q.templateSnapshot || quotTemplates[q.templateKey] || QUOT_TEMPLATE_DEFAULT.sau;
   let y=15;
@@ -13979,7 +14167,7 @@ function downloadQuotationPDFv2(q, isBill){
   y+=6;
   doc.setDrawColor(0); doc.line(14,y,196,y); y+=6;
   doc.setFontSize(13); doc.setTextColor(0,0,0); doc.setFont(undefined,'bold');
-  doc.text(isBill?'BILL / INVOICE':(quotSettings.titleText||'Quotation'), 105, y, {align:'center'}); y+=8;
+  doc.text('BILL / INVOICE', 105, y, {align:'center'}); y+=8;
   doc.setFontSize(10); doc.setFont(undefined,'normal');
   doc.text(`Party Name: ${q.party||'-'}`, 14, y);
   doc.text(`Date: ${q.date||''}`, 140, y); y+=5;
@@ -14022,7 +14210,131 @@ function downloadQuotationPDFv2(q, isBill){
   y+=5;
   if(tpl.email) doc.text(tpl.email,14,y);
   stampBrandLogoOnAllPages(doc);
-  doc.save(`${isBill?'Bill':'Quotation'}_${q.srNo}_${(q.party||'Customer').replace(/[^a-zA-Z0-9]/g,'_')}.pdf`);
+  doc.save(`Bill_${q.srNo}_${(q.party||'Customer').replace(/[^a-zA-Z0-9]/g,'_')}.pdf`);
+  toast('PDF download ho gayi','success');
+}
+// ---- Blue-box "Quotation" PDF template (matches the on-screen preview design) ----
+function downloadQuotPDFBlueTemplate(doc, q){
+  const cur = settings.currency||'PKR';
+  const tpl = q.templateSnapshot || quotTemplates[q.templateKey] || QUOT_TEMPLATE_DEFAULT.sau;
+  const DARK=[15,76,140], LIGHT=[234,243,252], BORDER=[169,201,232];
+  const ML=14, MR=196, PW=182;
+  let y=16;
+
+  // Top header: company/logo left, address block right
+  doc.setFontSize(17); doc.setFont(undefined,'bold'); doc.setTextColor(...DARK);
+  doc.text((tpl.companyName||'Company').split('\n')[0]||'', ML, y);
+  if(tpl.tagline){ doc.setFontSize(8); doc.setTextColor(...DARK); doc.text(tpl.tagline.toUpperCase(), ML, y+5); }
+  doc.setFontSize(9); doc.setFont(undefined,'normal'); doc.setTextColor(60,60,60);
+  let ry = y-4;
+  (tpl.address? doc.splitTextToSize(tpl.address, 80):[]).forEach(l=>{ doc.text(l, MR, ry, {align:'right'}); ry+=4; });
+  if(tpl.cell){ doc.text(tpl.cell, MR, ry, {align:'right'}); ry+=4; }
+  if(tpl.email){ doc.text(tpl.email, MR, ry, {align:'right'}); ry+=4; }
+  y = Math.max(y+10, ry)+4;
+
+  // Title bar with Quotation No / Date / Validity
+  const barH=14, boxW=PW*0.38, barW=PW-boxW, boxX=ML+barW;
+  doc.setFillColor(...DARK); doc.rect(ML, y, barW, barH, 'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(18); doc.setFont(undefined,'bold');
+  doc.text((quotSettings.titleText||'QUOTATION').toUpperCase(), ML+6, y+barH/2+3);
+  doc.setFillColor(...LIGHT); doc.setDrawColor(...BORDER);
+  doc.rect(boxX, y, boxW, barH, 'FD');
+  doc.setTextColor(20,20,20); doc.setFontSize(8); doc.setFont(undefined,'normal');
+  doc.text(`Quotation No : ${formatQuotRefNo(q)}`, boxX+3, y+4.5);
+  doc.text(`Date : ${q.date||''}`, boxX+3, y+8.5);
+  doc.text(`Validity : ${q.validity||'7 Days'}`, boxX+3, y+12.5);
+  y += barH+6;
+
+  // Customer Details (left) + Reference (right) boxes
+  const boxW2=(PW-6)/2, boxHeaderH=7, rowH=5.5;
+  const custRows=[['Customer Name',q.party||'-'],['Address',q.custAddress||'-'],['Contact No',q.custContact||'-'],['Email',q.custEmail||'-']];
+  const refRows=[['Sales Person',q.salesPerson||'-'],['Payment Terms',q.paymentTerms||'-'],['Delivery Time',q.deliveryTime||'-'],['Mode of Delivery',q.modeOfDelivery||'-']];
+  if(q.project) refRows.push(['Project',q.project]);
+  if(q.contactPerson) refRows.push(['Contact Person',q.contactPerson]);
+  const boxBodyH = Math.max(custRows.length, refRows.length)*rowH;
+  doc.setFillColor(...DARK); doc.rect(ML, y, boxW2, boxHeaderH, 'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont(undefined,'bold');
+  doc.text('Customer Details', ML+3, y+5);
+  doc.setDrawColor(...BORDER); doc.setFillColor(...LIGHT); doc.rect(ML, y+boxHeaderH, boxW2, boxBodyH, 'FD');
+  doc.setFontSize(8);
+  custRows.forEach((r,i)=>{
+    const ly=y+boxHeaderH+5+i*rowH;
+    doc.setTextColor(20,20,20); doc.setFont(undefined,'bold'); doc.text(r[0], ML+3, ly);
+    doc.setFont(undefined,'normal'); doc.text(': '+(doc.splitTextToSize(r[1], boxW2-38)[0]||''), ML+34, ly);
+  });
+  const rx = ML+boxW2+6;
+  doc.setFillColor(...DARK); doc.rect(rx, y, boxW2, boxHeaderH, 'F');
+  doc.setTextColor(255,255,255); doc.setFont(undefined,'bold'); doc.text('Reference', rx+3, y+5);
+  doc.setDrawColor(...BORDER); doc.setFillColor(255,255,255); doc.rect(rx, y+boxHeaderH, boxW2, boxBodyH, 'FD');
+  doc.setFontSize(8);
+  refRows.forEach((r,i)=>{
+    const ly=y+boxHeaderH+5+i*rowH;
+    doc.setTextColor(20,20,20); doc.setFont(undefined,'bold'); doc.text(r[0], rx+3, ly);
+    doc.setFont(undefined,'normal'); doc.text(': '+(doc.splitTextToSize(r[1], boxW2-38)[0]||''), rx+34, ly);
+  });
+  y += boxHeaderH+boxBodyH+8;
+
+  // Items table
+  const head=[['Sr No','Description of Goods / Services','Unit','Qty',`Unit Price (${cur})`,`Total Amount (${cur})`]];
+  const body=(q.items||[]).map((it,i)=>[i+1, it.desc, it.unit, it.qty, fmt(it.unitPrice), fmt((it.qty||0)*(it.unitPrice||0))]);
+  doc.autoTable({
+    startY:y, head, body, margin:{left:ML,right:14},
+    styles:{fontSize:8, lineColor:BORDER, lineWidth:0.2},
+    headStyles:{fillColor:DARK, textColor:255, fontStyle:'bold'},
+    alternateRowStyles:{fillColor:LIGHT},
+    columnStyles:{0:{halign:'center',cellWidth:14},2:{halign:'center',cellWidth:18},3:{halign:'center',cellWidth:16},4:{halign:'right',cellWidth:32},5:{halign:'right',cellWidth:34}}
+  });
+  y = doc.lastAutoTable.finalY+8;
+  if(y>240){ doc.addPage(); y=20; }
+
+  // Terms & Conditions box (left) + Totals table (right)
+  const totalsW=75, totalsX=MR-totalsW, termsW=PW-totalsW-8;
+  const taxRate=(q.items&&q.items[0]&&q.items[0].taxPct)||0;
+  const totalsRows=[['Sub Total', fmt(q.subTotal)]];
+  if(q.taxAmt>0) totalsRows.push([`Sales Tax${taxRate?` (${taxRate}%)`:''}`, fmt(q.taxAmt)]);
+  if(q.otherCharges>0) totalsRows.push(['Other Charges', fmt(q.otherCharges)]);
+
+  doc.setFontSize(8);
+  const termsLines=[];
+  (q.terms||[]).forEach(t=>{ doc.splitTextToSize(`${t.label} : ${t.value}`, termsW-6).forEach(l=>termsLines.push(l)); });
+  const termsBoxH = Math.max(18, 8+termsLines.length*4.2);
+  doc.setDrawColor(...BORDER); doc.setFillColor(...LIGHT);
+  doc.rect(ML, y, termsW, termsBoxH, 'FD');
+  doc.setTextColor(...DARK); doc.setFont(undefined,'bold'); doc.setFontSize(9);
+  doc.text('Terms & Conditions', ML+3, y+5.5);
+  doc.setTextColor(30,30,30); doc.setFont(undefined,'normal'); doc.setFontSize(8);
+  termsLines.forEach((l,i)=>doc.text(l, ML+3, y+10+i*4.2));
+
+  let ty=y;
+  totalsRows.forEach(r=>{
+    doc.setDrawColor(...BORDER); doc.setFillColor(255,255,255); doc.rect(totalsX, ty, totalsW, 7, 'FD');
+    doc.setTextColor(20,20,20); doc.setFontSize(8); doc.setFont(undefined,'bold'); doc.text(r[0], totalsX+3, ty+4.8);
+    doc.setFont(undefined,'normal'); doc.text(r[1], totalsX+totalsW-3, ty+4.8, {align:'right'});
+    ty+=7;
+  });
+  doc.setFillColor(...DARK); doc.rect(totalsX, ty, totalsW, 9, 'F');
+  doc.setTextColor(255,255,255); doc.setFont(undefined,'bold'); doc.setFontSize(10);
+  doc.text('Grand Total', totalsX+3, ty+6);
+  doc.text(`${cur} ${fmt(q.grandTotal)}`, totalsX+totalsW-3, ty+6, {align:'right'});
+  ty+=9;
+  y = Math.max(y+termsBoxH, ty)+10;
+  if(y>255){ doc.addPage(); y=20; }
+
+  // Closing note + signature
+  doc.setTextColor(...DARK); doc.setFont(undefined,'bold'); doc.setFontSize(9);
+  (quotSettings.closingText||'Looking forward to your valued order.\nThank you for your business!').split('\n').forEach((l,i)=>doc.text(l, ML, y+i*5));
+  doc.setDrawColor(80,80,80); doc.line(MR-60, y+8, MR, y+8);
+  doc.setTextColor(20,20,20); doc.setFont(undefined,'normal'); doc.setFontSize(8);
+  doc.text('Authorized Signature', MR-60, y+12);
+  doc.setFont(undefined,'bold'); doc.text(tpl.footerName||tpl.companyName||'', MR-60, y+17);
+
+  // Bottom banner
+  doc.setFillColor(...DARK); doc.rect(0, 287, 210, 10, 'F');
+  doc.setTextColor(255,255,255); doc.setFont(undefined,'bold'); doc.setFontSize(9);
+  doc.text((quotSettings.footerTagline||'YOUR TRUST OUR PRIORITY').toUpperCase(), 105, 293, {align:'center'});
+
+  stampBrandLogoOnAllPages(doc);
+  doc.save(`Quotation_${q.srNo}_${(q.party||'Customer').replace(/[^a-zA-Z0-9]/g,'_')}.pdf`);
   toast('PDF download ho gayi','success');
 }
 
