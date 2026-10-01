@@ -1447,13 +1447,16 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
       <div class="card-title">🧾 Commercial Bills — DC + Freight</div>
       <div class="flex-gap">
         <button class="btn btn-yellow btn-sm" onclick="cbScanNow()" title="DC records dobara scan karo + PDF se FBR numbers DC mein save karo">🔄 Scan Now</button>
-        <button class="btn btn-green btn-sm" id="cb-sel-btn" onclick="cbBulkPDF('selected')">📄 Selected PDF (0)</button>
+        <button class="btn btn-sm" style="background:var(--bg3);border:1px solid var(--border2);" onclick="cbOpenSettings()" title="Commercial bill par company ki kaun si details aayen">⚙️ Bill Settings</button>
+        <button class="btn btn-neon btn-sm" id="cb-comb-btn" onclick="cbOpenSelected()" title="Tick ki hui sab DCs (same PO) ka ek hi bill preview">🧾 Ek Bill Banao (0)</button>
+        <button class="btn btn-green btn-sm" id="cb-sel-btn" onclick="cbBulkPDF('selected')" title="Tick ki hui sab DCs ka EK combined bill PDF">📄 Selected PDF (0)</button>
         <button class="btn btn-purple btn-sm" onclick="cbBulkPDF('all')" title="Jo bills abhi list mein dikh rahe hain un sab ki ek PDF">📄 All Shown PDF</button>
       </div>
     </div>
     <div class="accent-box" style="font-size:11px;color:var(--text2);margin-bottom:10px;line-height:1.6;">
       <strong>Auto-scan:</strong> jis DC mein <strong>Freight Charges</strong> hain wo yahan khud aa jati hai — DC ki tafseel wahi rehti hai, sab se oper <strong>COMMERCIAL BILL</strong> likha hota hai aur aakhir mein Freight add ho kar <strong>Grand Total</strong> aata hai (digital invoice ke sath laga kar bhejne ke liye).<br>
-      <strong>FBR Numbers:</strong> D.Invoices mein PDF import karte hi FBR invoice number DC record mein <strong>pakka save</strong> ho jata hai — PDF baad mein hat bhi jaye to number yahan check ho sakta hai.
+      <strong>FBR Numbers:</strong> D.Invoices mein PDF import karte hi FBR invoice number DC record mein <strong>pakka save</strong> ho jata hai — PDF baad mein hat bhi jaye to number yahan check ho sakta hai.<br>
+      <strong>Multi-DC bill:</strong> jin DCs ka <strong>PO same</strong> ho unhe tick karein — sab ka <strong>ek hi Commercial Bill</strong> banega (sab items, DC # bracket mein, GST total aur Grand Total jama). PO alag wali DC tick nahi hogi, alert aayega. <strong>⚙️ Bill Settings</strong> se company ki details (NTN, STRN, address, phone...) bill par show/hide karein.
     </div>
     <div class="search-bar">
       <input type="text" id="cb-search" placeholder="Search DC no, invoice no, FBR no, party, PO..." oninput="cbRender()" style="max-width:340px;">
@@ -1470,6 +1473,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
       </select>
     </div>
     <div id="cb-stats" class="stats-grid" style="margin-bottom:12px;"></div>
+    <div id="cb-sel-info"></div>
     <div class="tbl-wrap">
       <table>
         <thead><tr>
@@ -1515,8 +1519,22 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
       <div class="form-group"><label>Project</label><input type="text" id="qb-project" placeholder="e.g. Cable+Lights"></div>
     </div>
     <div class="form-row">
+      <div class="form-group" style="flex:2;min-width:220px;"><label>Customer Address</label><input type="text" id="qb-custaddress" placeholder="Customer address"></div>
+      <div class="form-group"><label>Contact No</label><input type="text" id="qb-custcontact" placeholder="Customer contact no"></div>
+      <div class="form-group"><label>Email</label><input type="text" id="qb-custemail" placeholder="Customer email"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Sales Person</label><input type="text" id="qb-salesperson" placeholder="Sales person"></div>
+      <div class="form-group"><label>Payment Terms</label><input type="text" id="qb-paymentterms" placeholder="e.g. 50% Advance"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Delivery Time</label><input type="text" id="qb-deliverytime" placeholder="e.g. 3-5 Days"></div>
+      <div class="form-group"><label>Mode of Delivery</label><input type="text" id="qb-modeofdelivery" placeholder="e.g. Courier / Self Pickup"></div>
+    </div>
+    <div class="form-row">
       <div class="form-group"><label>Our Ref</label><input type="text" id="qb-ourref" placeholder="Auto e.g. SAU/LHR/Q/1"></div>
       <div class="form-group"><label>Date</label><input type="date" id="qb-date"></div>
+      <div class="form-group"><label>Validity</label><input type="text" id="qb-validity" value="7 Days" placeholder="e.g. 7 Days"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Contact Person</label><input type="text" id="qb-contactperson" placeholder="Contact person"></div>
@@ -1527,6 +1545,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
           <option value="off">No Tax (Off)</option>
         </select>
       </div>
+      <div class="form-group"><label>Other Charges</label><input type="number" id="qb-othercharges" value="0" onchange="renderQbItemsTable()"></div>
     </div>
 
     <div class="accent-box mb-8" style="font-size:11px;">➕ Description type karte hi neeche is item ki last rate history show ho jayegi.</div>
@@ -3977,12 +3996,36 @@ Switch Socket"></textarea>
 </div>
 </div>
 
+<!-- COMMERCIAL BILL SETTINGS MODAL (v80) -->
+<div class="modal-overlay" id="cbSettingsModal">
+<div class="modal modal-sm">
+  <div class="modal-header"><h3>⚙️ Commercial Bill Settings</h3><button class="close-btn" onclick="closeModal('cbSettingsModal')">✕</button></div>
+  <div class="modal-body">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5;">Jis cheez par tick hoga wo Commercial Bill (preview, print aur PDF) mein aayegi. Company ki values <strong>Settings</strong> tab se li jati hain.</div>
+    <div class="settings-section-title">🏢 Company Details</div>
+    <div id="cbs-company"></div>
+    <div class="settings-section-title" style="margin-top:12px;">🧾 Bill Details</div>
+    <div id="cbs-bill"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="cbSaveSettings()">💾 Save</button>
+    <button class="btn btn-neon" onclick="closeModal('cbSettingsModal')">Cancel</button>
+  </div>
+</div>
+</div>
+
 <!-- COMMERCIAL BILL MODAL -->
 <div class="modal-overlay" id="commBillModal">
 <div class="modal modal-lg">
   <div class="modal-header"><h3 id="cb-modal-title">🧾 Commercial Bill</h3><button class="close-btn" onclick="closeModal('commBillModal')">✕</button></div>
   <div class="modal-body">
     <div id="cb-frame" style="background:#fff;border:1px solid #ddd;padding:6px;overflow-x:auto;"></div>
+    <div class="settings-section" id="cb-desc-section" style="margin-top:12px;">
+      <div class="settings-section-title">✏️ Edit — FBR Description (bill par ye aayegi)</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.6;">Har item ki <strong>DC wali description</strong> sirf aap ke record ke liye hai (neeche dikhti hai, DC mein wohi rehti hai). <strong>FBR Description</strong> mein jo likhenge wohi Commercial Bill mein aayegi. Khali chhorenge to bill mein DC wali description aayegi.</div>
+      <div id="cb-desc-editor"></div>
+      <button class="btn btn-green btn-sm" onclick="cbSaveDesc()">💾 Save FBR Description</button>
+    </div>
     <div class="settings-section" style="margin-top:12px;">
       <div class="settings-section-title">🧾 FBR Invoice Number (DC record mein pakka save hota hai)</div>
       <div id="cb-fbr-editor"></div>
@@ -13745,16 +13788,19 @@ function renderQbItemsTable(){
     }).join('');
   }
   const t = computeQbTotals();
+  const otherCharges = parseFloat((document.getElementById('qb-othercharges')||{}).value)||0;
   const totEl = document.getElementById('qb-totals');
   if(totEl){
     if(!qbItems.length){ totEl.innerHTML=''; }
     else if(t.mixed){
       totEl.innerHTML = `Mixed tax rates — har item ka tax alag calculate ho ga.<br>
-      <strong>Grand Total: <span class="neon-text">${cur} ${fmt(t.grandTotal)}</span></strong>`;
+      ${otherCharges>0?`Other Charges: ${cur} ${fmt(otherCharges)}<br>`:''}
+      <strong>Grand Total: <span class="neon-text">${cur} ${fmt(t.grandTotal+otherCharges)}</span></strong>`;
     } else {
       totEl.innerHTML = `Sub Total: ${cur} ${fmt(t.subTotal)}<br>
       ${t.rate>0?`GST ${t.rate}%: ${cur} ${fmt(t.taxAmt)}<br>`:''}
-      <strong style="font-size:15px;">Total: <span class="neon-text">${cur} ${fmt(t.grandTotal)}</span></strong>`;
+      ${otherCharges>0?`Other Charges: ${cur} ${fmt(otherCharges)}<br>`:''}
+      <strong style="font-size:15px;">Total: <span class="neon-text">${cur} ${fmt(t.grandTotal+otherCharges)}</span></strong>`;
     }
   }
 }
@@ -13782,6 +13828,15 @@ function clearQbBuilder(){
   if(document.getElementById('qb-ourref')) document.getElementById('qb-ourref').value='';
   if(document.getElementById('qb-contactperson')) document.getElementById('qb-contactperson').value='';
   if(document.getElementById('qb-date')) document.getElementById('qb-date').value = new Date().toISOString().slice(0,10);
+  if(document.getElementById('qb-custaddress')) document.getElementById('qb-custaddress').value='';
+  if(document.getElementById('qb-custcontact')) document.getElementById('qb-custcontact').value='';
+  if(document.getElementById('qb-custemail')) document.getElementById('qb-custemail').value='';
+  if(document.getElementById('qb-salesperson')) document.getElementById('qb-salesperson').value='';
+  if(document.getElementById('qb-paymentterms')) document.getElementById('qb-paymentterms').value='';
+  if(document.getElementById('qb-deliverytime')) document.getElementById('qb-deliverytime').value='';
+  if(document.getElementById('qb-modeofdelivery')) document.getElementById('qb-modeofdelivery').value='';
+  if(document.getElementById('qb-validity')) document.getElementById('qb-validity').value='7 Days';
+  if(document.getElementById('qb-othercharges')) document.getElementById('qb-othercharges').value='0';
   renderQbItemsTable();
   toast('Builder clear ho gaya','info');
 }
@@ -13799,17 +13854,28 @@ function saveQbQuotation(){
   const date = document.getElementById('qb-date').value || new Date().toISOString().slice(0,10);
   const contactPerson = document.getElementById('qb-contactperson').value.trim();
   const taxMode = document.getElementById('qb-taxmode').value;
+  const custAddress = (document.getElementById('qb-custaddress')||{}).value?.trim()||'';
+  const custContact = (document.getElementById('qb-custcontact')||{}).value?.trim()||'';
+  const custEmail = (document.getElementById('qb-custemail')||{}).value?.trim()||'';
+  const salesPerson = (document.getElementById('qb-salesperson')||{}).value?.trim()||'';
+  const paymentTerms = (document.getElementById('qb-paymentterms')||{}).value?.trim()||'';
+  const deliveryTime = (document.getElementById('qb-deliverytime')||{}).value?.trim()||'';
+  const modeOfDelivery = (document.getElementById('qb-modeofdelivery')||{}).value?.trim()||'';
+  const validity = (document.getElementById('qb-validity')||{}).value?.trim()||'7 Days';
+  const otherCharges = parseFloat((document.getElementById('qb-othercharges')||{}).value)||0;
   const t = computeQbTotals();
   const srNo = qbEditingSavedId ? ((savedQuotations.find(q=>q.id===qbEditingSavedId)||{}).srNo || nextQuotNoForDate()) : nextQuotNoForDate();
   const templateSnapshot = qbSelectedTemplate==='custom' ? collectCustomTemplateFromForm() : quotTemplates[qbSelectedTemplate];
   const q = {
     id: qbEditingSavedId || ('QB'+Date.now()),
     srNo, date, party, project, ourRef, contactPerson,
+    custAddress, custContact, custEmail,
+    salesPerson, paymentTerms, deliveryTime, modeOfDelivery, validity,
     templateKey: qbSelectedTemplate, templateSnapshot,
     taxMode,
     items: qbItems.map(it=>({...it})),
     terms: getQbTermsForRender(),
-    subTotal:t.subTotal, taxAmt:t.taxAmt, grandTotal:t.grandTotal, mixedTax:t.mixed
+    subTotal:t.subTotal, taxAmt:t.taxAmt, otherCharges, grandTotal:t.grandTotal+otherCharges, mixedTax:t.mixed
   };
   if(qbEditingSavedId){
     savedQuotations = savedQuotations.map(x=>x.id===qbEditingSavedId?q:x);
@@ -13836,13 +13902,25 @@ function buildQbCurrentQuotObj(){
   const date = document.getElementById('qb-date').value || new Date().toISOString().slice(0,10);
   const contactPerson = document.getElementById('qb-contactperson').value.trim();
   const taxMode = document.getElementById('qb-taxmode').value;
+  const custAddress = (document.getElementById('qb-custaddress')||{}).value?.trim()||'';
+  const custContact = (document.getElementById('qb-custcontact')||{}).value?.trim()||'';
+  const custEmail = (document.getElementById('qb-custemail')||{}).value?.trim()||'';
+  const salesPerson = (document.getElementById('qb-salesperson')||{}).value?.trim()||'';
+  const paymentTerms = (document.getElementById('qb-paymentterms')||{}).value?.trim()||'';
+  const deliveryTime = (document.getElementById('qb-deliverytime')||{}).value?.trim()||'';
+  const modeOfDelivery = (document.getElementById('qb-modeofdelivery')||{}).value?.trim()||'';
+  const validity = (document.getElementById('qb-validity')||{}).value?.trim()||'7 Days';
+  const otherCharges = parseFloat((document.getElementById('qb-othercharges')||{}).value)||0;
   const t = computeQbTotals();
   const templateSnapshot = qbSelectedTemplate==='custom' ? collectCustomTemplateFromForm() : quotTemplates[qbSelectedTemplate];
   return {
     id:'PREVIEW', srNo: qbEditingSavedId ? (savedQuotations.find(x=>x.id===qbEditingSavedId)||{}).srNo : nextQuotNoForDate(),
-    date, party, project, ourRef, contactPerson, templateKey:qbSelectedTemplate, templateSnapshot, taxMode,
+    date, party, project, ourRef, contactPerson,
+    custAddress, custContact, custEmail,
+    salesPerson, paymentTerms, deliveryTime, modeOfDelivery, validity,
+    templateKey:qbSelectedTemplate, templateSnapshot, taxMode,
     items:qbItems.map(it=>({...it})), terms:getQbTermsForRender(),
-    subTotal:t.subTotal, taxAmt:t.taxAmt, grandTotal:t.grandTotal, mixedTax:t.mixed
+    subTotal:t.subTotal, taxAmt:t.taxAmt, otherCharges, grandTotal:t.grandTotal+otherCharges, mixedTax:t.mixed
   };
 }
 function previewQbQuotation(){
@@ -13877,10 +13955,147 @@ function buildQuotHeaderHtml(q, fs){
     <div style="text-align:right;">${logosRight}${tpl.authorizedText?`<div style="font-size:${fs-2}px;color:#555;text-align:right;margin-top:2px;">${tpl.authorizedText}</div>`:''}</div>
   </div>`;
 }
+// Reference no. shown as "QT-0001-2025" style, built from the saved serial number + year of the quotation date.
+function formatQuotRefNo(q){
+  const yr = (q.date||'').slice(0,4) || new Date().getFullYear();
+  return `QT-${String(q.srNo||0).padStart(4,'0')}-${yr}`;
+}
+// ---- New "Quotation" document design (blue header/box template) ----
+const QUOT_BLUE_DARK = '#0f4c8c', QUOT_BLUE = '#1a63a8', QUOT_BLUE_LIGHT = '#eaf3fc', QUOT_BLUE_BORDER = '#a9c9e8';
+function buildQuotHTMLv2New(q, fs){
+  const cur = settings.currency||'PKR';
+  const tpl = q.templateSnapshot || quotTemplates[q.templateKey] || QUOT_TEMPLATE_DEFAULT.sau;
+  const title = (quotSettings.titleText||'QUOTATION').toUpperCase();
+
+  // ---- Top header: logo/company left, address block right ----
+  let logoLeft;
+  if(tpl.companyLogoImg){
+    logoLeft = `<img src="${tpl.companyLogoImg}" style="max-height:52px;max-width:190px;display:block;">`;
+  } else {
+    const nameLines = (tpl.companyName||'Company').split('\n');
+    logoLeft = `<div style="font-size:${fs+11}px;font-weight:800;color:${QUOT_BLUE_DARK};letter-spacing:.3px;line-height:1.15;">${nameLines.join('<br>')}</div>`;
+  }
+  const tagline = tpl.tagline || quotSettings.tagline || '';
+  const addrRight = `<div style="text-align:right;font-size:${fs-2}px;color:#333;line-height:1.6;">
+    ${tpl.address? `<div>${(tpl.address||'').replace(/\n/g,'<br>')}</div>`:''}
+    ${tpl.cell? `<div>${tpl.cell}</div>`:''}
+    ${tpl.email? `<div>${tpl.email}</div>`:''}
+  </div>`;
+  const headerTop = `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:8px;">
+    <div>${logoLeft}${tagline?`<div style="font-size:${fs-3}px;color:${QUOT_BLUE};letter-spacing:2px;font-weight:700;margin-top:2px;">${tagline.toUpperCase()}</div>`:''}</div>
+    ${addrRight}
+  </div>`;
+
+  // ---- Title bar with Quotation No / Date / Validity ----
+  const titleBar = `<div style="display:flex;align-items:stretch;margin-bottom:12px;">
+    <div style="background:${QUOT_BLUE_DARK};color:#fff;font-size:${fs+13}px;font-weight:800;letter-spacing:1px;padding:14px 26px;flex:1;">${title}</div>
+    <div style="background:${QUOT_BLUE_LIGHT};border:1px solid ${QUOT_BLUE_BORDER};border-left:none;padding:8px 18px;font-size:${fs}px;display:flex;flex-direction:column;justify-content:center;gap:3px;min-width:230px;">
+      <div><strong>Quotation No</strong> : ${formatQuotRefNo(q)}</div>
+      <div><strong>Date</strong> : ${q.date||''}</div>
+      <div><strong>Validity</strong> : ${q.validity||'7 Days'}</div>
+    </div>
+  </div>`;
+
+  // ---- Customer Details + Reference boxes ----
+  const boxHeader = (label)=>`<div style="background:${QUOT_BLUE_DARK};color:#fff;font-weight:700;font-size:${fs}px;padding:6px 10px;">${label}</div>`;
+  const custRows = [
+    ['Customer Name', q.party||'-'],
+    ['Address', q.custAddress||'-'],
+    ['Contact No', q.custContact||'-'],
+    ['Email', q.custEmail||'-']
+  ];
+  const refRows = [
+    ['Sales Person', q.salesPerson||'-'],
+    ['Payment Terms', q.paymentTerms||'-'],
+    ['Delivery Time', q.deliveryTime||'-'],
+    ['Mode of Delivery', q.modeOfDelivery||'-']
+  ];
+  if(q.project) refRows.push(['Project', q.project]);
+  if(q.contactPerson) refRows.push(['Contact Person', q.contactPerson]);
+  const boxRowsHtml = rows=>`<table style="width:100%;font-size:${fs-1}px;border-collapse:collapse;">
+    ${rows.map(r=>`<tr><td style="padding:4px 8px;font-weight:700;white-space:nowrap;vertical-align:top;width:38%;">${r[0]}</td><td style="padding:4px 8px;vertical-align:top;">: ${r[1]}</td></tr>`).join('')}
+  </table>`;
+  const twoBoxes = `<div style="display:flex;gap:12px;margin-bottom:12px;">
+    <div style="flex:1;border:1px solid ${QUOT_BLUE_BORDER};">${boxHeader('👤 Customer Details')}<div style="background:${QUOT_BLUE_LIGHT};">${boxRowsHtml(custRows)}</div></div>
+    <div style="flex:1;border:1px solid ${QUOT_BLUE_BORDER};">${boxHeader('📋 Reference')}<div style="background:#fff;">${boxRowsHtml(refRows)}</div></div>
+  </div>`;
+
+  // ---- Items table ----
+  const rows = (q.items||[]).map((it,i)=>{
+    const line=(it.qty||0)*(it.unitPrice||0);
+    const shade = i%2? QUOT_BLUE_LIGHT : '#fff';
+    return `<tr style="background:${shade};">
+      <td style="padding:5px 6px;border:1px solid ${QUOT_BLUE_BORDER};text-align:center;">${i+1}</td>
+      <td style="padding:5px 6px;border:1px solid ${QUOT_BLUE_BORDER};">${it.desc}${it.hscode?` <span style="color:#777;font-size:${fs-3}px;">(HS: ${it.hscode})</span>`:''}</td>
+      <td style="padding:5px 6px;border:1px solid ${QUOT_BLUE_BORDER};text-align:center;">${it.unit}</td>
+      <td style="padding:5px 6px;border:1px solid ${QUOT_BLUE_BORDER};text-align:center;">${it.qty}</td>
+      <td style="padding:5px 6px;border:1px solid ${QUOT_BLUE_BORDER};text-align:right;">${fmt(it.unitPrice)}</td>
+      <td style="padding:5px 6px;border:1px solid ${QUOT_BLUE_BORDER};text-align:right;font-weight:700;">${fmt(line)}</td>
+    </tr>`;
+  }).join('');
+  const head = `<tr style="background:${QUOT_BLUE_DARK};color:#fff;">
+    <th style="padding:7px 6px;border:1px solid ${QUOT_BLUE_BORDER};">Sr No</th>
+    <th style="padding:7px 6px;border:1px solid ${QUOT_BLUE_BORDER};text-align:left;">Description of Goods / Services</th>
+    <th style="padding:7px 6px;border:1px solid ${QUOT_BLUE_BORDER};">Unit</th>
+    <th style="padding:7px 6px;border:1px solid ${QUOT_BLUE_BORDER};">Qty</th>
+    <th style="padding:7px 6px;border:1px solid ${QUOT_BLUE_BORDER};">Unit Price (${cur})</th>
+    <th style="padding:7px 6px;border:1px solid ${QUOT_BLUE_BORDER};">Total Amount (${cur})</th>
+  </tr>`;
+  const tableHtml = `<table style="width:100%;border-collapse:collapse;font-size:${fs-1}px;margin-bottom:12px;">
+    <thead>${head}</thead><tbody>${rows||`<tr><td colspan="6" style="padding:12px;text-align:center;border:1px solid ${QUOT_BLUE_BORDER};color:#888;">No items</td></tr>`}</tbody>
+  </table>`;
+
+  // ---- Terms & totals side by side ----
+  const termsHtml = (q.terms||[]).map(t=>`<div style="margin-bottom:2px;">${t.label} : ${t.value}</div>`).join('');
+  const taxRate = (q.items&&q.items[0]&&q.items[0].taxPct)||0;
+  const totalsRows = [
+    ['Sub Total', fmt(q.subTotal)],
+    q.taxAmt>0?[`Sales Tax ${taxRate?`(${taxRate}%)`:''}`, fmt(q.taxAmt)]:null,
+    q.otherCharges>0?['Other Charges', fmt(q.otherCharges)]:null
+  ].filter(Boolean);
+  const totalsHtml = `<table style="width:100%;border-collapse:collapse;font-size:${fs-1}px;">
+    ${totalsRows.map(r=>`<tr><td style="padding:5px 10px;border:1px solid ${QUOT_BLUE_BORDER};font-weight:700;">${r[0]}</td><td style="padding:5px 10px;border:1px solid ${QUOT_BLUE_BORDER};text-align:right;">${r[1]}</td></tr>`).join('')}
+    <tr style="background:${QUOT_BLUE_DARK};color:#fff;"><td style="padding:7px 10px;border:1px solid ${QUOT_BLUE_DARK};font-weight:800;font-size:${fs}px;">Grand Total</td><td style="padding:7px 10px;border:1px solid ${QUOT_BLUE_DARK};text-align:right;font-weight:800;font-size:${fs}px;">${cur} ${fmt(q.grandTotal)}</td></tr>
+  </table>`;
+  const termsAndTotals = `<div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:16px;">
+    <div style="flex:1.3;border:1px solid ${QUOT_BLUE_BORDER};background:${QUOT_BLUE_LIGHT};padding:8px 10px;">
+      <div style="font-weight:700;color:${QUOT_BLUE_DARK};margin-bottom:4px;">📌 Terms &amp; Conditions</div>
+      <div style="font-size:${fs-2}px;color:#333;">${termsHtml}</div>
+    </div>
+    <div style="flex:1;">${totalsHtml}</div>
+  </div>`;
+
+  // ---- Closing note + signature ----
+  const closingText = (quotSettings.closingText||'Looking forward to your valued order.\nThank you for your business!').replace(/\n/g,'<br>');
+  const footerBlock = `<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px;">
+    <div style="font-size:${fs-1}px;font-weight:700;color:${QUOT_BLUE_DARK};">${closingText}</div>
+    <div style="text-align:center;font-size:${fs-1}px;">
+      <div style="border-top:1px solid #333;padding-top:4px;min-width:170px;">Authorized Signature</div>
+      <div style="font-weight:700;margin-top:2px;">${tpl.footerName||tpl.companyName||''}</div>
+    </div>
+  </div>`;
+  const bottomBar = `<div style="background:${QUOT_BLUE_DARK};color:#fff;text-align:center;padding:7px;font-size:${fs-1}px;letter-spacing:3px;font-weight:700;">${(quotSettings.footerTagline||'YOUR TRUST OUR PRIORITY').toUpperCase()}</div>`;
+
+  return `<div style="font-family:Arial,sans-serif;font-size:${fs}px;width:190mm;max-width:190mm;margin:0 auto;color:#111;background:#fff;border:1px solid ${QUOT_BLUE_BORDER};">
+    <div style="padding:14px 16px 0;">
+      ${headerTop}
+      ${titleBar}
+      ${twoBoxes}
+      ${tableHtml}
+      ${termsAndTotals}
+      ${footerBlock}
+    </div>
+    ${bottomBar}
+  </div>`;
+}
 function buildQuotHTMLv2(q, isBill, printSize){
   const cur = settings.currency||'PKR';
   const isThermal = printSize==='thermal';
   const fs = isThermal?11:parseInt(quotSettings.fontSize||12);
+  // The new blue-box template applies to A4 Quotations only; Bills and thermal prints keep the compact classic layout.
+  if(!isBill && !isThermal){
+    return buildQuotHTMLv2New(q, fs);
+  }
   const tpl = q.templateSnapshot || quotTemplates[q.templateKey] || QUOT_TEMPLATE_DEFAULT.sau;
   const header = buildQuotHeaderHtml(q, fs);
   const width = isThermal? `${quotSettings.thermalWidth||80}mm`:'190mm';
@@ -13969,6 +14184,7 @@ function previewQuotationV2(q, isBill){
 }
 function downloadQuotationPDFv2(q, isBill){
   const doc = new jspdf.jsPDF();
+  if(!isBill){ downloadQuotPDFBlueTemplate(doc, q); return; }
   const cur = settings.currency||'PKR';
   const tpl = q.templateSnapshot || quotTemplates[q.templateKey] || QUOT_TEMPLATE_DEFAULT.sau;
   let y=15;
@@ -13979,7 +14195,7 @@ function downloadQuotationPDFv2(q, isBill){
   y+=6;
   doc.setDrawColor(0); doc.line(14,y,196,y); y+=6;
   doc.setFontSize(13); doc.setTextColor(0,0,0); doc.setFont(undefined,'bold');
-  doc.text(isBill?'BILL / INVOICE':(quotSettings.titleText||'Quotation'), 105, y, {align:'center'}); y+=8;
+  doc.text('BILL / INVOICE', 105, y, {align:'center'}); y+=8;
   doc.setFontSize(10); doc.setFont(undefined,'normal');
   doc.text(`Party Name: ${q.party||'-'}`, 14, y);
   doc.text(`Date: ${q.date||''}`, 140, y); y+=5;
@@ -14022,7 +14238,131 @@ function downloadQuotationPDFv2(q, isBill){
   y+=5;
   if(tpl.email) doc.text(tpl.email,14,y);
   stampBrandLogoOnAllPages(doc);
-  doc.save(`${isBill?'Bill':'Quotation'}_${q.srNo}_${(q.party||'Customer').replace(/[^a-zA-Z0-9]/g,'_')}.pdf`);
+  doc.save(`Bill_${q.srNo}_${(q.party||'Customer').replace(/[^a-zA-Z0-9]/g,'_')}.pdf`);
+  toast('PDF download ho gayi','success');
+}
+// ---- Blue-box "Quotation" PDF template (matches the on-screen preview design) ----
+function downloadQuotPDFBlueTemplate(doc, q){
+  const cur = settings.currency||'PKR';
+  const tpl = q.templateSnapshot || quotTemplates[q.templateKey] || QUOT_TEMPLATE_DEFAULT.sau;
+  const DARK=[15,76,140], LIGHT=[234,243,252], BORDER=[169,201,232];
+  const ML=14, MR=196, PW=182;
+  let y=16;
+
+  // Top header: company/logo left, address block right
+  doc.setFontSize(17); doc.setFont(undefined,'bold'); doc.setTextColor(...DARK);
+  doc.text((tpl.companyName||'Company').split('\n')[0]||'', ML, y);
+  if(tpl.tagline){ doc.setFontSize(8); doc.setTextColor(...DARK); doc.text(tpl.tagline.toUpperCase(), ML, y+5); }
+  doc.setFontSize(9); doc.setFont(undefined,'normal'); doc.setTextColor(60,60,60);
+  let ry = y-4;
+  (tpl.address? doc.splitTextToSize(tpl.address, 80):[]).forEach(l=>{ doc.text(l, MR, ry, {align:'right'}); ry+=4; });
+  if(tpl.cell){ doc.text(tpl.cell, MR, ry, {align:'right'}); ry+=4; }
+  if(tpl.email){ doc.text(tpl.email, MR, ry, {align:'right'}); ry+=4; }
+  y = Math.max(y+10, ry)+4;
+
+  // Title bar with Quotation No / Date / Validity
+  const barH=14, boxW=PW*0.38, barW=PW-boxW, boxX=ML+barW;
+  doc.setFillColor(...DARK); doc.rect(ML, y, barW, barH, 'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(18); doc.setFont(undefined,'bold');
+  doc.text((quotSettings.titleText||'QUOTATION').toUpperCase(), ML+6, y+barH/2+3);
+  doc.setFillColor(...LIGHT); doc.setDrawColor(...BORDER);
+  doc.rect(boxX, y, boxW, barH, 'FD');
+  doc.setTextColor(20,20,20); doc.setFontSize(8); doc.setFont(undefined,'normal');
+  doc.text(`Quotation No : ${formatQuotRefNo(q)}`, boxX+3, y+4.5);
+  doc.text(`Date : ${q.date||''}`, boxX+3, y+8.5);
+  doc.text(`Validity : ${q.validity||'7 Days'}`, boxX+3, y+12.5);
+  y += barH+6;
+
+  // Customer Details (left) + Reference (right) boxes
+  const boxW2=(PW-6)/2, boxHeaderH=7, rowH=5.5;
+  const custRows=[['Customer Name',q.party||'-'],['Address',q.custAddress||'-'],['Contact No',q.custContact||'-'],['Email',q.custEmail||'-']];
+  const refRows=[['Sales Person',q.salesPerson||'-'],['Payment Terms',q.paymentTerms||'-'],['Delivery Time',q.deliveryTime||'-'],['Mode of Delivery',q.modeOfDelivery||'-']];
+  if(q.project) refRows.push(['Project',q.project]);
+  if(q.contactPerson) refRows.push(['Contact Person',q.contactPerson]);
+  const boxBodyH = Math.max(custRows.length, refRows.length)*rowH;
+  doc.setFillColor(...DARK); doc.rect(ML, y, boxW2, boxHeaderH, 'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont(undefined,'bold');
+  doc.text('Customer Details', ML+3, y+5);
+  doc.setDrawColor(...BORDER); doc.setFillColor(...LIGHT); doc.rect(ML, y+boxHeaderH, boxW2, boxBodyH, 'FD');
+  doc.setFontSize(8);
+  custRows.forEach((r,i)=>{
+    const ly=y+boxHeaderH+5+i*rowH;
+    doc.setTextColor(20,20,20); doc.setFont(undefined,'bold'); doc.text(r[0], ML+3, ly);
+    doc.setFont(undefined,'normal'); doc.text(': '+(doc.splitTextToSize(r[1], boxW2-38)[0]||''), ML+34, ly);
+  });
+  const rx = ML+boxW2+6;
+  doc.setFillColor(...DARK); doc.rect(rx, y, boxW2, boxHeaderH, 'F');
+  doc.setTextColor(255,255,255); doc.setFont(undefined,'bold'); doc.text('Reference', rx+3, y+5);
+  doc.setDrawColor(...BORDER); doc.setFillColor(255,255,255); doc.rect(rx, y+boxHeaderH, boxW2, boxBodyH, 'FD');
+  doc.setFontSize(8);
+  refRows.forEach((r,i)=>{
+    const ly=y+boxHeaderH+5+i*rowH;
+    doc.setTextColor(20,20,20); doc.setFont(undefined,'bold'); doc.text(r[0], rx+3, ly);
+    doc.setFont(undefined,'normal'); doc.text(': '+(doc.splitTextToSize(r[1], boxW2-38)[0]||''), rx+34, ly);
+  });
+  y += boxHeaderH+boxBodyH+8;
+
+  // Items table
+  const head=[['Sr No','Description of Goods / Services','Unit','Qty',`Unit Price (${cur})`,`Total Amount (${cur})`]];
+  const body=(q.items||[]).map((it,i)=>[i+1, it.desc, it.unit, it.qty, fmt(it.unitPrice), fmt((it.qty||0)*(it.unitPrice||0))]);
+  doc.autoTable({
+    startY:y, head, body, margin:{left:ML,right:14},
+    styles:{fontSize:8, lineColor:BORDER, lineWidth:0.2},
+    headStyles:{fillColor:DARK, textColor:255, fontStyle:'bold'},
+    alternateRowStyles:{fillColor:LIGHT},
+    columnStyles:{0:{halign:'center',cellWidth:14},2:{halign:'center',cellWidth:18},3:{halign:'center',cellWidth:16},4:{halign:'right',cellWidth:32},5:{halign:'right',cellWidth:34}}
+  });
+  y = doc.lastAutoTable.finalY+8;
+  if(y>240){ doc.addPage(); y=20; }
+
+  // Terms & Conditions box (left) + Totals table (right)
+  const totalsW=75, totalsX=MR-totalsW, termsW=PW-totalsW-8;
+  const taxRate=(q.items&&q.items[0]&&q.items[0].taxPct)||0;
+  const totalsRows=[['Sub Total', fmt(q.subTotal)]];
+  if(q.taxAmt>0) totalsRows.push([`Sales Tax${taxRate?` (${taxRate}%)`:''}`, fmt(q.taxAmt)]);
+  if(q.otherCharges>0) totalsRows.push(['Other Charges', fmt(q.otherCharges)]);
+
+  doc.setFontSize(8);
+  const termsLines=[];
+  (q.terms||[]).forEach(t=>{ doc.splitTextToSize(`${t.label} : ${t.value}`, termsW-6).forEach(l=>termsLines.push(l)); });
+  const termsBoxH = Math.max(18, 8+termsLines.length*4.2);
+  doc.setDrawColor(...BORDER); doc.setFillColor(...LIGHT);
+  doc.rect(ML, y, termsW, termsBoxH, 'FD');
+  doc.setTextColor(...DARK); doc.setFont(undefined,'bold'); doc.setFontSize(9);
+  doc.text('Terms & Conditions', ML+3, y+5.5);
+  doc.setTextColor(30,30,30); doc.setFont(undefined,'normal'); doc.setFontSize(8);
+  termsLines.forEach((l,i)=>doc.text(l, ML+3, y+10+i*4.2));
+
+  let ty=y;
+  totalsRows.forEach(r=>{
+    doc.setDrawColor(...BORDER); doc.setFillColor(255,255,255); doc.rect(totalsX, ty, totalsW, 7, 'FD');
+    doc.setTextColor(20,20,20); doc.setFontSize(8); doc.setFont(undefined,'bold'); doc.text(r[0], totalsX+3, ty+4.8);
+    doc.setFont(undefined,'normal'); doc.text(r[1], totalsX+totalsW-3, ty+4.8, {align:'right'});
+    ty+=7;
+  });
+  doc.setFillColor(...DARK); doc.rect(totalsX, ty, totalsW, 9, 'F');
+  doc.setTextColor(255,255,255); doc.setFont(undefined,'bold'); doc.setFontSize(10);
+  doc.text('Grand Total', totalsX+3, ty+6);
+  doc.text(`${cur} ${fmt(q.grandTotal)}`, totalsX+totalsW-3, ty+6, {align:'right'});
+  ty+=9;
+  y = Math.max(y+termsBoxH, ty)+10;
+  if(y>255){ doc.addPage(); y=20; }
+
+  // Closing note + signature
+  doc.setTextColor(...DARK); doc.setFont(undefined,'bold'); doc.setFontSize(9);
+  (quotSettings.closingText||'Looking forward to your valued order.\nThank you for your business!').split('\n').forEach((l,i)=>doc.text(l, ML, y+i*5));
+  doc.setDrawColor(80,80,80); doc.line(MR-60, y+8, MR, y+8);
+  doc.setTextColor(20,20,20); doc.setFont(undefined,'normal'); doc.setFontSize(8);
+  doc.text('Authorized Signature', MR-60, y+12);
+  doc.setFont(undefined,'bold'); doc.text(tpl.footerName||tpl.companyName||'', MR-60, y+17);
+
+  // Bottom banner
+  doc.setFillColor(...DARK); doc.rect(0, 287, 210, 10, 'F');
+  doc.setTextColor(255,255,255); doc.setFont(undefined,'bold'); doc.setFontSize(9);
+  doc.text((quotSettings.footerTagline||'YOUR TRUST OUR PRIORITY').toUpperCase(), 105, 293, {align:'center'});
+
+  stampBrandLogoOnAllPages(doc);
+  doc.save(`Quotation_${q.srNo}_${(q.party||'Customer').replace(/[^a-zA-Z0-9]/g,'_')}.pdf`);
   toast('PDF download ho gayi','success');
 }
 
@@ -14337,61 +14677,182 @@ function cbWords(n){
   return `${unit} ${conv(rupees)}${paisa?` and ${conv(paisa)} Paisa`:''} Only`;
 }
 
+// ---- Commercial Bill display options (v80): company ki kaun si details bill par aayen ----
+const CB_COMPANY_OPTS = [['logo','Company Logo'],['name','Company Name'],['ntn','NTN'],['strn','STRN'],['address','Address'],['phone','Phone Number'],['email','Email']];
+const CB_BILL_OPTS = [
+  ['partyDetails','M/s ka Address / NTN / STRN (party ki details)'],
+  ['fbr','FBR Invoice No'],
+  ['itemDc','Har item ke neeche uski DC # (jab 2+ DCs ka ek bill ho)'],
+  ['dispatch','Dispatch / Bilty / Tracking info'],
+  ['words','Amount in Words'],
+  ['sign','Signature lines (Prepared By / Authorized Signature)']
+];
+function cbOpt(k){
+  const o = settings.cbShow;
+  if(o && o[k]!==undefined) return !!o[k];
+  const legacy = {ntn:'showNtn', strn:'showStrn', address:'showAddress', phone:'showPhone', email:'showEmail'};
+  if(legacy[k]) return settings[legacy[k]]!==false;
+  return true;
+}
+function cbOpenSettings(){
+  const cv = {logo: settings.logoBase64 ? '(logo laga hua hai)' : '', name: settings.companyName, ntn: settings.ntn, strn: settings.strn,
+    address: String(settings.address||'').replace(/\n/g,' ').slice(0,60), phone: settings.phone, email: settings.email};
+  const row = (k,label,val)=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:13px;">
+    <input type="checkbox" id="cbs-${k}" style="width:auto;" ${cbOpt(k)?'checked':''}>
+    <span>${label}${val!==undefined ? ` <span style="color:var(--text3);font-size:11px;">${val ? '— '+_lgEsc(val) : '— (Settings tab mein khali hai)'}</span>` : ''}</span></label>`;
+  document.getElementById('cbs-company').innerHTML = CB_COMPANY_OPTS.map(([k,l])=>row(k,l,cv[k])).join('');
+  document.getElementById('cbs-bill').innerHTML = CB_BILL_OPTS.map(([k,l])=>row(k,l)).join('');
+  openModal('cbSettingsModal');
+}
+function cbSaveSettings(){
+  const o = {};
+  CB_COMPANY_OPTS.concat(CB_BILL_OPTS).forEach(([k])=>{ const el = document.getElementById('cbs-'+k); o[k] = el ? el.checked : true; });
+  settings.cbShow = o;
+  safeSetItem('sau_settings', JSON.stringify(settings));
+  try{ saveData(); }catch(e){}
+  closeModal('cbSettingsModal');
+  const m = document.getElementById('commBillModal');
+  if(cbCurrentIdxs.length && m && m.classList.contains('open')) cbRenderModal();
+  toast('Commercial Bill settings save ho gayi ✓','success');
+}
+
+// ---- Kya ye DCs ek hi commercial bill mein aa sakti hain? (party + PO same hona zaroori) ----
+function cbNorm(s){ return String(s==null?'':s).trim().toLowerCase().replace(/\s+/g,' '); }
+function cbGroupCheck(a, b){
+  if(cbNorm(a.partyName)!==cbNorm(b.partyName))
+    return `Party alag hai!\nDC ${a.dcNo} → ${a.partyName}\nDC ${b.dcNo} → ${b.partyName}\n\nEk commercial bill sirf ek hi party ki DCs ka ban sakta hai.`;
+  const pa = cbNorm(a.poNo), pb = cbNorm(b.poNo);
+  if(!pa || !pb)
+    return `DC ${!pa ? a.dcNo : b.dcNo} mein PO number nahi hai.\n\nBina PO wali DC ko kisi dosri DC ke saath combine nahi kiya ja sakta.`;
+  if(pa!==pb)
+    return `PO same nahi hai!\nDC ${a.dcNo} → PO: ${a.poNo}\nDC ${b.dcNo} → PO: ${b.poNo}\n\nSirf wohi DCs select ho sakti hain jin ka PO same ho.`;
+  return '';
+}
+function cbAlert(msg){ alert('⚠️ DC select nahi ho saki\n\n'+msg); }
+
+// ---- FBR Description (v81): bill par ye likhi hui description aati hai; DC mein DC wali description hi rehti hai ----
+// rec.cbDescMap[itemIndex] = {src: DC ki asal description, text: FBR description}. Agar DC ki description baad mein badal jaye
+// to purani FBR description khud ignore ho jati hai (galat item par na lage).
+function cbItemDesc(rec, i){
+  const it = (rec.items||[])[i]; if(!it) return '';
+  const m = rec.cbDescMap && rec.cbDescMap[i];
+  if(m && m.text && m.src===(it.desc||'')) return m.text;
+  return it.desc||'';
+}
+function cbFbrDescOf(rec, i){
+  const it = (rec.items||[])[i]; const m = rec.cbDescMap && rec.cbDescMap[i];
+  return (it && m && m.text && m.src===(it.desc||'')) ? m.text : '';
+}
+function cbHasFbrDesc(rec){ return (rec.items||[]).some((_,i)=>!!cbFbrDescOf(rec,i)); }
+function cbSaveDesc(){
+  let n = 0;
+  document.querySelectorAll('#cb-desc-editor .cb-fd-in').forEach(inp=>{
+    const rec = db[parseInt(inp.getAttribute('data-ri'),10)], ii = parseInt(inp.getAttribute('data-ii'),10);
+    if(!rec || !rec.items || !rec.items[ii]) return;
+    const text = inp.value.trim(), dcd = rec.items[ii].desc||'';
+    rec.cbDescMap = rec.cbDescMap || {};
+    if(text && text!==dcd.trim()){ rec.cbDescMap[ii] = {src:dcd, text}; n++; }
+    else delete rec.cbDescMap[ii];
+    if(!Object.keys(rec.cbDescMap).length) delete rec.cbDescMap;
+  });
+  saveData();
+  cbRenderModal(); cbRefreshIfActive();
+  toast(n ? `✅ ${n} item ki FBR description save ho gayi — bill mein wohi aayegi` : 'FBR description khali hai — bill mein DC wali description aayegi','success');
+}
+function cbCopyDcDesc(ri, ii){
+  const inp = document.getElementById(`cb-fd-${ri}-${ii}`), rec = db[ri];
+  if(inp && rec && rec.items[ii]) inp.value = rec.items[ii].desc||'';
+}
+function cbClearDesc(ri, ii){ const inp = document.getElementById(`cb-fd-${ri}-${ii}`); if(inp) inp.value = ''; }
+function cbScrollEditor(){ const el = document.getElementById('cb-desc-section'); if(el) el.scrollIntoView({behavior:'smooth', block:'start'}); }
+function cbOpenEdit(idx){ openCommercialBill(idx); setTimeout(cbScrollEditor, 250); }
+
 // ---- Everything a commercial bill needs, worked out once (used by preview, print and PDF) ----
-function cbData(rec){
-  const items = (rec.items||[]).map(it=>{
-    const qty = parseFloat(it.qty||0), rate = parseFloat(it.rate||0), tax = parseFloat(it.tax||0);
-    const gross = qty*rate, taxAmt = gross*tax/100;
-    return {desc:it.desc||'', hscode:it.hscode||'', uom:it.uom||'', qtyTxt:String(it.qty==null?'':it.qty), rate, tax, gross, taxAmt, total:gross+taxAmt};
+// input = ek DC record ya DC records ki array (same PO) — array ho to sab ek hi bill mein jama ho jati hain.
+function cbDispatchOne(rec){
+  const disp = rec.dispatch && rec.dispatch.method ? rec.dispatch : null;
+  if(!disp) return '';
+  const label = disp.method==='leopards' ? 'Leopards Courier' : (disp.method==='bilty' ? 'Bilty / Cargo' : (COURIER_LABELS[disp.method]||disp.method));
+  return 'Dispatch: '+String(label).replace(/^[^A-Za-z]+/,'') + (disp.trackingNo?` | ${disp.method==='leopards'?'Tracking':'Bilty'} #: ${disp.trackingNo}`:'') + (disp.addaName?` | Adda: ${disp.addaName}`:'');
+}
+function cbData(input){
+  const recs = (Array.isArray(input) ? input : [input]).slice();
+  const multi = recs.length>1;
+  const uniq = arr=>[...new Set(arr.filter(Boolean))];
+  const items = [];
+  recs.forEach(rec=>{
+    (rec.items||[]).forEach((it,ii)=>{
+      const qty = parseFloat(it.qty||0), rate = parseFloat(it.rate||0), tax = parseFloat(it.tax||0);
+      const gross = qty*rate, taxAmt = gross*tax/100;
+      items.push({desc:cbItemDesc(rec,ii), dcDesc:it.desc||'', hscode:it.hscode||'', uom:it.uom||'', qtyTxt:String(it.qty==null?'':it.qty), rate, tax, gross, taxAmt, total:gross+taxAmt, dcNo:String(rec.dcNo||'')});
+    });
   });
   const gross = items.reduce((s,i)=>s+i.gross,0), taxAmt = items.reduce((s,i)=>s+i.taxAmt,0);
   const total = gross + taxAmt;
-  const freight = getDCFreight(rec);
-  const party = fbrParties.find(p=>p.partyName===rec.partyName) || {};
-  const disp = rec.dispatch && rec.dispatch.method ? rec.dispatch : null;
-  let dispatchTxt = '';
-  if(disp){
-    const label = disp.method==='leopards' ? 'Leopards Courier' : (disp.method==='bilty' ? 'Bilty / Cargo' : (COURIER_LABELS[disp.method]||disp.method));
-    dispatchTxt = 'Dispatch: '+String(label).replace(/^[^A-Za-z]+/,'') + (disp.trackingNo?` | ${disp.method==='leopards'?'Tracking':'Bilty'} #: ${disp.trackingNo}`:'') + (disp.addaName?` | Adda: ${disp.addaName}`:'');
-  }
-  return {rec, items, gross, taxAmt, total, freight, grand: total+freight, party, dispatchTxt, cur: settings.currency||'PKR',
-    fbr: cbFbrText(rec), note: rec.freightNote||''};
+  const freight = recs.reduce((s,r)=>s+getDCFreight(r),0);
+  const first = recs[0];
+  const party = fbrParties.find(p=>p.partyName===first.partyName) || {};
+  const dcList = recs.map(r=>String(r.dcNo||'').trim()).filter(Boolean);
+  const dates = recs.map(r=>r.date).filter(Boolean).sort();
+  const invText = multi ? uniq([].concat(...recs.map(r=>cbTokens(r.invNo)))).join(', ') : (first.invNo||'');
+  const dispatchLines = recs.map(r=>{ const t = cbDispatchOne(r); return t ? (multi ? `DC ${r.dcNo} — ${t}` : t) : ''; }).filter(Boolean);
+  return {recs, multi, items, gross, taxAmt, total, freight, grand: total+freight, party, cur: settings.currency||'PKR',
+    dcText: multi ? '('+dcList.join(', ')+')' : (dcList[0]||''), dcList,
+    date: dates.length ? dates[dates.length-1] : (first.date||''),
+    invText, invDate: multi ? '' : (first.invDate||''),
+    poNo: first.poNo||'',
+    units: uniq(recs.map(r=>String(r.unitName||'').trim()).filter(u=>u && u!=='undefined')),
+    fbr: uniq(recs.map(r=>cbFbrText(r))).join(' / '),
+    note: uniq(recs.map(r=>r.freightNote||'')).join(', '),
+    dispatchLines};
 }
-function cbFileName(rec){
-  const base = 'Commercial_Bill_' + (rec.invNo ? 'Inv'+String(rec.invNo).replace(/[^A-Za-z0-9]+/g,'-') : 'DC'+String(rec.dcNo||'').replace(/[^A-Za-z0-9]+/g,'-')) + '_' + String(rec.partyName||'').replace(/[^A-Za-z0-9]+/g,'_').slice(0,30);
+function cbFileName(input){
+  const recs = Array.isArray(input) ? input : [input], rec = recs[0];
+  const clean = s=>String(s||'').replace(/[^A-Za-z0-9]+/g,'-');
+  let base;
+  if(recs.length>1) base = 'Commercial_Bill_PO'+clean(rec.poNo)+'_'+recs.length+'DCs';
+  else base = 'Commercial_Bill_' + (rec.invNo ? 'Inv'+clean(rec.invNo) : 'DC'+clean(rec.dcNo));
+  base += '_' + String(rec.partyName||'').replace(/[^A-Za-z0-9]+/g,'_').slice(0,30);
   return base.replace(/_+$/,'') + '.pdf';
 }
 
 // ---- HTML version (preview + print) ----
-function cbBuildHTML(rec){
-  const d = cbData(rec), E = _lgEsc, c = d.cur;
-  const td = 'border:1px solid #000;padding:4px 6px;';
+function cbBuildHTML(input){
+  const d = cbData(input), E = _lgEsc, c = d.cur, td = 'border:1px solid #000;padding:4px 6px;';
+  const showItemDc = d.multi && cbOpt('itemDc');
   const rows = d.items.map((it,i)=>`<tr>
-    <td style="${td}text-align:center;">${i+1}</td><td style="${td}">${E(it.desc)}</td><td style="${td}text-align:center;">${E(it.hscode)}</td>
+    <td style="${td}text-align:center;">${i+1}</td><td style="${td}">${E(it.desc)}${showItemDc?`<div style="font-size:9px;color:#555;">DC # ${E(it.dcNo)}</div>`:''}</td><td style="${td}text-align:center;">${E(it.hscode)}</td>
     <td style="${td}text-align:center;">${E(it.uom)}</td><td style="${td}text-align:center;">${E(it.qtyTxt)}</td>
     <td style="${td}text-align:right;">${fmt(it.rate)}</td><td style="${td}text-align:center;">${it.tax}%</td>
     <td style="${td}text-align:right;">${fmt(it.gross)}</td><td style="${td}text-align:right;">${fmt(it.taxAmt)}</td><td style="${td}text-align:right;font-weight:bold;">${fmt(it.total)}</td></tr>`).join('');
-  const ntnLine = [];
-  if(settings.showNtn!==false && settings.ntn) ntnLine.push('NTN: '+E(settings.ntn));
-  if(settings.showStrn!==false && settings.strn) ntnLine.push('STRN: '+E(settings.strn));
+  // company header — sirf wohi cheezen jin par Bill Settings mein tick hai
+  const idParts = [];
+  if(cbOpt('ntn') && settings.ntn) idParts.push('NTN: '+E(settings.ntn));
+  if(cbOpt('strn') && settings.strn) idParts.push('STRN: '+E(settings.strn));
+  const cp = [];
+  if(cbOpt('phone') && settings.phone) cp.push('Phone: '+E(settings.phone));
+  if(cbOpt('email') && settings.email) cp.push('Email: '+E(settings.email));
+  const hl = [];
+  if(idParts.length) hl.push(idParts.join(' &nbsp; '));
+  if(cbOpt('address') && settings.address) hl.push(E(String(settings.address).replace(/\n/g,' ')));
+  if(cp.length) hl.push(cp.join(' &nbsp; '));
+  const nameHtml = cbOpt('name') ? `<div style="font-size:20px;font-weight:bold;">${E(settings.companyName||'SAU CORPORATION')}</div>` : '';
+  const logoHtml = (cbOpt('logo') && settings.logoBase64) ? `<img src="${settings.logoBase64}" style="max-height:60px;max-width:150px;">` : '';
+  const header = (nameHtml || hl.length || logoHtml) ? `<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:8px;">
+      <div>${nameHtml}${hl.length?`<div style="font-size:11px;line-height:1.5;">${hl.join('<br>')}</div>`:''}</div>${logoHtml}</div>` : '';
+  const pd = cbOpt('partyDetails');
   const tot = (label, val, strong)=>`<tr><td style="padding:3px 8px;${strong?'font-weight:bold;':''}">${label}</td><td style="padding:3px 8px;text-align:right;${strong?'font-weight:bold;':''}">${val}</td></tr>`;
   return `<div id="cb-print-area" style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;padding:18px;color:#000;font-size:12px;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:8px;">
-      <div>
-        <div style="font-size:20px;font-weight:bold;">${E(settings.companyName||'SAU CORPORATION')}</div>
-        ${settings.pdfFullDetails!==false?`<div style="font-size:11px;line-height:1.5;">${ntnLine.join(' &nbsp; ')}${ntnLine.length?'<br>':''}${E((settings.address||'').replace(/\n/g,' '))}<br>${settings.phone?'Phone: '+E(settings.phone):''}${settings.email?' &nbsp; Email: '+E(settings.email):''}</div>`:''}
-      </div>
-      ${settings.logoBase64?`<img src="${settings.logoBase64}" style="max-height:60px;max-width:150px;">`:''}
-    </div>
+    ${header}
     <div style="text-align:center;font-size:20px;font-weight:bold;letter-spacing:3px;margin:10px 0;border:2px solid #000;padding:5px;">COMMERCIAL BILL</div>
     <div style="display:flex;justify-content:space-between;gap:16px;margin-bottom:10px;font-size:12px;">
-      <div style="flex:1;"><strong>M/s:</strong> ${E(rec.partyName||'')}
-        ${d.party.address?`<br>${E(d.party.address)}`:''}${d.party.ntn?`<br><strong>NTN:</strong> ${E(d.party.ntn)}`:''}${rec.unitName?`<br><strong>Unit:</strong> ${E(rec.unitName)}`:''}</div>
-      <div style="text-align:right;line-height:1.6;">
-        <strong>Date:</strong> ${E(fmtDate(rec.date))}<br>
-        <strong>Invoice #:</strong> ${E(rec.invNo||'-')}${rec.invDate?` (${E(rec.invDate)})`:''}<br>
-        ${d.fbr?`<strong>FBR Invoice #:</strong> <span style="font-size:11px;">${E(d.fbr)}</span><br>`:''}
-        <strong>DC #:</strong> ${E(rec.dcNo||'')}<br><strong>PO #:</strong> ${E(rec.poNo||'-')}
+      <div style="flex:1;"><strong>M/s:</strong> ${E(d.recs[0].partyName||'')}
+        ${pd&&d.party.address?`<br>${E(d.party.address)}`:''}${pd&&d.party.ntn?`<br><strong>NTN:</strong> ${E(d.party.ntn)}`:''}${pd&&d.party.strn?`<br><strong>STRN:</strong> ${E(d.party.strn)}`:''}${d.units.length?`<br><strong>Unit:</strong> ${E(d.units.join(', '))}`:''}</div>
+      <div style="text-align:right;line-height:1.6;max-width:52%;word-break:break-word;">
+        <strong>Date:</strong> ${E(fmtDate(d.date))}<br>
+        <strong>Invoice #:</strong> ${E(d.invText||'-')}${d.invDate?` (${E(d.invDate)})`:''}<br>
+        ${cbOpt('fbr') && d.fbr?`<strong>FBR Invoice #:</strong> <span style="font-size:11px;">${E(d.fbr)}</span><br>`:''}
+        <strong>DC #:</strong> ${E(d.dcText)}<br><strong>PO #:</strong> ${E(d.poNo||'-')}
       </div>
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:11px;">
@@ -14403,52 +14864,52 @@ function cbBuildHTML(rec){
     <div style="display:flex;justify-content:flex-end;margin-top:8px;">
       <table style="border-collapse:collapse;min-width:300px;font-size:12px;">
         ${tot('Sub Total (Excl. Tax)', c+' '+fmt(d.gross))}
-        ${tot('Sales Tax', c+' '+fmt(d.taxAmt))}
+        ${tot('Sales Tax (GST) Total', c+' '+fmt(d.taxAmt))}
         ${tot('Invoice Total (Incl. Tax)', c+' '+fmt(d.total), true)}
         ${d.freight>0?tot('🚚 Freight Charges'+(d.note?` <span style="font-size:10px;">(${E(d.note)})</span>`:''), c+' '+fmt(d.freight)):''}
         <tr style="background:#eee;border-top:2px solid #000;border-bottom:2px solid #000;"><td style="padding:5px 8px;font-weight:bold;font-size:13px;">GRAND TOTAL</td><td style="padding:5px 8px;text-align:right;font-weight:bold;font-size:14px;">${c} ${fmt(d.grand)}</td></tr>
       </table>
     </div>
-    <div style="margin-top:8px;font-size:11px;"><strong>Amount in words:</strong> ${E(cbWords(d.grand))}</div>
-    ${d.dispatchTxt?`<div style="margin-top:4px;font-size:11px;">${E(d.dispatchTxt)}</div>`:''}
-    <div style="display:flex;justify-content:space-between;margin-top:46px;font-size:12px;">
+    ${cbOpt('words')?`<div style="margin-top:8px;font-size:11px;"><strong>Amount in words:</strong> ${E(cbWords(d.grand))}</div>`:''}
+    ${cbOpt('dispatch') ? d.dispatchLines.map(l=>`<div style="margin-top:4px;font-size:11px;">${E(l)}</div>`).join('') : ''}
+    ${cbOpt('sign')?`<div style="display:flex;justify-content:space-between;margin-top:46px;font-size:12px;">
       <div>Prepared By: ______________________</div><div>Authorized Signature: ______________________</div>
-    </div>
+    </div>`:''}
   </div>`;
 }
 
 // ---- PDF version ----
-function cbDrawBill(doc, rec){
-  const d = cbData(rec), W = doc.internal.pageSize.getWidth(), c = d.cur;
-  if(settings.logoBase64){
+function cbDrawBill(doc, input){
+  const d = cbData(input), W = doc.internal.pageSize.getWidth(), c = d.cur, first = d.recs[0];
+  if(cbOpt('logo') && settings.logoBase64){
     try{ doc.addImage(settings.logoBase64, settings.logoBase64.includes('image/png')?'PNG':'JPEG', W-34, 8, 20, 16); }catch(e){}
   }
   doc.setTextColor(0,0,0);
-  doc.setFont(undefined,'bold'); doc.setFontSize(15); doc.text(settings.companyName||'SAU CORPORATION', 14, 15);
-  let y = 21; doc.setFont(undefined,'normal'); doc.setFontSize(8.5);
-  if(settings.pdfFullDetails!==false){
-    const nt = []; if(settings.showNtn!==false && settings.ntn) nt.push('NTN: '+settings.ntn); if(settings.showStrn!==false && settings.strn) nt.push('STRN: '+settings.strn);
-    if(nt.length){ doc.text(nt.join('   '), 14, y); y += 4.5; }
-    if(settings.address){ doc.splitTextToSize(String(settings.address).replace(/\n/g,' '), W-60).forEach(l=>{ doc.text(l, 14, y); y += 4.2; }); }
-    const cp = []; if(settings.phone) cp.push('Phone: '+settings.phone); if(settings.email) cp.push('Email: '+settings.email);
-    if(cp.length){ doc.text(cp.join('   '), 14, y); y += 4.5; }
-  }
+  let y = 15;
+  if(cbOpt('name')){ doc.setFont(undefined,'bold'); doc.setFontSize(15); doc.text(settings.companyName||'SAU CORPORATION', 14, 15); y = 21; }
+  doc.setFont(undefined,'normal'); doc.setFontSize(8.5);
+  const nt = []; if(cbOpt('ntn') && settings.ntn) nt.push('NTN: '+settings.ntn); if(cbOpt('strn') && settings.strn) nt.push('STRN: '+settings.strn);
+  if(nt.length){ doc.text(nt.join('   '), 14, y); y += 4.5; }
+  if(cbOpt('address') && settings.address){ doc.splitTextToSize(String(settings.address).replace(/\n/g,' '), W-60).forEach(l=>{ doc.text(l, 14, y); y += 4.2; }); }
+  const cp = []; if(cbOpt('phone') && settings.phone) cp.push('Phone: '+settings.phone); if(cbOpt('email') && settings.email) cp.push('Email: '+settings.email);
+  if(cp.length){ doc.text(cp.join('   '), 14, y); y += 4.5; }
   y += 1; doc.setDrawColor(0); doc.setLineWidth(0.5); doc.line(14, y, W-14, y); y += 9;
   doc.setFont(undefined,'bold'); doc.setFontSize(16); doc.text('COMMERCIAL BILL', W/2, y, {align:'center'});
   doc.setLineWidth(0.4); doc.rect(W/2-40, y-7, 80, 10); y += 9;
   // party (left) + document details (right)
-  const topY = y;
+  const topY = y, pd = cbOpt('partyDetails');
   doc.setFontSize(9.5); doc.setFont(undefined,'bold'); doc.text('M/s:', 14, y);
   doc.setFont(undefined,'normal');
   let ly = y;
-  doc.splitTextToSize(String(rec.partyName||''), 86).forEach(l=>{ doc.text(l, 24, ly); ly += 4.6; });
+  doc.splitTextToSize(String(first.partyName||''), 86).forEach(l=>{ doc.text(l, 24, ly); ly += 4.6; });
   doc.setFontSize(8.5);
-  if(d.party.address) doc.splitTextToSize(String(d.party.address), 90).forEach(l=>{ doc.text(l, 14, ly); ly += 4; });
-  if(d.party.ntn){ doc.text('NTN: '+d.party.ntn, 14, ly); ly += 4; }
-  if(rec.unitName){ doc.text('Unit: '+rec.unitName, 14, ly); ly += 4; }
-  const kv = [['Date', fmtDate(rec.date)], ['Invoice #', (rec.invNo||'-')+(rec.invDate?` (${rec.invDate})`:'')]];
-  if(d.fbr) kv.push(['FBR Invoice #', d.fbr]);
-  kv.push(['DC #', rec.dcNo||''], ['PO #', rec.poNo||'-']);
+  if(pd && d.party.address) doc.splitTextToSize(String(d.party.address), 90).forEach(l=>{ doc.text(l, 14, ly); ly += 4; });
+  if(pd && d.party.ntn){ doc.text('NTN: '+d.party.ntn, 14, ly); ly += 4; }
+  if(pd && d.party.strn){ doc.text('STRN: '+d.party.strn, 14, ly); ly += 4; }
+  if(d.units.length){ doc.splitTextToSize('Unit: '+d.units.join(', '), 90).forEach(l=>{ doc.text(l, 14, ly); ly += 4; }); }
+  const kv = [['Date', fmtDate(d.date)], ['Invoice #', (d.invText||'-')+(d.invDate?` (${d.invDate})`:'')]];
+  if(cbOpt('fbr') && d.fbr) kv.push(['FBR Invoice #', d.fbr]);
+  kv.push(['DC #', d.dcText], ['PO #', d.poNo||'-']);
   let ry = topY; doc.setFontSize(9);
   kv.forEach(([k,v])=>{
     doc.setFont(undefined,'bold'); doc.text(k+':', 118, ry);
@@ -14458,17 +14919,18 @@ function cbDrawBill(doc, rec){
     ry += Math.max(5, lines.length*4.2 + 0.8);
   });
   y = Math.max(ly, ry) + 3;
+  const showItemDc = d.multi && cbOpt('itemDc');
   doc.autoTable({
     startY:y, margin:{left:14,right:14},
     head:[['Sr#','Description','HS Code','UOM','Qty','Rate','Tax%','Gross Amt','Sales Tax','Total (Incl.)']],
-    body:d.items.map((it,i)=>[i+1, it.desc, it.hscode, it.uom, it.qtyTxt, fmt(it.rate), it.tax+'%', fmt(it.gross), fmt(it.taxAmt), fmt(it.total)]),
+    body:d.items.map((it,i)=>[i+1, it.desc + (showItemDc ? '\nDC # '+it.dcNo : ''), it.hscode, it.uom, it.qtyTxt, fmt(it.rate), it.tax+'%', fmt(it.gross), fmt(it.taxAmt), fmt(it.total)]),
     styles:{fontSize:7.5, cellPadding:1.6, lineColor:[0,0,0], lineWidth:0.15, textColor:[0,0,0]},
     headStyles:{fillColor:[235,235,235], textColor:[0,0,0], fontStyle:'bold', halign:'center', fontSize:7},
     columnStyles:{0:{cellWidth:9,halign:'center'},2:{cellWidth:17,halign:'center'},3:{cellWidth:11,halign:'center'},4:{cellWidth:11,halign:'center'},5:{cellWidth:15,halign:'right'},6:{cellWidth:11,halign:'center'},7:{cellWidth:21,halign:'right'},8:{cellWidth:18,halign:'right'},9:{cellWidth:22,halign:'right',fontStyle:'bold'}}
   });
   y = doc.lastAutoTable.finalY + 5;
   if(y > 225){ doc.addPage(); y = 20; }
-  const body = [['Sub Total (Excl. Tax)', c+' '+fmt(d.gross)], ['Sales Tax', c+' '+fmt(d.taxAmt)], ['Invoice Total (Incl. Tax)', c+' '+fmt(d.total)]];
+  const body = [['Sub Total (Excl. Tax)', c+' '+fmt(d.gross)], ['Sales Tax (GST) Total', c+' '+fmt(d.taxAmt)], ['Invoice Total (Incl. Tax)', c+' '+fmt(d.total)]];
   if(d.freight>0) body.push(['Freight Charges'+(d.note?' ('+d.note+')':''), c+' '+fmt(d.freight)]);
   body.push(['GRAND TOTAL', c+' '+fmt(d.grand)]);
   const lastRow = body.length-1;
@@ -14483,54 +14945,96 @@ function cbDrawBill(doc, rec){
     }
   });
   y = doc.lastAutoTable.finalY + 6;
-  doc.setFont(undefined,'bold'); doc.setFontSize(8.5); doc.text('Amount in words:', 14, y);
-  doc.setFont(undefined,'normal');
-  const wl = doc.splitTextToSize(cbWords(d.grand), W-62);
-  wl.forEach((l,i)=>doc.text(l, 42, y + i*4.4)); y += wl.length*4.4 + 2;
-  if(d.dispatchTxt){ doc.setFontSize(8); doc.text(d.dispatchTxt, 14, y); y += 5; }
-  if(y > 262){ doc.addPage(); y = 30; } else { y = Math.max(y + 22, 255); }
-  doc.setFontSize(9); doc.setDrawColor(0); doc.setLineWidth(0.3);
-  doc.line(14, y, 74, y); doc.line(W-74, y, W-14, y);
-  doc.text('Prepared By', 14, y+4.5); doc.text('Authorized Signature', W-74, y+4.5);
+  if(cbOpt('words')){
+    doc.setFont(undefined,'bold'); doc.setFontSize(8.5); doc.text('Amount in words:', 14, y);
+    doc.setFont(undefined,'normal');
+    const wl = doc.splitTextToSize(cbWords(d.grand), W-62);
+    wl.forEach((l,i)=>doc.text(l, 42, y + i*4.4)); y += wl.length*4.4 + 2;
+  }
+  if(cbOpt('dispatch')){
+    doc.setFont(undefined,'normal'); doc.setFontSize(8);
+    d.dispatchLines.forEach(l=>{ doc.splitTextToSize(l, W-28).forEach(s=>{ doc.text(s, 14, y); y += 4; }); });
+    if(d.dispatchLines.length) y += 1;
+  }
+  if(cbOpt('sign')){
+    if(y > 262){ doc.addPage(); y = 30; } else { y = Math.max(y + 22, 255); }
+    doc.setFont(undefined,'normal'); doc.setFontSize(9); doc.setDrawColor(0); doc.setLineWidth(0.3);
+    doc.line(14, y, 74, y); doc.line(W-74, y, W-14, y);
+    doc.text('Prepared By', 14, y+4.5); doc.text('Authorized Signature', W-74, y+4.5);
+  }
 }
-function cbMakePdf(recs){
+// bills = array; har element ya to ek DC record ya DC records ki array (jo ek hi bill ban jati hai)
+function cbMakePdf(bills){
   const doc = new jspdf.jsPDF();
-  recs.forEach((rec,i)=>{ if(i>0) doc.addPage(); cbDrawBill(doc, rec); });
+  bills.forEach((b,i)=>{ if(i>0) doc.addPage(); cbDrawBill(doc, b); });
   if(typeof stampBrandLogoOnAllPages==='function') { try{ stampBrandLogoOnAllPages(doc); }catch(e){} }
   return doc;
 }
 
-// ---- Preview modal (opened from the DC quick-view popup and from the Commercial Bills tab) ----
-let cbCurrentIdx = -1;
+// ---- Preview modal (DC quick-view popup, Commercial Bills tab, aur multi-DC combined bill) ----
+let cbCurrentIdxs = [];
 function openCommercialBill(idx){
-  const rec = db[idx];
-  if(!rec){ toast('Record not found','error'); return; }
-  cbCurrentIdx = idx;
+  if(!db[idx]){ toast('Record not found','error'); return; }
+  cbCurrentIdxs = [idx];
+  cbRenderModal();
+  openModal('commBillModal');
+}
+function cbCurrentRecs(){ return cbCurrentIdxs.map(i=>db[i]).filter(Boolean); }
+function cbOpenSelected(){
+  const recs = cbSelectedRecs();
+  if(!recs.length){ toast('Pehle jin DCs ka ek bill banana hai unhe tick karein','warning'); return; }
+  cbCurrentIdxs = recs.map(r=>db.indexOf(r));
   cbRenderModal();
   openModal('commBillModal');
 }
 function cbRenderModal(){
-  const rec = db[cbCurrentIdx]; if(!rec) return;
-  document.getElementById('cb-frame').innerHTML = cbBuildHTML(rec);
-  document.getElementById('cb-modal-title').textContent = `🧾 Commercial Bill — DC ${rec.dcNo}`;
-  const toks = cbTokens(rec.invNo); const keys = toks.length ? toks : ['_'];
-  const m = rec.fbrInvMap || {}; const src = rec.fbrInvSrc || {};
-  document.getElementById('cb-fbr-editor').innerHTML = keys.map(t=>`
+  const recs = cbCurrentRecs(); if(!recs.length) return;
+  document.getElementById('cb-frame').innerHTML = cbBuildHTML(recs);
+  document.getElementById('cb-modal-title').textContent = recs.length>1
+    ? `🧾 Commercial Bill — ${recs.length} DCs (${recs.map(r=>r.dcNo).join(', ')})`
+    : `🧾 Commercial Bill — DC ${recs[0].dcNo}`;
+  let dh = '';
+  recs.forEach(rec=>{
+    const ri = db.indexOf(rec);
+    (rec.items||[]).forEach((it,ii)=>{
+      const fd = cbFbrDescOf(rec,ii);
+      dh += `<div style="border:1px solid var(--border2);border-radius:8px;padding:8px;margin-bottom:8px;">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">DC <strong>${_lgEsc(rec.dcNo)}</strong> • Item ${ii+1} • Qty ${_lgEsc(it.qty)} ${_lgEsc(it.uom||'')} ${fd?'&nbsp;<span style="color:var(--neon4);">✏️ FBR description laga hua hai</span>':''}</div>
+        <div style="font-size:11px;margin-bottom:2px;color:var(--text3);">📦 DC Description <span style="font-weight:400;">(sirf record ke liye — bill par nahi)</span></div>
+        <div style="background:var(--bg3);border-radius:6px;padding:6px 8px;font-size:12px;margin-bottom:6px;word-break:break-word;">${_lgEsc(it.desc||'')}</div>
+        <div style="font-size:11px;margin-bottom:2px;">🧾 <strong>FBR Description</strong> <span style="color:var(--text3);">(Commercial Bill par)</span></div>
+        <textarea class="cb-fd-in" id="cb-fd-${ri}-${ii}" data-ri="${ri}" data-ii="${ii}" rows="2" placeholder="Khali = DC wali description bill par aayegi" style="width:100%;">${_lgEsc(fd)}</textarea>
+        <div style="margin-top:4px;display:flex;gap:6px;">
+          <button class="btn btn-xs" style="background:var(--bg3);border:1px solid var(--border2);" onclick="cbCopyDcDesc(${ri},${ii})">📋 DC wali copy karein</button>
+          <button class="btn btn-xs" style="background:var(--bg3);border:1px solid var(--border2);" onclick="cbClearDesc(${ri},${ii})">↺ Khali (DC wali use ho)</button>
+        </div></div>`;
+    });
+  });
+  document.getElementById('cb-desc-editor').innerHTML = dh || '<div style="color:var(--text3);font-size:12px;">Is DC mein koi item nahi.</div>';
+  let html = '';
+  recs.forEach(rec=>{
+    const ri = db.indexOf(rec);
+    const toks = cbTokens(rec.invNo); const keys = toks.length ? toks : ['_'];
+    const m = rec.fbrInvMap || {}; const src = rec.fbrInvSrc || {};
+    html += keys.map(t=>`
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
-      <label style="min-width:130px;font-size:12px;">${t==='_'?'FBR Invoice No':`FBR No (Invoice #${_lgEsc(t)})`}</label>
-      <input type="text" class="cb-fbr-in" data-tok="${_lgEsc(t)}" value="${_lgEsc(m[t]||'')}" placeholder="e.g. 3310082639283DI5BI0A3068971" style="flex:1;min-width:220px;max-width:380px;">
+      <label style="min-width:130px;font-size:12px;">${recs.length>1?`DC ${_lgEsc(rec.dcNo)} — `:''}${t==='_'?'FBR Invoice No':`FBR No (Invoice #${_lgEsc(t)})`}</label>
+      <input type="text" class="cb-fbr-in" data-ri="${ri}" data-tok="${_lgEsc(t)}" value="${_lgEsc(m[t]||'')}" placeholder="e.g. 3310082639283DI5BI0A3068971" style="flex:1;min-width:220px;max-width:380px;">
       <span style="font-size:10px;color:var(--text3);">${m[t]?(src[t]==='manual'?'✍️ manual':'📎 PDF se sync'):'⚠️ abhi save nahi'}</span>
     </div>`).join('');
+  });
+  document.getElementById('cb-fbr-editor').innerHTML = html;
 }
 function cbSaveFbr(){
-  const rec = db[cbCurrentIdx]; if(!rec) return;
-  rec.fbrInvMap = rec.fbrInvMap || {}; rec.fbrInvSrc = rec.fbrInvSrc || {};
+  if(!cbCurrentIdxs.length) return;
   document.querySelectorAll('#cb-fbr-editor .cb-fbr-in').forEach(inp=>{
+    const rec = db[parseInt(inp.getAttribute('data-ri'),10)]; if(!rec) return;
+    rec.fbrInvMap = rec.fbrInvMap || {}; rec.fbrInvSrc = rec.fbrInvSrc || {};
     const t = inp.getAttribute('data-tok'), v = inp.value.trim();
     if(v){ if(rec.fbrInvMap[t]!==v){ rec.fbrInvMap[t] = v; rec.fbrInvSrc[t] = 'manual'; rec.fbrInvSyncedAt = new Date().toISOString(); } }
     else { delete rec.fbrInvMap[t]; delete rec.fbrInvSrc[t]; }
   });
-  rec.fbrInvNo = cbFbrText(rec);
+  cbCurrentRecs().forEach(rec=>{ rec.fbrInvNo = cbFbrText(rec); });
   saveData();
   cbRenderModal(); cbRefreshIfActive();
   toast('FBR invoice number DC record mein save ho gaya ✓','success');
@@ -14543,15 +15047,18 @@ function cbPrint(){
   setTimeout(()=>win.print(),300);
 }
 function cbDownloadPDF(idx){
-  const rec = db[idx===undefined ? cbCurrentIdx : idx];
-  if(!rec){ toast('Record not found','error'); return; }
-  try{ cbMakePdf([rec]).save(cbFileName(rec)); toast('Commercial Bill PDF ban gayi ✓','success'); }
+  const recs = idx===undefined ? cbCurrentRecs() : [db[idx]].filter(Boolean);
+  if(!recs.length){ toast('Record not found','error'); return; }
+  try{ cbMakePdf([recs.length>1 ? recs : recs[0]]).save(cbFileName(recs)); toast(recs.length>1 ? `${recs.length} DCs ka ek Commercial Bill PDF ban gaya ✓` : 'Commercial Bill PDF ban gayi ✓','success'); }
   catch(e){ console.error(e); toast('PDF banane mein masla aaya','error'); }
 }
 
 // ---- Commercial Bills TAB (auto-scans DC records) ----
 let cbSelected = new Set();
 function cbKey(rec){ return (rec.dcNo||'')+'||'+(rec.partyName||'')+'||'+(rec.invNo||''); }
+function cbSelectedRecs(){
+  return db.filter(r=>!r.cancelled && !r.voidOnly && cbSelected.has(cbKey(r))).sort((a,b)=>dcNoSortValue(a.dcNo)-dcNoSortValue(b.dcNo));
+}
 // Auto-scan: every DC that carries freight (or, with the switch, every invoiced DC) — always read live from the DC records.
 function cbCandidates(scope){
   return db.filter(r=>!r.cancelled && !r.voidOnly && (scope==='all' ? !!r.invNo : getDCFreight(r)>0));
@@ -14619,34 +15126,71 @@ function cbRender(){
         : (r.invNo ? '<span style="color:var(--neon3);font-size:11px;">⚠️ Missing</span>' : '<span style="color:var(--text3);font-size:11px;">Invoice pending</span>');
       return `<tr>
         <td><input type="checkbox" style="width:auto;" ${cbSelected.has(k)?'checked':''} onchange="cbToggle(${idx},this.checked)"></td>
-        <td><strong>${_lgEsc(r.dcNo)}</strong></td><td>${fmtDate(r.date)}</td>
-        <td>${_lgEsc(r.partyName)}${r.unitName?`<div style="font-size:10px;color:var(--text3);">🏭 ${_lgEsc(r.unitName)}</div>`:''}</td>
+        <td><strong>${_lgEsc(r.dcNo)}</strong>${cbHasFbrDesc(r)?'<div style="font-size:10px;color:var(--neon4);">✏️ FBR desc</div>':''}</td><td>${fmtDate(r.date)}</td>
+        <td>${_lgEsc(r.partyName)}${r.unitName&&r.unitName!=='undefined'?`<div style="font-size:10px;color:var(--text3);">🏭 ${_lgEsc(r.unitName)}</div>`:''}${r.poNo?`<div style="font-size:10px;color:var(--text3);">PO: ${_lgEsc(r.poNo)}</div>`:''}</td>
         <td>${_lgEsc(r.invNo||'-')}</td><td>${fbrCell}</td>
         <td style="text-align:right;">${fmt(tot)}</td><td style="text-align:right;">${fmt(frt)}</td>
         <td style="text-align:right;font-weight:700;color:var(--neon);">${fmt(tot+frt)}</td>
         <td style="white-space:nowrap;">
           <button class="btn btn-neon btn-xs" onclick="openCommercialBill(${idx})" title="Preview / Print / FBR no.">👁️ View</button>
+          <button class="btn btn-yellow btn-xs" onclick="cbOpenEdit(${idx})" title="FBR Description edit karein">✏️ Edit</button>
           <button class="btn btn-green btn-xs" onclick="cbDownloadPDF(${idx})" title="PDF download">📄 PDF</button>
         </td></tr>`;
     }).join('');
   }
-  const b = document.getElementById('cb-sel-btn'); if(b) b.textContent = `📄 Selected PDF (${cbSelected.size})`;
+  const sel = cbSelectedRecs();
+  const b = document.getElementById('cb-sel-btn'); if(b) b.textContent = `📄 Selected PDF (${sel.length})`;
+  const cb2 = document.getElementById('cb-comb-btn'); if(cb2) cb2.textContent = `🧾 Ek Bill Banao (${sel.length})`;
   const ca = document.getElementById('cb-check-all'); if(ca) ca.checked = list.length>0 && list.every(r=>cbSelected.has(cbKey(r)));
+  const info = document.getElementById('cb-sel-info');
+  if(info){
+    if(sel.length){
+      const sumTot = sel.reduce((s,r)=>s+getDCTotal(r),0), sumFrt = sel.reduce((s,r)=>s+getDCFreight(r),0);
+      info.innerHTML = `<div class="accent-box" style="font-size:12px;margin-bottom:10px;line-height:1.7;">
+        ✅ <strong>${sel.length}</strong> DC select: <strong>(${sel.map(r=>_lgEsc(r.dcNo)).join(', ')})</strong> &nbsp;|&nbsp; PO: <strong>${_lgEsc(sel[0].poNo||'-')}</strong> &nbsp;|&nbsp; ${_lgEsc(sel[0].partyName||'')}<br>
+        ${sel.length>1?'Sab ka <strong>ek hi Commercial Bill</strong> banega — ':''}Total: ${cur} ${fmt(sumTot)} + Freight ${cur} ${fmt(sumFrt)} = <strong style="color:var(--neon);">${cur} ${fmt(sumTot+sumFrt)}</strong></div>`;
+    } else info.innerHTML = '';
+  }
 }
 function cbToggle(idx, on){
   const r = db[idx]; if(!r) return;
-  if(on) cbSelected.add(cbKey(r)); else cbSelected.delete(cbKey(r));
-  const b = document.getElementById('cb-sel-btn'); if(b) b.textContent = `📄 Selected PDF (${cbSelected.size})`;
-}
-function cbToggleAll(on){
-  cbGetShown().forEach(r=>{ if(on) cbSelected.add(cbKey(r)); else cbSelected.delete(cbKey(r)); });
+  if(on){
+    const cur = cbSelectedRecs().filter(x=>x!==r);
+    if(cur.length){
+      const msg = cbGroupCheck(cur[0], r);
+      if(msg){ cbRender(); cbAlert(msg); return; }   // galat DC: tick hat jata hai + alert
+    }
+    cbSelected.add(cbKey(r));
+  } else cbSelected.delete(cbKey(r));
   cbRender();
 }
-function cbBulkPDF(which){
+function cbToggleAll(on){
   const shown = cbGetShown();
-  const recs = which==='selected' ? shown.filter(r=>cbSelected.has(cbKey(r))) : shown;
-  if(!recs.length){ toast(which==='selected' ? 'Pehle kuch bills tick karein' : 'Koi bill nahi hai','warning'); return; }
-  const ordered = recs.slice().sort((a,b)=>dcNoSortValue(a.dcNo)-dcNoSortValue(b.dcNo));
+  if(on){
+    for(let i=1;i<shown.length;i++){
+      const msg = cbGroupCheck(shown[0], shown[i]);
+      if(msg){
+        cbRender();
+        cbAlert('Select All nahi ho saka — list mein alag PO / party ki DCs hain.\n\n'+msg+'\n\nPehle Party ya Search se ek hi PO ki DCs dikhayen, ya DCs ko khud tick karein.');
+        return;
+      }
+    }
+    shown.forEach(r=>cbSelected.add(cbKey(r)));
+  } else shown.forEach(r=>cbSelected.delete(cbKey(r)));
+  cbRender();
+}
+// 'selected' = tick ki hui sab DCs ka EK combined bill (PDF) ; 'all' = list ki har DC ka alag bill (ek PDF mein)
+function cbBulkPDF(which){
+  if(which==='selected'){
+    const recs = cbSelectedRecs();
+    if(!recs.length){ toast('Pehle kuch bills tick karein','warning'); return; }
+    try{ cbMakePdf([recs.length>1 ? recs : recs[0]]).save(cbFileName(recs)); toast(recs.length>1 ? `${recs.length} DCs ka ek Commercial Bill PDF ban gaya ✓` : 'Commercial Bill PDF ban gayi ✓','success'); }
+    catch(e){ console.error(e); toast('PDF banane mein masla aaya','error'); }
+    return;
+  }
+  const shown = cbGetShown();
+  if(!shown.length){ toast('Koi bill nahi hai','warning'); return; }
+  const ordered = shown.slice().sort((a,b)=>dcNoSortValue(a.dcNo)-dcNoSortValue(b.dcNo));
   try{ cbMakePdf(ordered).save(`Commercial_Bills_${new Date().toISOString().slice(0,10)}.pdf`); toast(`${ordered.length} commercial bill(s) ki ek PDF ban gayi ✓`,'success'); }
   catch(e){ console.error(e); toast('PDF banane mein masla aaya','error'); }
 }
