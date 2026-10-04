@@ -561,6 +561,7 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
     </div>
     <div id="records-info" style="font-size:12px;color:var(--text2);margin-bottom:8px;"></div>
     <div id="records-di-matches" style="margin-bottom:8px;"></div>
+    <div id="records-qi-matches" style="margin-bottom:8px;"></div>
     <div class="tbl-wrap">
       <table id="recordsTable">
         <thead>
@@ -701,6 +702,8 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
       <input type="date" id="ledgerOpeningDate" style="width:145px;" title="As of date (optional, used only for sorting)">
       <input type="text" id="ledgerOpeningInvoices" placeholder="Linked Invoice Nos (optional, comma separated)" style="width:240px;" title="Agar ye opening balance kisi purani invoice/invoices se related hai, un k number yahan likhen — jab un invoices per payment aayegi to ye opening balance bhi Paid show hoga">
       <button class="btn btn-green btn-xs" onclick="saveLedgerOpeningBalance()">💾 Save</button>
+      <span style="border-left:1px solid var(--bg3);height:22px;"></span>
+      <button class="btn btn-purple btn-xs" onclick="openQuickInvoice()" title="Sirf ledger ke liye foran invoice add karein (DC banaye baghair)">⚡ Quick Invoice</button>
     </div>
     <div id="ledgerScopeNote" style="display:none;font-size:12px;background:var(--bg2);border-left:3px solid var(--neon2);padding:8px 10px;border-radius:6px;margin-bottom:8px;line-height:1.5;"></div>
     <div id="ledger-summary" class="ledger-summary"></div>
@@ -4517,8 +4520,9 @@ Switch Socket"></textarea>
           onblur="setTimeout(function(){hideLedInvSuggestions();renderInvoiceAllocation();},150)">
         <div id="led-inv-suggest" style="display:none;position:absolute;z-index:50;top:100%;left:0;right:0;background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;max-height:180px;overflow:auto;box-shadow:0 4px 12px rgba(0,0,0,.4);"></div>
       </div>
-      <div class="form-group"><label>Total Amount <span style="font-weight:400;color:var(--text3);">(actual cheque / cash received)</span></label><input type="number" id="led-amount" placeholder="0.00" oninput="renderInvoiceAllocation()"></div>
+      <div class="form-group"><label>Total Amount <span style="font-weight:400;color:var(--text3);">(actual cheque / cash received)</span></label><div style="display:flex;gap:6px;"><input type="number" id="led-amount" placeholder="0.00" style="flex:1;" oninput="renderInvoiceAllocation()" onchange="ledAutoDetect()"><button type="button" class="btn btn-purple btn-xs" onclick="ledAiSearch()" title="Amount se matching bills dhoondein (5.5% / 0.25% / GST Hold)">🤖 AI Search</button></div></div>
     </div>
+    <div id="led-ai-box" style="display:none;background:var(--bg3);border-radius:8px;padding:10px;margin-bottom:10px;font-size:12px;"></div>
     <div id="led-alloc-wrap" style="display:none;background:var(--bg3);border-radius:8px;padding:10px;margin-bottom:10px;">
       <label style="display:block;margin-bottom:6px;">Split this amount across invoices:</label>
       <div id="led-alloc-rows"></div>
@@ -4536,6 +4540,16 @@ Switch Socket"></textarea>
         <div id="led-freight-hint" style="font-size:11px;color:var(--text3);margin-top:4px;"></div>
       </div>
     </div>
+    <div id="led-gst-wrap" style="background:var(--bg3);border-radius:8px;padding:10px;margin-bottom:10px;">
+      <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0;"><input type="checkbox" id="led-gst-on" onchange="ledSyncGstHold(true)"> 🟠 GST Hold <span style="font-weight:400;color:var(--text3);">(party ne GST nahi di — bill ka baqi hissa hold par)</span></label>
+      <div id="led-gst-fields" style="display:none;margin-top:8px;">
+        <div class="form-row">
+          <div class="form-group"><label>GST Hold Amount</label><input type="number" id="led-gst-amt" placeholder="0.00" oninput="_gstTouched=true;window._ledGstDetails=null;ledSyncGstHold()"></div>
+          <div class="form-group"><label>Kis Bill ke against</label><select id="led-gst-inv" onchange="window._ledGstDetails=null"></select></div>
+        </div>
+        <div id="led-gst-hint" style="font-size:11px;color:var(--text3);"></div>
+      </div>
+    </div>
     <div class="form-group" id="led-freight-note-wrap">
       <label>Freight Note (optional)</label>
       <input type="text" id="led-freight-note" placeholder="e.g. DC 2031 ka bilty freight">
@@ -4551,6 +4565,33 @@ Switch Socket"></textarea>
   <div class="modal-footer">
     <button class="btn btn-green" onclick="saveLedgerEntry()">💾 Save</button>
     <button class="btn btn-neon" onclick="closeModal('addLedgerModal')">Cancel</button>
+  </div>
+</div>
+</div>
+
+<!-- QUICK INVOICE MODAL (ledger-only invoice) -->
+<div class="modal-overlay" id="quickInvModal">
+<div class="modal modal-md">
+  <div class="modal-header"><h3 id="qi-title">⚡ Quick Invoice (sirf Ledger ke liye)</h3><button class="close-btn" onclick="closeModal('quickInvModal')">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="qi-edit-id">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">DC banaye baghair invoice ledger mein save hoti hai. Records tab mein search karne par "⚡ Quick Invoice" ke naam se nazar aayegi.</div>
+    <div class="form-row">
+      <div class="form-group"><label>Party</label><select id="qi-party"><option value="">Select...</option></select></div>
+      <div class="form-group"><label>Date</label><input type="date" id="qi-date"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Invoice # *</label><input type="text" id="qi-inv" placeholder="e.g. 619"></div>
+      <div class="form-group"><label>DC # (optional)</label><input type="text" id="qi-dc" placeholder="e.g. 2031"></div>
+      <div class="form-group"><label>PO # (optional)</label><input type="text" id="qi-po" placeholder="e.g. PO-455"></div>
+    </div>
+    <div class="form-group"><label>Amount * <span style="font-weight:400;color:var(--text3);">(total likhein, ya jama kar ke jaise 50000+66112)</span></label>
+      <input type="text" id="qi-amt" placeholder="116112" oninput="qiShowSum()"><div id="qi-sum" style="font-size:12px;margin-top:4px;color:var(--neon4);"></div></div>
+    <div class="form-group"><label>Note (optional)</label><input type="text" id="qi-note" placeholder="Note..."></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="saveQuickInvoice()">💾 Save Invoice</button>
+    <button class="btn btn-neon" onclick="closeModal('quickInvModal')">Cancel</button>
   </div>
 </div>
 </div>
@@ -7264,6 +7305,7 @@ function renderRecords(){
   document.getElementById('records-info').innerHTML = 
     `Showing <strong>${start+1}–${Math.min(end,total)}</strong> of <strong>${total}</strong> records | Total Amount: <strong class="neon-text">${settings.currency||'PKR'} ${fmt(recs.reduce((s,r)=>s+getDCTotal(r),0))}</strong>`;
 
+  try{ renderQuickInvoiceMatches(); }catch(x){}
   // Show D.Invoice matches if search term matches any digital invoices
   const searchVal = (document.getElementById('searchInput')||{}).value?.trim()||'';
   const diMatchEl = document.getElementById('records-di-matches');
@@ -9543,7 +9585,7 @@ function renderLedger(){
   entries.sort((a,b)=> (a.date||'').localeCompare(b.date||'') || (a.id||'').localeCompare(b.id||''));
   const obRowsSrc = lgOpeningRows(sel, unitVal);       // one row per combined party that has a Previous Balance (none in unit view)
   const obTotal = obRowsSrc.reduce((s,o)=>s+(o.amount||0),0);
-  let balance = obTotal, totalBills=0, totalPaid=0, totalDed=0, totalFreight=0;
+  let balance = obTotal, totalBills=0, totalPaid=0, totalDed=0, totalFreight=0, totalGstHold=0; const gstHoldRows=[];
   const cur=settings.currency||'PKR';
   // Which invoice numbers already have a payment entry linked to them (for the green "Paid" tick below) —
   // uses ALL ledger entries of this party / combined ledger (not just the date/search/unit-filtered ones)
@@ -9636,10 +9678,11 @@ function renderLedger(){
     const frt = (!isDebit && e.freight) ? e.freight : 0;
     balance += debit-credit-ded+frt;
     if(isDebit) totalBills+=e.amount;
-    else { totalPaid+=e.amount; totalDed+=ded; totalFreight+=frt; }
+    else { totalPaid+=e.amount; totalDed+=ded; totalFreight+=frt; if(e.gstHold>0){ totalGstHold+=e.gstHold; (e.gstHoldDetails||[]).forEach(d=>gstHoldRows.push({date:e.date,ref:e.refNo,invNo:d.invNo,amount:d.amount,bill:getInvoiceBillTotal(e.partyName,d.invNo)})); } }
     const typeMap={bill:'<span class="badge badge-invoiced">Bill</span>',payment:'<span class="badge badge-paid">Payment</span>',debit_note:'<span class="badge badge-pending">Debit</span>',credit_note:'<span class="badge badge-paid">Credit Note</span>'};
     let descCell = e.desc||e.narration||'';
     if(e.type==='bill' && e.dcNo) descCell = `<strong>DC:${e.dcNo}</strong>${e.poNo?' | PO:'+e.poNo:''}`;
+    if(e.quickInvoice){ descCell = `<span class="badge" style="background:rgba(155,89,182,.25);color:#b57edc;">⚡ Quick Invoice</span> <span style="font-size:10px;color:var(--text3);">(sirf ledger)</span>${e.dcNo?'<br><strong>DC:'+_lgEsc(e.dcNo)+'</strong>':''}${e.poNo?' | PO:'+_lgEsc(e.poNo):''}${e.qiNote?'<div style="font-size:10px;color:var(--text3);">'+_lgEsc(e.qiNote)+'</div>':''}`; }
     if(e.type==='payment' && e.bankName) descCell += `<div style="font-size:10px;color:var(--text3);">🏦 ${e.bankName}</div>`;
     // Auto-description: how much (if any) % was cut on this payment, worked out
     // against the linked invoice's actual bill total where possible (falls back to
@@ -9663,6 +9706,9 @@ function renderLedger(){
         descCell += `<div style="font-size:10px;color:var(--neon2);">🚚 Freight in this cheque: ${fmt(frt)}${e.freightNote?' — '+e.freightNote:''}<br><span style="color:var(--text3);">Bills ke against: ${fmt((e.amount||0)-frt+ded)}</span></div>`;
       }
     }
+    if(e.type==='payment' && e.gstHold>0.5){
+      descCell += `<div style="font-size:10px;color:#e67e22;">🟠 GST Hold: ${fmt(e.gstHold)} — ${(e.gstHoldDetails||[]).map(d=>'Bill #'+d.invNo+(e.gstHoldDetails.length>1?' ('+fmt(d.amount)+')':'')).join(', ')} <span style="color:var(--text3);">(party ne GST nahi di)</span></div>`;
+    }
     // Bills carry their DC's freight purely as information — it is never part of
     // the bill amount, it just flags "is DC par freight bhi hai".
     if(isDebit && e.dcFreight>0.5){
@@ -9675,6 +9721,8 @@ function renderLedger(){
     if(e.type==='bill' && e.invNo){
       if(paidAmt >= e.amount - 0.5) invCell = `${e.invNo} <span style="color:#1fbf75;font-weight:800;" title="Fully paid">✅ Paid</span>`;
       else if(paidAmt > 0.5) invCell = `${e.invNo} <span style="color:#f5a623;font-weight:800;" title="Partially paid: ${fmt(paidAmt)} of ${fmt(e.amount)}">🟡 Partial (${fmt(paidAmt)}/${fmt(e.amount)})</span>`;
+      const _gh = getInvoiceGstHold(e.partyName, e.invNo);
+      if(_gh>0.5) invCell += ` <span style="color:#e67e22;font-weight:800;" title="Is bill ki GST party ne hold par rakhi hai">🟠 GST Hold ${fmt(_gh)}</span>`;
     }
     const statusBadgeMap={cleared:'<span class="badge badge-paid" title="Cleared" style="margin-left:4px;">✅</span>',pending:'<span class="badge badge-pending" title="Pending" style="margin-left:4px;">⏳</span>',bounced:'<span class="badge" style="background:#c0392b;color:#fff;margin-left:4px;" title="Bounced">❌</span>'};
     const statusBadge = (e.type==='payment' && e.status) ? (statusBadgeMap[e.status]||'') : '';
@@ -9690,7 +9738,8 @@ function renderLedger(){
       <td style="text-align:right;font-weight:700;color:${balance<0?'var(--neon4)':'var(--neon3)'};">${fmt(Math.abs(balance))} ${balance<0?'CR':'DR'}</td>
       <td style="white-space:nowrap;">
         <button class="btn btn-xs lg-tick-btn${isTicked?' on':''}" onclick="lgToggleTick(this,'${e.id}')" title="Manual ledger se match ho gaya? Tick karein (row highlight ho jayegi)">${isTicked?'✔':'☐'}</button>
-        ${e.type==='bill'?`<button class="btn btn-neon btn-xs" onclick="viewLedgerInvoice('${e.id}')" title="View Invoice Details">🔍</button>`:''}
+        ${e.type==='bill'&&!e.quickInvoice?`<button class="btn btn-neon btn-xs" onclick="viewLedgerInvoice('${e.id}')" title="View Invoice Details">🔍</button>`:''}
+        ${e.quickInvoice?`<button class="btn btn-yellow btn-xs" onclick="openQuickInvoice('${e.id}')" title="Edit Quick Invoice">✏️</button><button class="btn btn-red btn-xs" onclick="deleteLedgerEntry('${e.id}')">🗑️</button>`:''}
         ${e.attachment?`<button class="btn btn-purple btn-xs" onclick="viewLedgerAttachment('${e.id}')" title="View Attachment">📎</button>`:''}
         ${e.type!=='bill'?`<button class="btn btn-neon btn-xs" onclick="viewLedgerEntryHistory('${e.id}')" title="View Edit History">🕘</button><button class="btn btn-yellow btn-xs" onclick="editLedgerEntry('${e.id}')" title="Edit">✏️</button><button class="btn btn-red btn-xs" onclick="deleteLedgerEntry('${e.id}')">🗑️</button>`:''}
       </td>
@@ -9705,6 +9754,14 @@ function renderLedger(){
     filterWarnEl.style.cssText='font-size:11px;color:#f5a623;margin:-4px 0 8px;';
     document.getElementById('ledgerTbody').closest('table').parentElement.insertBefore(filterWarnEl, document.getElementById('ledgerTbody').closest('table'));
   }
+  let gstBar = document.getElementById('ledgerGstHoldBar');
+  if(!gstBar){
+    gstBar = document.createElement('div'); gstBar.id='ledgerGstHoldBar';
+    gstBar.style.cssText='font-size:12px;background:rgba(230,126,34,.12);border:1px solid #e67e22;border-radius:8px;padding:8px 10px;margin:0 0 8px;';
+    const _t=document.getElementById('ledgerTbody').closest('table'); _t.parentElement.insertBefore(gstBar,_t);
+  }
+  gstBar.style.display = totalGstHold>0.5 ? '' : 'none';
+  gstBar.innerHTML = totalGstHold>0.5 ? `<strong style="color:#e67e22;">🟠 GST Hold Total: ${cur} ${fmt(totalGstHold)}</strong><div style="color:var(--text2);margin-top:3px;">${gstHoldRows.map(r=>`Bill #${r.invNo} (${fmt(r.bill)}) → ${fmt(r.amount)} <span style="color:var(--text3);">[${r.ref||'-'}, ${fmtDate(r.date)}]</span>`).join(' &nbsp;|&nbsp; ')}</div>` : '';
   filterWarnEl.textContent = filtersActive ? '⚠️ Search/Type/Payment Mode/Amount/Tick filter active — running Balance column reflects only the filtered rows, not the full account.' : '';
   window._lgLastView = {shown: entries, all: built.entries, q: searchRaw, field: searchField};
   lgUpdateSearchInfo(window._lgLastView);
@@ -9727,6 +9784,7 @@ function renderLedger(){
     <div class="ledger-sum-card lsc1"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(totalBills)}</div><div style="font-size:11px;color:var(--text2);">Total Bills (${entries.filter(e=>e.type==='bill').length})</div></div>
     <div class="ledger-sum-card lsc2"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(totalPaid)}</div><div style="font-size:11px;color:var(--text2);">Total Paid</div></div>
     <div class="ledger-sum-card lsc3"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(totalDed)}</div><div style="font-size:11px;color:var(--text2);">Deductions</div></div>
+    ${totalGstHold>0.5?`<div class="ledger-sum-card lsc3" style="border-top-color:#e67e22;"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(totalGstHold)}</div><div style="font-size:11px;color:var(--text2);">🟠 GST Hold</div></div>`:''}
     ${totalFreight>0.5?`<div class="ledger-sum-card lsc2" style="border-top-color:var(--neon2);"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(totalFreight)}</div><div style="font-size:11px;color:var(--text2);">🚚 Freight (cheques mein)</div></div>`:''}
     <div class="ledger-sum-card lsc4"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(outstanding)}</div><div style="font-size:11px;color:var(--text2);">Outstanding</div></div>
     ${modeCardsHtml}`;
@@ -9976,6 +10034,7 @@ function openNewLedgerEntry(){
   ['led-ref','led-inv','led-amount','led-deduction','led-narration','led-bank','led-freight','led-freight-note'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
   _dedManuallyEdited = false;
   _freightManuallyEdited = false;
+  ledGstReset();
   const dedHint=document.getElementById('led-deduction-hint'); if(dedHint) dedHint.textContent='';
   const frHint=document.getElementById('led-freight-hint'); if(frHint) frHint.textContent='';
   updateLedFreightSummary();
@@ -10020,6 +10079,7 @@ function editLedgerEntry(id){
   if(document.getElementById('led-bank')) document.getElementById('led-bank').value=e.bankName||'';
   togglePaymodeField();
   lgPopulateModalUnits(e.unitName||'');
+  ledGstLoad(e);
   _dedManuallyEdited = true; // don't silently overwrite an already-saved deduction on open
   _freightManuallyEdited = true; // same for a freight figure that was already saved
   renderInvoiceAllocation(e.allocations||[]);
@@ -10048,6 +10108,19 @@ function saveLedgerEntry(){
   const status=(type==='payment'&&document.getElementById('led-status'))?document.getElementById('led-status').value:'';
   const bankName=document.getElementById('led-bank')?document.getElementById('led-bank').value.trim():'';
   const unitName=(document.getElementById('led-unit')||{}).value||'';
+  let gstHold=0, gstHoldDetails=[];
+  if(type==='payment' && document.getElementById('led-gst-on') && document.getElementById('led-gst-on').checked){
+    gstHold=parseFloat(document.getElementById('led-gst-amt').value)||0;
+    if(gstHold>0.5){
+      const dt=window._ledGstDetails;
+      if(dt && dt.length && Math.abs(dt.reduce((a,b)=>a+(b.amount||0),0)-gstHold)<1) gstHoldDetails=dt.map(d=>({...d}));
+      else {
+        const gi=document.getElementById('led-gst-inv').value || (inv.split(',')[0]||'').trim();
+        if(!gi){toast('GST Hold ke liye Linked Invoice select karein — entry NOT saved','warning');return;}
+        gstHoldDetails=[{invNo:gi,amount:gstHold}];
+      }
+    } else gstHold=0;
+  }
   if(!party||!date||!amount){toast('Party, date, and amount required — entry NOT saved','warning');return;}
   if(freight > amount + 0.5){
     toast('Freight charges cheque ki total amount se zyada nahi ho sakte — entry NOT saved','warning');
@@ -10080,9 +10153,10 @@ function saveLedgerEntry(){
     entry.freight=freight; entry.freightNote=freightNote;
     entry.attachment=_ledgerAttachment;
     entry.unitName=unitName;
+    entry.gstHold=gstHold; entry.gstHoldDetails=gstHoldDetails;
     logAudit('edit','Ledger',`${type} entry for ${party} — amount ${amount} updated`, before, entry);
   } else {
-    entry = {id:'L'+uid(),partyName:party,date,type,refNo:ref,invNo:inv,dcNo:'',desc:narration,amount,deduction,freight,freightNote,narration,paymode,status,bankName,allocations,attachment:_ledgerAttachment,unitName};
+    entry = {id:'L'+uid(),partyName:party,date,type,refNo:ref,invNo:inv,dcNo:'',desc:narration,amount,deduction,freight,freightNote,narration,paymode,status,bankName,allocations,attachment:_ledgerAttachment,unitName,gstHold,gstHoldDetails};
     ledgerData.push(entry);
     initApprovalForEntity('ledger', entry);
     logAudit('create','Ledger',`${type} entry for ${party} — amount ${amount}`, undefined, entry);
@@ -11101,7 +11175,7 @@ function generateLedgerPDF(partyVal, detailMode, from, to, unitVal){
   // balance is party-level, so it is left out there too.)
   const obRows = dateFiltered ? [] : lgOpeningRows(sel, unitVal);
   const obTotal = obRows.reduce((s,o)=>s+(o.amount||0),0);
-  let balance=obTotal, totalBills=0, totalPaid=0, totalDed=0, totalFreight=0;
+  let balance=obTotal, totalBills=0, totalPaid=0, totalDed=0, totalFreight=0, totalGstHold=0; const gstHoldRows=[];
   const cur=settings.currency||'PKR';
   const body=[];
   let obRun = 0;
@@ -11128,14 +11202,16 @@ function generateLedgerPDF(partyVal, detailMode, from, to, unitVal){
     const credit=!isDebit?e.amount:0;
     const frt = (!isDebit && e.freight) ? e.freight : 0;
     balance+=debit-credit-(e.deduction||0)+frt;
-    if(isDebit) totalBills+=e.amount; else { totalPaid+=e.amount; totalDed+=(e.deduction||0); totalFreight+=frt; }
+    if(isDebit) totalBills+=e.amount; else { totalPaid+=e.amount; totalDed+=(e.deduction||0); totalFreight+=frt; if(e.gstHold>0){ totalGstHold+=e.gstHold; (e.gstHoldDetails||[]).forEach(d=>gstHoldRows.push([fmtDate(e.date),e.refNo||'-',d.invNo,fmt(getInvoiceBillTotal(e.partyName,d.invNo)),fmt(d.amount)])); } }
     let desc = e.desc||e.narration||'';
     if(e.type==='bill' && e.dcNo) desc = `DC:${e.dcNo}${e.poNo?' PO:'+e.poNo:''}`;
+    if(e.quickInvoice) desc = `Quick Invoice (ledger only)${e.dcNo?' DC:'+e.dcNo:''}${e.poNo?' PO:'+e.poNo:''}${e.qiNote?' | '+e.qiNote:''}`;
     if(e.type==='payment'){
       if(e.bankName) desc += (desc?' | ':'')+'Bank: '+e.bankName;
       if(e.status) desc += (desc?' | ':'')+'Status: '+(statusLabel[e.status]||e.status);
       if(frt>0.5) desc += (desc?' | ':'')+'Freight in cheque: '+fmt(frt)+(e.freightNote?' ('+e.freightNote+')':'');
     }
+    if(e.type==='payment' && e.gstHold>0.5) desc += (desc?' | ':'')+'GST Hold: '+fmt(e.gstHold)+' (Bill '+(e.gstHoldDetails||[]).map(d=>'#'+d.invNo).join(', ')+') - party ne GST nahi di';
     if(isDebit && e.dcFreight>0.5) desc += (desc?' | ':'')+'DC Freight: '+fmt(e.dcFreight)+' (not in bill)';
     desc += lgPdfTags(e, sel);
     let invCell = e.invNo||'-';
@@ -11143,6 +11219,7 @@ function generateLedgerPDF(partyVal, detailMode, from, to, unitVal){
       const paidAmt = paidAmountMap[String(e.invNo).trim()]||0;
       if(paidAmt >= e.amount-0.5) invCell += ' (Paid)';
       else if(paidAmt>0.5) invCell += ` (Partial ${fmt(paidAmt)}/${fmt(e.amount)})`;
+      const _gh=getInvoiceGstHold(e.partyName,e.invNo); if(_gh>0.5) invCell += ` (GST Hold ${fmt(_gh)})`;
     }
     const typeLabel={bill:'Bill',payment:'Payment',debit_note:'Debit Note'}[e.type]||e.type;
     body.push([fmtDate(e.date),typeLabel,e.refNo||'-',invCell,desc,debit?fmt(debit):'',credit?fmt(credit):'',(e.deduction&&!isDebit)?fmt(e.deduction):'',fmt(Math.abs(balance))+(balance<0?' CR':' DR')]);
@@ -11155,7 +11232,12 @@ function generateLedgerPDF(partyVal, detailMode, from, to, unitVal){
   const outstanding = obTotal+totalBills-totalPaid-totalDed+totalFreight;
   doc.setFontSize(10); doc.setFont(undefined,'bold');
   doc.text(`Total Bills: ${cur} ${fmt(totalBills)}   Total Paid: ${cur} ${fmt(totalPaid)}   Deductions: ${cur} ${fmt(totalDed)}${totalFreight>0.5?`   Freight: ${cur} ${fmt(totalFreight)}`:''}   Outstanding: ${cur} ${fmt(outstanding)}`,14,fy);
-  fy += 10;
+  fy += 8;
+  if(totalGstHold>0.5){
+    doc.setTextColor(200,100,0); doc.text(`GST Hold Total: ${cur} ${fmt(totalGstHold)}  (included in Outstanding - party ne GST nahi di)`,14,fy); doc.setTextColor(0,0,0);
+    doc.autoTable({startY:fy+3, head:[['Payment Date','Cheque/Ref','Bill / Invoice #','Bill Total','GST Hold Amount']], body:gstHoldRows.concat([['','','','TOTAL',fmt(totalGstHold)]]), styles:{fontSize:8}, headStyles:{fillColor:[200,100,0]}});
+    fy = doc.lastAutoTable.finalY+8;
+  } else fy += 2;
 
   // Detailed Invoice Breakdown (per bill entry with item-level details) — only for "With All Details" mode
   const billEntries = detailMode ? entries.filter(e=>e.type==='bill' && e.items && e.items.length) : [];
@@ -17923,6 +18005,7 @@ function autoFillDeduction(invoices){
   if(type!=='payment' || invoices.length!==1 || !party || !amount){ hintEl.textContent=''; return; }
   const billTotal = getInvoiceBillTotal(party, invoices[0]);
   if(!billTotal){ hintEl.textContent=''; return; }
+  if(document.getElementById('led-gst-on') && document.getElementById('led-gst-on').checked){ hintEl.textContent=`Invoice #${invoices[0]} total: ${fmt(billTotal)} — GST Hold on hai, deduction apni marzi se likhein (ya 🤖 AI Search)`; return; }
   // Freight sitting inside this cheque isn't part of the bill, so strip it out
   // before working out how much of the invoice the cheque actually covered.
   const freight = parseFloat(document.getElementById('led-freight')?document.getElementById('led-freight').value:0)||0;
@@ -17971,6 +18054,7 @@ function autoFillLedgerFreight(invoices){
 // Plain-language breakdown of the cheque so the operator can see, before saving,
 // exactly how the total splits between bills, deduction and freight.
 function updateLedFreightSummary(){
+  ledSyncGstHold();
   const box = document.getElementById('led-freight-summary');
   if(!box) return;
   const type = document.getElementById('led-type') ? document.getElementById('led-type').value : '';
@@ -18026,6 +18110,210 @@ function pickLedInvoice(no){
   hideLedInvSuggestions();
   renderInvoiceAllocation();
   inp.focus();
+}
+
+// ==================== GST HOLD + AI SEARCH (v83) ====================
+// Kuch parties GST nahi deti: bill total = base + 18% GST. Payment mein se WHT (5.5% / 0.25% of base)
+// kat'ti hai aur GST wala hissa "hold" par reh jata hai. Wo hold amount payment entry par
+// (gstHold + gstHoldDetails[{invNo,amount}]) save hota hai aur ledger/PDF mein bill-wise dikhta hai.
+let _gstTouched = false;
+window._ledGstDetails = null;
+function getInvoiceGstHold(partyName, invNo){
+  invNo = String(invNo).trim(); let h = 0;
+  const _scope = lgScopeParties(partyName);
+  ledgerData.filter(l=>l.type==='payment' && _scope.includes(l.partyName) && l.gstHold>0).forEach(l=>{
+    (l.gstHoldDetails||[]).forEach(d=>{ if(String(d.invNo).trim()===invNo) h += d.amount||0; });
+  });
+  return h;
+}
+function ledGstReset(){
+  _gstTouched=false; window._ledGstDetails=null;
+  const on=document.getElementById('led-gst-on'); if(on) on.checked=false;
+  const a=document.getElementById('led-gst-amt'); if(a) a.value='';
+  const b=document.getElementById('led-ai-box'); if(b){ b.style.display='none'; b.innerHTML=''; }
+  ledSyncGstHold();
+}
+function ledGstLoad(e){
+  ledGstReset();
+  if(e.gstHold>0){
+    document.getElementById('led-gst-on').checked=true;
+    document.getElementById('led-gst-amt').value=e.gstHold;
+    _gstTouched=true; window._ledGstDetails=(e.gstHoldDetails||[]).map(d=>({...d}));
+    ledSyncGstHold();
+    const sel=document.getElementById('led-gst-inv');
+    if(sel && e.gstHoldDetails && e.gstHoldDetails[0]) sel.value=e.gstHoldDetails[0].invNo;
+  }
+}
+function ledSyncGstHold(fromCheck){
+  const on=document.getElementById('led-gst-on'); if(!on) return;
+  const type=(document.getElementById('led-type')||{}).value;
+  document.getElementById('led-gst-wrap').style.display = type==='payment' ? '' : 'none';
+  const f=document.getElementById('led-gst-fields');
+  f.style.display = (on.checked && type==='payment') ? '' : 'none';
+  if(!on.checked || type!=='payment') return;
+  if(fromCheck===true) _gstTouched=false;
+  const invs=document.getElementById('led-inv').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const sel=document.getElementById('led-gst-inv'); const prev=sel.value;
+  sel.innerHTML = invs.length ? invs.map(n=>`<option value="${n}">Bill #${n}</option>`).join('') : '<option value="">— pehle Linked Invoice select karein —</option>';
+  if(invs.includes(prev)) sel.value=prev;
+  const hint=document.getElementById('led-gst-hint'); const amtEl=document.getElementById('led-gst-amt');
+  if(window._ledGstDetails && window._ledGstDetails.length>1){ hint.textContent='Multi-bill split: '+window._ledGstDetails.map(d=>'#'+d.invNo+' → '+fmt(d.amount)).join(' | '); return; }
+  if(invs.length===1 && !_gstTouched){
+    const party=document.getElementById('led-party').value;
+    const amount=parseFloat(document.getElementById('led-amount').value)||0;
+    const fr=parseFloat(document.getElementById('led-freight').value)||0;
+    const ded=parseFloat(document.getElementById('led-deduction').value)||0;
+    const bt=getInvoiceBillTotal(party, invs[0]);
+    if(bt && amount){
+      const hold=bt-(amount-fr)-ded;
+      if(hold>0.5){ amtEl.value=hold.toFixed(2); hint.textContent=`Bill #${invs[0]} ${fmt(bt)} − received ${fmt(amount-fr)} − deduction ${fmt(ded)} = GST hold ${fmt(hold)}`; }
+      else hint.textContent='Is hisab se koi hold amount nahi bachta — manually likh sakte hain.';
+    }
+  }
+}
+// Party ke wo bills jin par abhi koi payment/hold nahi hai (AI match ke liye)
+function _ledBillsForAI(party){
+  const scope=lgScopeParties(party), map={};
+  ledgerData.filter(l=>l.type==='bill' && scope.includes(l.partyName) && l.invNo).forEach(l=>{
+    const k=String(l.invNo).trim(); const m=map[k]||(map[k]={invNo:k,total:0,base:0});
+    m.total += l.amount||0;
+    const b=(l.items||[]).reduce((a,it)=>a+(parseFloat(it.qty)||0)*(parseFloat(it.rate)||0),0);
+    m.base += b>0 ? b : (l.amount||0)/1.18;
+  });
+  return Object.values(map).filter(m=>getInvoicePaidAmount(party,m.invNo)<0.5 && getInvoiceGstHold(party,m.invNo)<0.5 && m.total>0.5);
+}
+function _ledAiFind(party, amount){
+  const bills=_ledBillsForAI(party).slice(-30);
+  const modes=[]; [0.055,0.0025,0].forEach(r=>{ modes.push({r,hold:false}); modes.push({r,hold:true}); });
+  const out=[], seen=new Set();
+  const test=(combo)=>{
+    modes.forEach(m=>{
+      let ded=0, hold=0, net=0; const per=[];
+      combo.forEach(b=>{
+        const d=b.base*m.r, h=m.hold?(b.total-b.base):0, n=b.total-d-h;
+        ded+=d; hold+=h; net+=n; per.push({invNo:b.invNo,total:b.total,ded:d,hold:h,net:n});
+      });
+      if(Math.abs(net-amount)<=1.5){
+        const key=combo.map(b=>b.invNo).join(',')+'|'+m.r+'|'+m.hold;
+        if(!seen.has(key)){ seen.add(key); out.push({inv:combo.map(b=>b.invNo),rate:m.r,hasHold:m.hold,ded,hold,net,per,diff:amount-net}); }
+      }
+    });
+  };
+  const n=bills.length;
+  for(let i=0;i<n;i++){ test([bills[i]]);
+    for(let j=i+1;j<n;j++){ test([bills[i],bills[j]]);
+      for(let k=j+1;k<n;k++) test([bills[i],bills[j],bills[k]]); } }
+  out.sort((a,b)=>a.inv.length-b.inv.length || (a.hasHold-b.hasHold) || b.rate-a.rate);
+  return out.slice(0,8);
+}
+function ledAiSearch(){
+  const party=document.getElementById('led-party').value;
+  const amount=parseFloat(document.getElementById('led-amount').value)||0;
+  const box=document.getElementById('led-ai-box'); box.style.display='';
+  if(!party||!amount){ box.innerHTML='⚠️ Pehle Party select karein aur Total Amount likhein.'; return; }
+  const res=_ledAiFind(party,amount); window._ledAiRes=res;
+  if(!res.length){ box.innerHTML=`🤖 <strong>${fmt(amount)}</strong> se koi bill match nahi hua (5.5% / 0.25% / GST Hold — 1 se 3 bills tak check kiye). Linked Invoice manually select karein.`; return; }
+  box.innerHTML=`<div style="font-weight:700;margin-bottom:6px;">🤖 ${res.length} possible match — click kar ke "Use" karein:</div>`+res.map((r,i)=>{
+    const rl=r.rate>0?`${(r.rate*100).toString().replace(/\.?0+$/,'')}% deduction = ${fmt(r.ded)}`:'koi deduction nahi';
+    const detail=r.per.map(x=>`#${x.invNo} (${fmt(x.total)})`).join(' + ');
+    return `<div style="border:1px solid var(--bg2);border-radius:6px;padding:6px 8px;margin-bottom:6px;display:flex;gap:8px;align-items:center;justify-content:space-between;">
+      <div>Bill ${detail}<br><span style="color:var(--neon5);">✂️ ${rl}</span>${r.hasHold?` <span style="color:#e67e22;">🟠 GST Hold ${fmt(r.hold)}</span>`:''} <span style="color:#1fbf75;">→ received ${fmt(r.net)}</span></div>
+      <button type="button" class="btn btn-green btn-xs" onclick="ledApplyAi(${i})">Use</button></div>`;
+  }).join('');
+}
+function ledApplyAi(i){
+  const r=(window._ledAiRes||[])[i]; if(!r) return;
+  document.getElementById('led-type').value='payment'; togglePaymodeField();
+  document.getElementById('led-inv').value=r.inv.join(',');
+  _dedManuallyEdited=true; _gstTouched=true;
+  document.getElementById('led-deduction').value = r.ded>0 ? r.ded.toFixed(2) : '0';
+  const on=document.getElementById('led-gst-on'); on.checked=r.hasHold;
+  document.getElementById('led-gst-amt').value = r.hasHold ? r.hold.toFixed(2) : '';
+  window._ledGstDetails = r.hasHold ? r.per.map(x=>({invNo:x.invNo,amount:+x.hold.toFixed(2)})) : null;
+  renderInvoiceAllocation();
+  r.per.forEach(x=>{ const inp=Array.from(document.querySelectorAll('#led-alloc-rows input[data-invno]')).find(e=>e.getAttribute('data-invno')===x.invNo); if(inp) inp.value=x.net.toFixed(2); });
+  if(r.per.length>1) updateAllocTotal();
+  ledSyncGstHold();
+  document.getElementById('led-ai-box').style.display='none';
+  toast('AI match apply ho gaya — details check kar ke Save karein','success');
+}
+// Amount likhte hi agar sirf ek hi match banta hai to foran bata deta hai aur confirm maangta hai.
+function ledAutoDetect(){
+  if(document.getElementById('led-edit-idx').value) return;
+  if(document.getElementById('led-inv').value.trim()) return;
+  if((document.getElementById('led-type')||{}).value!=='payment') return;
+  const party=document.getElementById('led-party').value;
+  const amount=parseFloat(document.getElementById('led-amount').value)||0;
+  if(!party||!amount) return;
+  const res=_ledAiFind(party,amount);
+  if(res.length!==1){ if(res.length>1) ledAiSearch(); return; }
+  const r=res[0]; window._ledAiRes=res;
+  const msg=`🤖 AI Match mila:\n\nBill: ${r.per.map(x=>'#'+x.invNo+' ('+fmt(x.total)+')').join(' + ')}\nDeduction: ${r.rate>0?(r.rate*100)+'% = '+fmt(r.ded):'koi nahi'}\n${r.hasHold?'GST Hold: '+fmt(r.hold)+'\n':''}Received: ${fmt(r.net)}\n\nKya ye bill auto select kar dein? (OK = haan, Cancel = nahi)`;
+  if(confirm(msg)) ledApplyAi(0);
+}
+
+// ==================== QUICK INVOICE (ledger-only bill, v83) ====================
+// Ledger mein type 'bill' entry banti hai (quickInvoice:true) — koi DC / stock / FBR record nahi banta.
+function qiParseAmt(v){
+  const t=String(v||'').replace(/[, ]/g,'');
+  if(!/^[0-9.+]+$/.test(t)) return NaN;
+  return t.split('+').filter(Boolean).reduce((a,b)=>a+(parseFloat(b)||0),0);
+}
+function qiShowSum(){
+  const raw=document.getElementById('qi-amt').value, v=qiParseAmt(raw), el=document.getElementById('qi-sum');
+  el.textContent = (raw.includes('+') && v>0) ? '= '+fmt(v) : '';
+}
+function openQuickInvoice(id){
+  const sel=document.getElementById('qi-party');
+  const base=document.getElementById('led-party');
+  sel.innerHTML=base.innerHTML;
+  ['qi-edit-id','qi-inv','qi-dc','qi-po','qi-amt','qi-note','qi-sum'].forEach(k=>{const el=document.getElementById(k); if(el){ if(k==='qi-sum') el.textContent=''; else el.value=''; }});
+  document.getElementById('qi-date').value=new Date().toISOString().slice(0,10);
+  document.getElementById('qi-title').textContent='⚡ Quick Invoice (sirf Ledger ke liye)';
+  const e = id ? ledgerData.find(l=>l.id===id) : null;
+  if(e){
+    document.getElementById('qi-title').textContent='✏️ Edit Quick Invoice';
+    document.getElementById('qi-edit-id').value=e.id; sel.value=e.partyName; document.getElementById('qi-date').value=e.date||'';
+    document.getElementById('qi-inv').value=e.invNo||''; document.getElementById('qi-dc').value=e.dcNo||''; document.getElementById('qi-po').value=e.poNo||'';
+    document.getElementById('qi-amt').value=e.amount||''; document.getElementById('qi-note').value=e.qiNote||'';
+  } else {
+    const ctx = (typeof lgModalDefaults==='function') ? lgModalDefaults() : {};
+    if(ctx && ctx.party) sel.value=ctx.party;
+  }
+  openModal('quickInvModal');
+}
+function saveQuickInvoice(){
+  const editId=document.getElementById('qi-edit-id').value;
+  const party=document.getElementById('qi-party').value, date=document.getElementById('qi-date').value;
+  const inv=document.getElementById('qi-inv').value.trim(), dc=document.getElementById('qi-dc').value.trim(), po=document.getElementById('qi-po').value.trim();
+  const note=document.getElementById('qi-note').value.trim(), amount=qiParseAmt(document.getElementById('qi-amt').value);
+  if(!party||!date||!inv||!(amount>0)){toast('Party, date, invoice # aur amount zaroori hain','warning');return;}
+  const dup = ledgerData.find(l=>l.type==='bill' && l.id!==editId && l.partyName===party && String(l.invNo||'').trim()===inv);
+  if(dup && !confirm(`Is party ke liye Invoice #${inv} pehle se ledger mein hai (${fmt(dup.amount)}). Phir bhi save karein?`)) return;
+  const desc=`⚡ Quick Invoice ${inv}${dc?' - DC '+dc:''}${po?' - PO '+po:''}`;
+  let e = editId ? ledgerData.find(l=>l.id===editId) : null;
+  if(e){ const before={...e}; Object.assign(e,{partyName:party,date,refNo:inv,invNo:inv,dcNo:dc,poNo:po,amount,desc,qiNote:note}); logAudit('edit','Ledger',`Quick invoice ${inv} updated`,before,e); }
+  else {
+    e={id:'L'+uid(),partyName:party,date,type:'bill',refNo:inv,invNo:inv,dcNo:dc,poNo:po,desc,amount,deduction:0,
+       narration:'Quick Invoice (ledger only)',quickInvoice:true,qiNote:note,items:[],invDate:'',createdAt:new Date().toISOString()};
+    ledgerData.push(e); logAudit('create','Ledger',`Quick invoice ${inv} for ${party} — ${amount}`,undefined,e);
+  }
+  saveData(); closeModal('quickInvModal');
+  try{ renderLedger(); }catch(x){} try{ renderRecords(); }catch(x){}
+  toast('⚡ Quick Invoice ledger mein save ho gayi','success');
+}
+// Records tab ki search mein bhi Quick Invoices dikhane ke liye
+function renderQuickInvoiceMatches(){
+  const el=document.getElementById('records-qi-matches'); if(!el) return;
+  const q=((document.getElementById('searchInput')||{}).value||'').trim().toLowerCase();
+  if(q.length<1){ el.innerHTML=''; return; }
+  const qn=q.replace(/,/g,'');
+  const hits=ledgerData.filter(l=>l.quickInvoice && l.type==='bill' && (
+    [l.partyName,l.invNo,l.dcNo,l.poNo,l.qiNote].some(v=>String(v||'').toLowerCase().includes(q)) || String(l.amount).includes(qn)));
+  if(!hits.length){ el.innerHTML=''; return; }
+  el.innerHTML=`<div class="accent-box" style="border-color:var(--neon5);">⚡ <strong>${hits.length} Quick Invoice(s)</strong> (sirf ledger mein, DC record nahi):
+    ${hits.map(l=>`<div style="margin-top:6px;font-size:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><span>${_lgEsc(l.partyName)} — Inv #${_lgEsc(l.invNo)}${l.dcNo?' | DC '+_lgEsc(l.dcNo):''}${l.poNo?' | PO '+_lgEsc(l.poNo):''} | ${fmtDate(l.date)} | <strong>${fmt(l.amount)}</strong></span>
+    <button class="btn btn-neon btn-xs" onclick="jumpToPartyLedger('${String(l.partyName).replace(/'/g,"\\'")}')">📒 Ledger mein kholein</button></div>`).join('')}</div>`;
 }
 function renderInvoiceAllocation(preset){
   const invRaw = document.getElementById('led-inv').value;
