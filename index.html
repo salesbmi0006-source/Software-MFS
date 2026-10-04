@@ -264,6 +264,12 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
 .items-table input{padding:5px;font-size:11px;}
 .items-table select{padding:5px;font-size:11px;}
 /* LEDGER */
+/* Ledger reconcile: tick button + highlighted (matched) rows */
+.lg-tick-btn{background:var(--bg3);color:var(--text2);border:1px solid var(--text3);min-width:26px;font-weight:800;cursor:pointer;border-radius:6px;}
+.lg-tick-btn.on{background:#1fbf75;color:#fff;border-color:#1fbf75;}
+tr.lg-ticked td{background:rgba(31,191,117,.24)!important;}
+tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
+#ledgerSearchInfo{display:none;font-size:12px;background:var(--bg2);border-left:3px solid #1fbf75;padding:8px 10px;border-radius:6px;margin-bottom:8px;line-height:1.7;}
 .ledger-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:14px;}
 .ledger-sum-card{background:var(--bg3);border-radius:var(--radius2);padding:10px;border-top:2px solid;}
 .lsc1{border-top-color:var(--neon3);}
@@ -646,7 +652,22 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
       <input type="date" id="ledgerFrom" onchange="renderLedger()" style="width:145px;">
       <span style="color:var(--text2)">to</span>
       <input type="date" id="ledgerTo" onchange="renderLedger()" style="width:145px;">
-      <input type="text" id="ledgerSearch" placeholder="Cheque/Ref/Invoice..." oninput="renderLedger()" style="width:150px;">
+      <select id="ledgerSearchField" onchange="renderLedger()" style="width:170px;" title="Search kis cheez mein karni hai — filter select karein taa-ke kaam mix na ho">
+        <option value="amount">💰 Amount (exact)</option>
+        <option value="amount_part">💰 Amount (partial digits)</option>
+        <option value="ref">🏦 Cheque / Ref No</option>
+        <option value="inv">🧾 Invoice No</option>
+        <option value="dc">📦 DC No</option>
+        <option value="po">📑 PO No</option>
+        <option value="desc">📝 Description / Bank</option>
+        <option value="all">🔎 All Fields</option>
+      </select>
+      <input type="text" id="ledgerSearch" placeholder="Search... (146048 ya 146,048)" oninput="renderLedger()" style="width:210px;" autocomplete="off" title="Amount mein comma ya .00 lagana zaroori nahi">
+      <select id="ledgerTickFilter" onchange="renderLedger()" style="width:150px;" title="Reconcile: tick kiye hue / baaqi rows">
+        <option value="">✔ Tick: All rows</option>
+        <option value="ticked">✔ Sirf Ticked</option>
+        <option value="unticked">⬜ Sirf Un-ticked</option>
+      </select>
       <select id="ledgerTypeFilter" onchange="renderLedger()" style="width:130px;">
         <option value="">All Types</option>
         <option value="bill">Bill</option>
@@ -669,8 +690,10 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
         <option value="with_details">With All Details</option>
       </select>
       <button class="btn btn-neon btn-sm" onclick="clearLedgerFilters()">✕ Clear</button>
+      <button class="btn btn-yellow btn-sm" onclick="lgClearTicks()" title="Is ledger ke SAB tick/highlight ek click mein hata dein — ledger apni purani halat mein">🧹 Untick All</button>
       <button class="btn btn-purple btn-sm" onclick="exportLedgerPDF()">📄 PDF</button>
     </div>
+    <div id="ledgerSearchInfo"></div>
     <div class="flex-gap mb-8" style="flex-wrap:wrap;align-items:center;background:var(--bg2);padding:8px 10px;border-radius:8px;">
       <span style="font-size:12px;color:var(--text2);">📌 Previous Balance (opening balance before ledger entries start):</span>
       <select id="ledgerOpeningMember" onchange="renderLedger()" style="display:none;width:230px;" title="Combined ledger: kis party ka previous balance edit karna hai"></select>
@@ -683,7 +706,7 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
     <div id="ledger-summary" class="ledger-summary"></div>
     <div class="tbl-wrap">
       <table><thead><tr>
-        <th>Date</th><th>Type</th><th>Ref/Cheque</th><th>Invoice</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th><th>Actions</th>
+        <th>Date</th><th>Type</th><th>Ref/Cheque</th><th>Invoice</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th><th style="white-space:nowrap;">Actions<br><button class="btn btn-green btn-xs" onclick="lgTickShown()" title="Jo rows abhi screen par nazar aa rahi hain unko ek saath tick karein">✔ Tick shown</button> <button class="btn btn-red btn-xs" onclick="lgClearTicks()" title="Is ledger ke SAB ticks ek click mein hata dein">✕ Untick All</button></th>
       </tr></thead><tbody id="ledgerTbody"></tbody></table>
     </div>
     <div id="ledger-details-panel"></div>
@@ -9485,6 +9508,7 @@ function renderLedger(){
     document.getElementById('ledgerTbody').innerHTML='<tr><td colspan="9" class="text-center" style="padding:20px;color:var(--text3);">Select a party to view ledger</td></tr>';
     document.getElementById('ledger-summary').innerHTML='';
     lgRenderScopeNote(null, '', null);
+    lgUpdateSearchInfo(null);
     if(obInput) obInput.value='';
     if(obDateInput) obDateInput.value='';
     if(obInvInput) obInvInput.value='';
@@ -9496,7 +9520,10 @@ function renderLedger(){
   if(obInvInput) obInvInput.value = ob.linkedInvoices || '';
   const from = document.getElementById('ledgerFrom').value;
   const to = document.getElementById('ledgerTo').value;
-  const search = document.getElementById('ledgerSearch').value.toLowerCase();
+  const searchRaw = (document.getElementById('ledgerSearch').value||'').trim();
+  const searchField = (document.getElementById('ledgerSearchField')||{}).value || 'amount';
+  const tickFilter = (document.getElementById('ledgerTickFilter')||{}).value || '';
+  const ticks = lgTicks();
   const typeFilter = document.getElementById('ledgerTypeFilter') ? document.getElementById('ledgerTypeFilter').value : '';
   const paymodeFilter = document.getElementById('ledgerPaymodeFilter') ? document.getElementById('ledgerPaymodeFilter').value : '';
   const amtMin = document.getElementById('ledgerAmountMin') ? parseFloat(document.getElementById('ledgerAmountMin').value) : NaN;
@@ -9506,7 +9533,9 @@ function renderLedger(){
   let entries = built.entries;
   if(from) entries=entries.filter(e=>e.date>=from);
   if(to) entries=entries.filter(e=>e.date<=to);
-  if(search) entries=entries.filter(e=>(e.refNo||'').toLowerCase().includes(search)||(e.invNo||'').toLowerCase().includes(search)||(e.dcNo||'').toLowerCase().includes(search));
+  if(searchRaw) entries=entries.filter(e=>lgEntryMatchesSearch(e, searchField, searchRaw));
+  if(tickFilter==='ticked') entries=entries.filter(e=>ticks.has(e.id));
+  if(tickFilter==='unticked') entries=entries.filter(e=>!ticks.has(e.id));
   if(typeFilter) entries=entries.filter(e=>e.type===typeFilter);
   if(paymodeFilter) entries=entries.filter(e=>e.paymode===paymodeFilter);
   if(!isNaN(amtMin)) entries=entries.filter(e=>e.amount>=amtMin);
@@ -9649,7 +9678,8 @@ function renderLedger(){
     }
     const statusBadgeMap={cleared:'<span class="badge badge-paid" title="Cleared" style="margin-left:4px;">✅</span>',pending:'<span class="badge badge-pending" title="Pending" style="margin-left:4px;">⏳</span>',bounced:'<span class="badge" style="background:#c0392b;color:#fff;margin-left:4px;" title="Bounced">❌</span>'};
     const statusBadge = (e.type==='payment' && e.status) ? (statusBadgeMap[e.status]||'') : '';
-    return `<tr>
+    const isTicked = ticks.has(e.id);
+    return `<tr class="${isTicked?'lg-ticked':''}">
       <td>${fmtDate(e.date)}</td>
       <td>${typeMap[e.type]||e.type}</td>
       <td>${e.refNo||'-'}${statusBadge}${e.type!=='bill'?ledgerApprovalBadge(e.id):''}</td>
@@ -9659,6 +9689,7 @@ function renderLedger(){
       <td style="text-align:right;color:var(--neon4);">${credit>0?fmt(credit):''}${ded>0?`<div style="font-size:10px;color:var(--neon5);font-weight:400;">➖ Ded: ${fmt(ded)}</div>`:''}</td>
       <td style="text-align:right;font-weight:700;color:${balance<0?'var(--neon4)':'var(--neon3)'};">${fmt(Math.abs(balance))} ${balance<0?'CR':'DR'}</td>
       <td style="white-space:nowrap;">
+        <button class="btn btn-xs lg-tick-btn${isTicked?' on':''}" onclick="lgToggleTick(this,'${e.id}')" title="Manual ledger se match ho gaya? Tick karein (row highlight ho jayegi)">${isTicked?'✔':'☐'}</button>
         ${e.type==='bill'?`<button class="btn btn-neon btn-xs" onclick="viewLedgerInvoice('${e.id}')" title="View Invoice Details">🔍</button>`:''}
         ${e.attachment?`<button class="btn btn-purple btn-xs" onclick="viewLedgerAttachment('${e.id}')" title="View Attachment">📎</button>`:''}
         ${e.type!=='bill'?`<button class="btn btn-neon btn-xs" onclick="viewLedgerEntryHistory('${e.id}')" title="View Edit History">🕘</button><button class="btn btn-yellow btn-xs" onclick="editLedgerEntry('${e.id}')" title="Edit">✏️</button><button class="btn btn-red btn-xs" onclick="deleteLedgerEntry('${e.id}')">🗑️</button>`:''}
@@ -9666,7 +9697,7 @@ function renderLedger(){
     </tr>`;
   });
   document.getElementById('ledgerTbody').innerHTML = (openingRow + rows.join('')) || '<tr><td colspan="9" class="text-center" style="padding:20px;color:var(--text3);">No ledger entries found</td></tr>';
-  const filtersActive = typeFilter || paymodeFilter || !isNaN(amtMin) || !isNaN(amtMax);
+  const filtersActive = typeFilter || paymodeFilter || !isNaN(amtMin) || !isNaN(amtMax) || searchRaw || tickFilter;
   let filterWarnEl = document.getElementById('ledgerFilterWarn');
   if(!filterWarnEl){
     filterWarnEl = document.createElement('div');
@@ -9674,7 +9705,9 @@ function renderLedger(){
     filterWarnEl.style.cssText='font-size:11px;color:#f5a623;margin:-4px 0 8px;';
     document.getElementById('ledgerTbody').closest('table').parentElement.insertBefore(filterWarnEl, document.getElementById('ledgerTbody').closest('table'));
   }
-  filterWarnEl.textContent = filtersActive ? '⚠️ Type/Payment Mode/Amount filter active — running Balance column reflects only the filtered rows, not the full account.' : '';
+  filterWarnEl.textContent = filtersActive ? '⚠️ Search/Type/Payment Mode/Amount/Tick filter active — running Balance column reflects only the filtered rows, not the full account.' : '';
+  window._lgLastView = {shown: entries, all: built.entries, q: searchRaw, field: searchField};
+  lgUpdateSearchInfo(window._lgLastView);
   // Freight recovered through payments was never billed, so it is added back on
   // the charge side — otherwise Outstanding would understate what the party owes.
   const outstanding = obTotal+totalBills-totalPaid-totalDed+totalFreight;
@@ -9832,8 +9865,108 @@ function viewLedgerInvoice(ledgerId){
 }
 function clearLedgerFilters(){
   ['ledgerFrom','ledgerTo','ledgerSearch','ledgerAmountMin','ledgerAmountMax'].forEach(id=>document.getElementById(id).value='');
-  ['ledgerTypeFilter','ledgerPaymodeFilter','ledgerUnitSelect'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['ledgerTypeFilter','ledgerPaymodeFilter','ledgerUnitSelect','ledgerTickFilter'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   renderLedger();
+}
+
+// ==================== LEDGER RECONCILE: SMART SEARCH + TICK MARKS ====================
+// Tick marks are kept per ledger-entry id (browser localStorage, local only) so a half-finished
+// reconciliation survives a page refresh. "Clear Ticks" removes them when the work is done.
+var _lgTicks = null;
+function lgTicks(){
+  if(!_lgTicks){
+    try{ _lgTicks = new Set(JSON.parse(localStorage.getItem('sau_ledger_ticks')||'[]')); }
+    catch(e){ _lgTicks = new Set(); }
+  }
+  return _lgTicks;
+}
+function _lgSaveTicks(){
+  try{ localStorage.setItem('sau_ledger_ticks', JSON.stringify(Array.from(lgTicks()))); }catch(e){}
+}
+// "146,048" / "146048.00" / "Rs 146 048" -> 146048   (commas, spaces, .00 not needed)
+function lgParseAmountQuery(q){
+  const s = String(q||'').replace(/[^0-9.]/g,'');
+  if(!s || s==='.') return null;
+  const v = parseFloat(s);
+  if(isNaN(v)) return null;
+  return {value:v, hasFrac:(v-Math.floor(v))>0.0001, digits:s.split('.')[0]};
+}
+function _lgAmtEq(amt, a){
+  amt = Number(amt)||0;
+  return a.hasFrac ? Math.abs(amt-a.value)<0.011 : (Math.round(amt)===a.value || Math.floor(amt)===a.value);
+}
+function lgEntryMatchesSearch(e, field, q){
+  const txt = v => String(v==null?'':v).toLowerCase();
+  const ql = q.toLowerCase();
+  const amounts = [e.amount]; if(e._fullAmount!=null) amounts.push(e._fullAmount);
+  const amountExact = () => { const a = lgParseAmountQuery(q); return !!a && amounts.some(x=>_lgAmtEq(x,a)); };
+  switch(field){
+    case 'amount': return amountExact();
+    case 'amount_part': {
+      const a = lgParseAmountQuery(q); if(!a || !a.digits) return false;
+      return amounts.some(x=>String(Math.floor(Number(x)||0)).includes(a.digits));
+    }
+    case 'ref':  return txt(e.refNo).includes(ql);
+    case 'inv':  return txt(e.invNo).includes(ql);
+    case 'dc':   return txt(e.dcNo).includes(ql);
+    case 'po':   return txt(e.poNo).includes(ql);
+    case 'desc': return [e.desc,e.narration,e.bankName,e.freightNote,e.partyName].some(v=>txt(v).includes(ql));
+    case 'all':
+    default:
+      return [e.refNo,e.invNo,e.dcNo,e.poNo,e.desc,e.narration,e.bankName,e.partyName,e.freightNote].some(v=>txt(v).includes(ql)) || amountExact();
+  }
+}
+function lgToggleTick(btn, id){
+  const t = lgTicks();
+  const on = !t.has(id);
+  if(on) t.add(id); else t.delete(id);
+  _lgSaveTicks();
+  if((document.getElementById('ledgerTickFilter')||{}).value){ renderLedger(); return; } // row may need to leave/enter the list
+  const tr = btn.closest('tr');
+  if(tr) tr.classList.toggle('lg-ticked', on);
+  btn.classList.toggle('on', on);
+  btn.textContent = on ? '✔' : '☐';
+  lgUpdateSearchInfo(window._lgLastView);
+}
+function lgClearTicks(){
+  const v = window._lgLastView, t = lgTicks();
+  if(!v){ toast('Pehle party select karein','warning'); return; }
+  const n = v.all.filter(e=>t.has(e.id)).length;   // every entry of the selected ledger, whatever filters are on
+  if(!n){ toast('Is ledger mein koi tick nahi hai','info'); return; }
+  v.all.forEach(e=>t.delete(e.id));
+  _lgSaveTicks();
+  const tf = document.getElementById('ledgerTickFilter'); if(tf) tf.value = '';
+  renderLedger();
+  toast('✅ '+n+' tick clear ho gaye — ledger apni purani halat mein','success');
+}
+function lgTickShown(){
+  const v = window._lgLastView, t = lgTicks();
+  if(!v || !v.shown.length){ toast('Tick karne ke liye koi row nahi hai','warning'); return; }
+  v.shown.forEach(e=>t.add(e.id));
+  _lgSaveTicks();
+  renderLedger();
+  toast('✔ '+v.shown.length+' row(s) tick ho gayin','success');
+}
+function lgUpdateSearchInfo(v){
+  const el = document.getElementById('ledgerSearchInfo'); if(!el) return;
+  if(!v){ el.style.display='none'; el.innerHTML=''; return; }
+  const ticks = lgTicks();
+  const sum = arr => { let d=0,c=0; arr.forEach(e=>{ if(e.type==='bill'||e.type==='debit_note') d+=e.amount||0; else c+=e.amount||0; }); return {d,c}; };
+  const labels = {amount:'Amount',amount_part:'Amount partial',ref:'Cheque/Ref',inv:'Invoice',dc:'DC',po:'PO',desc:'Description',all:'All Fields'};
+  const parts = [];
+  if(v.q){
+    const s = sum(v.shown);
+    parts.push(v.shown.length
+      ? `🔎 <b>${_lgEsc(v.q)}</b> <span style="color:var(--text3);">(${labels[v.field]||v.field})</span> → <b>${v.shown.length}</b> row${v.shown.length>1?'s':''} mili | Debit: <b>${fmt(s.d)}</b> | Credit: <b>${fmt(s.c)}</b>`
+      : `🔎 <b>${_lgEsc(v.q)}</b> <span style="color:var(--text3);">(${labels[v.field]||v.field})</span> → <span style="color:#f5a623;font-weight:700;">koi row nahi mili</span>`);
+  }
+  const tk = v.all.filter(e=>ticks.has(e.id));
+  if(tk.length){
+    const s = sum(tk);
+    parts.push(`✔ Ticked (poora ledger): <b>${tk.length}</b> row${tk.length>1?'s':''} | Debit: <b>${fmt(s.d)}</b> | Credit: <b>${fmt(s.c)}</b> | Baaqi un-ticked: <b>${v.all.length-tk.length}</b>`);
+  }
+  el.innerHTML = parts.join('<br>');
+  el.style.display = parts.length ? 'block' : 'none';
 }
 // Opens the Add Ledger Entry modal in "fresh add" mode — clears any leftover
 // edit-id from a previous edit session so Save always creates a new entry.
