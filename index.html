@@ -1480,7 +1480,7 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
       </div>
     </div>
     <div class="accent-box" style="font-size:11px;color:var(--text2);margin-bottom:10px;line-height:1.6;">
-      <strong>Auto-scan:</strong> jis DC mein <strong>Freight Charges</strong> hain wo yahan khud aa jati hai — DC ki tafseel wahi rehti hai, sab se oper <strong>COMMERCIAL BILL</strong> likha hota hai aur aakhir mein Freight add ho kar <strong>Grand Total</strong> aata hai (digital invoice ke sath laga kar bhejne ke liye).<br>
+      <strong>Auto-scan:</strong> ab <strong>sab DCs</strong> yahan aati hain — jin ki <strong>invoice lag chuki</strong> hai (✅ Invoiced / 🧾 FBR) aur jin ki <strong>abhi invoice nahi lagi</strong> (⏳ Invoice Pending) bhi. Bina invoice wali DC ka bhi Commercial Bill ban sakta hai (customer se confirmation ke liye). Jaise hi DC mein invoice no. save ho, scan ho ya FBR PDF sync ho — wo DC khud ⏳ se ✅ ban jati hai, list apne aap update hoti hai. DC ki tafseel wahi rehti hai, sab se oper <strong>COMMERCIAL BILL</strong> likha hota hai aur aakhir mein Freight add ho kar <strong>Grand Total</strong> aata hai (digital invoice ke sath laga kar bhejne ke liye).<br>
       <strong>FBR Numbers:</strong> D.Invoices mein PDF import karte hi FBR invoice number DC record mein <strong>pakka save</strong> ho jata hai — PDF baad mein hat bhi jaye to number yahan check ho sakta hai.<br>
       <strong>Multi-DC bill:</strong> jin DCs ka <strong>PO same</strong> ho unhe tick karein — sab ka <strong>ek hi Commercial Bill</strong> banega (sab items, DC # bracket mein, GST total aur Grand Total jama). PO alag wali DC tick nahi hogi, alert aayega. <strong>⚙️ Bill Settings</strong> se company ki details (NTN, STRN, address, phone...) bill par show/hide karein.
     </div>
@@ -1489,12 +1489,14 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
       <select id="cb-party" onchange="cbRender()" style="width:200px;"><option value="">All Parties</option></select>
       <select id="cb-month" onchange="cbRender()" style="width:150px;"><option value="">All Months</option></select>
       <select id="cb-scope" onchange="cbRender()" style="width:200px;">
-        <option value="freight">Freight wali DCs</option>
-        <option value="all">Sab invoiced DCs</option>
+        <option value="all">Sab DCs (invoice + bina invoice)</option>
+        <option value="pending">⏳ Bina invoice wali DCs</option>
+        <option value="invoiced">✅ Invoice lagi hui DCs</option>
+        <option value="freight">🚚 Freight wali DCs</option>
       </select>
       <select id="cb-fbr" onchange="cbRender()" style="width:190px;">
         <option value="">FBR No: All</option>
-        <option value="missing">FBR No missing</option>
+        <option value="missing">FBR No missing (invoice lagi, FBR no. nahi)</option>
         <option value="has">FBR No saved</option>
       </select>
     </div>
@@ -15276,7 +15278,18 @@ function cbSelectedRecs(){
 }
 // Auto-scan: every DC that carries freight (or, with the switch, every invoiced DC) — always read live from the DC records.
 function cbCandidates(scope){
-  return db.filter(r=>!r.cancelled && !r.voidOnly && (scope==='all' ? !!r.invNo : getDCFreight(r)>0));
+  return db.filter(r=>{
+    if(r.cancelled || r.voidOnly) return false;
+    if(scope==='pending') return !r.invNo;
+    if(scope==='invoiced') return !!r.invNo;
+    if(scope==='freight') return getDCFreight(r)>0;
+    return true;   // 'all' (default): invoice wali + bina invoice wali sab DCs
+  });
+}
+// Invoice status of a DC: 'fbr' (invoice + FBR no.), 'inv' (invoice no. lagi, FBR no. abhi nahi), 'pending' (invoice nahi lagi)
+function cbInvStatus(rec){
+  if(!rec || !rec.invNo) return 'pending';
+  return cbFbrText(rec) ? 'fbr' : 'inv';
 }
 function cbOnOpen(){
   cbSyncFbrNumbers({silent:true});
@@ -15285,8 +15298,8 @@ function cbOnOpen(){
 function cbScanNow(){
   const r = cbSyncFbrNumbers({silent:true});
   cbRender();
-  const n = cbCandidates('freight').length;
-  toast(`🔄 Scan complete — ${n} freight wali DC mili${r.changed?` | ${r.changed} FBR number DC records mein save hue`:''}`,'success');
+  const nAll = cbCandidates('all'), n = nAll.length, nPend = nAll.filter(r=>!r.invNo).length;
+  toast(`🔄 Scan complete — ${n} DC mili (${n-nPend} invoice lagi, ${nPend} bina invoice)${r.changed?` | ${r.changed} FBR number DC records mein save hue`:''}`,'success');
 }
 function cbFillSelect(id, values, allLabel){
   const el = document.getElementById(id); if(!el) return;
@@ -15299,7 +15312,7 @@ function cbFillSelect(id, values, allLabel){
 }
 function cbGetShown(){
   const g = id=>((document.getElementById(id)||{}).value||'');
-  const scope = g('cb-scope')||'freight';
+  const scope = g('cb-scope')||'all';
   const q = g('cb-search').trim().toLowerCase(), party = g('cb-party'), month = g('cb-month'), fbrF = g('cb-fbr');
   const all = cbCandidates(scope);
   cbFillSelect('cb-party', [...new Set(all.map(r=>r.partyName).filter(Boolean))].sort(), 'All Parties');
@@ -15322,10 +15335,11 @@ function cbGetShown(){
 function cbRender(){
   const tb = document.getElementById('cb-tbody'); if(!tb) return;
   const list = cbGetShown(), cur = settings.currency||'PKR';
-  let sBill=0, sFrt=0, missing=0;
-  list.forEach(r=>{ sBill += getDCTotal(r); sFrt += getDCFreight(r); if(r.invNo && !cbFbrText(r)) missing++; });
+  let sBill=0, sFrt=0, missing=0, pending=0;
+  list.forEach(r=>{ sBill += getDCTotal(r); sFrt += getDCFreight(r); if(r.invNo && !cbFbrText(r)) missing++; if(!r.invNo) pending++; });
   const st = document.getElementById('cb-stats');
-  if(st) st.innerHTML = `<div class="stat-card c1"><div class="stat-val">${list.length}</div><div class="stat-label">Commercial Bills</div></div>
+  if(st) st.innerHTML = `<div class="stat-card c1"><div class="stat-val">${list.length}</div><div class="stat-label">Commercial Bills (DCs)</div></div>
+    <div class="stat-card c3"><div class="stat-val" style="color:${pending?'var(--neon3)':'var(--neon4)'};">${pending}</div><div class="stat-label">⏳ Invoice Pending</div></div>
     <div class="stat-card c2"><div class="stat-val" style="font-size:17px;">${cur} ${fmt(sBill)}</div><div class="stat-label">Bill Amount</div></div>
     <div class="stat-card c3"><div class="stat-val" style="font-size:17px;">${cur} ${fmt(sFrt)}</div><div class="stat-label">Freight</div></div>
     <div class="stat-card c4"><div class="stat-val" style="font-size:17px;">${cur} ${fmt(sBill+sFrt)}</div><div class="stat-label">Grand Total</div></div>
@@ -15333,17 +15347,21 @@ function cbRender(){
   const shownKeys = new Set(list.map(cbKey));
   [...cbSelected].forEach(k=>{ if(!shownKeys.has(k)) cbSelected.delete(k); });
   if(!list.length){
-    tb.innerHTML = '<tr><td colspan="10" class="text-center" style="padding:20px;color:var(--text3);">Koi commercial bill nahi mila. Freight wali DCs yahan khud aa jati hain (DC mein Freight Charges bharein).</td></tr>';
+    tb.innerHTML = '<tr><td colspan="10" class="text-center" style="padding:20px;color:var(--text3);">Koi DC nahi mili. Filters / search check karein — DC records banenge to yahan khud aa jayengi.</td></tr>';
   } else {
     tb.innerHTML = list.map(r=>{
       const idx = db.indexOf(r), k = cbKey(r), fbr = cbFbrText(r), frt = getDCFreight(r), tot = getDCTotal(r);
       const fbrCell = fbr ? `<span style="font-size:11px;word-break:break-all;">${_lgEsc(fbr)}</span>`
-        : (r.invNo ? '<span style="color:var(--neon3);font-size:11px;">⚠️ Missing</span>' : '<span style="color:var(--text3);font-size:11px;">Invoice pending</span>');
-      return `<tr>
+        : (r.invNo ? '<span style="color:var(--neon3);font-size:11px;">⚠️ Missing</span>' : '<span style="color:var(--text3);font-size:11px;">—</span>');
+      const stt = cbInvStatus(r);
+      const stBadge = stt==='fbr' ? '<div style="font-size:10px;color:var(--neon4);">🧾 FBR invoiced</div>'
+        : (stt==='inv' ? '<div style="font-size:10px;color:var(--neon);">✅ Invoiced</div>'
+        : '<div style="font-size:10px;color:var(--neon3);">⏳ Invoice pending — confirmation bill</div>');
+      return `<tr${stt==='pending'?' style="background:rgba(255,160,0,0.06);"':''}>
         <td><input type="checkbox" style="width:auto;" ${cbSelected.has(k)?'checked':''} onchange="cbToggle(${idx},this.checked)"></td>
         <td><strong>${_lgEsc(r.dcNo)}</strong>${cbHasFbrDesc(r)?'<div style="font-size:10px;color:var(--neon4);">✏️ FBR desc</div>':''}</td><td>${fmtDate(r.date)}</td>
         <td>${_lgEsc(r.partyName)}${r.unitName&&r.unitName!=='undefined'?`<div style="font-size:10px;color:var(--text3);">🏭 ${_lgEsc(r.unitName)}</div>`:''}${r.poNo?`<div style="font-size:10px;color:var(--text3);">PO: ${_lgEsc(r.poNo)}</div>`:''}</td>
-        <td>${_lgEsc(r.invNo||'-')}</td><td>${fbrCell}</td>
+        <td>${r.invNo?_lgEsc(r.invNo):'<span style="color:var(--neon3);font-size:11px;">⏳ Not invoiced</span>'}${stBadge}</td><td>${fbrCell}</td>
         <td style="text-align:right;">${fmt(tot)}</td><td style="text-align:right;">${fmt(frt)}</td>
         <td style="text-align:right;font-weight:700;color:var(--neon);">${fmt(tot+frt)}</td>
         <td style="white-space:nowrap;">
@@ -15409,6 +15427,18 @@ function cbBulkPDF(which){
   try{ cbMakePdf(ordered).save(`Commercial_Bills_${new Date().toISOString().slice(0,10)}.pdf`); toast(`${ordered.length} commercial bill(s) ki ek PDF ban gayi ✓`,'success'); }
   catch(e){ console.error(e); toast('PDF banane mein masla aaya','error'); }
 }
+
+// ---- v84: invoice no. save / scan / sync hote hi Commercial Bills list khud update (⏳ pending → ✅ invoiced) ----
+(function(){
+  if(window.__cbAutoHook) return; window.__cbAutoHook = true;
+  const _orig = saveData;
+  saveData = function(){
+    const r = _orig.apply(this, arguments);
+    clearTimeout(window.__cbAutoT);
+    window.__cbAutoT = setTimeout(function(){ try{ cbRefreshIfActive(); }catch(e){} }, 200);
+    return r;
+  };
+})();
 
 // ==================== DC DELIVERY CHALLAN PRINT ====================
 let currentDCPrintIdx = -1;
