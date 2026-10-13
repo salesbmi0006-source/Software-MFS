@@ -75,128 +75,6 @@ body.light-mode.theme-green{--neon:#00a86b;}
 body.light-mode.theme-pink{--neon:#e0245e;}
 body.light-mode.theme-orange{--neon:#ea580c;}
 body.light-mode.theme-blue{--neon:#2563eb;}
-
-/* ===================== GLASS MODE (v86) ===================== */
-body.glass-mode{
-  --bg:#070b1f;--bg2:rgba(255,255,255,.07);--bg3:rgba(255,255,255,.08);--bg4:rgba(255,255,255,.11);
-  --card:rgba(255,255,255,.075);--card2:rgba(255,255,255,.10);
-  --border:rgba(255,255,255,.14);--border2:rgba(255,255,255,.24);
-  --text:#f2f5ff;--text2:#c5cdee;--text3:#94a0cc;
-  --radius:16px;--radius2:11px;
-  --glass-shadow:0 8px 32px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.22);
-  --glass-modal:rgba(18,24,58,.62);--glass-opt:#1a2146;
-  --blob1:#2a6bff;--blob2:#8a3dff;--blob3:#00d4d4;
-  background:
-    radial-gradient(1100px 700px at 12% 8%,rgba(42,107,255,.35),transparent 60%),
-    radial-gradient(900px 650px at 90% 15%,rgba(138,61,255,.32),transparent 60%),
-    radial-gradient(1000px 700px at 60% 100%,rgba(0,212,212,.20),transparent 60%),
-    #070b1f;
-  background-attachment:fixed;
-}
-body.glass-mode.glass-light{
-  --bg:#dce8ff;--bg2:rgba(255,255,255,.50);--bg3:rgba(255,255,255,.55);--bg4:rgba(255,255,255,.65);
-  --card:rgba(255,255,255,.50);--card2:rgba(255,255,255,.66);
-  --border:rgba(255,255,255,.75);--border2:rgba(150,170,230,.55);
-  --text:#17204a;--text2:#464f80;--text3:#7881ad;
-  --glass-shadow:0 8px 28px rgba(70,90,170,.18),inset 0 1px 0 rgba(255,255,255,.9);
-  --glass-modal:rgba(255,255,255,.78);--glass-opt:#ffffff;
-  --blob1:#7fb2ff;--blob2:#c9a6ff;--blob3:#8ff0e0;
-  background:
-    radial-gradient(1100px 700px at 10% 10%,rgba(120,175,255,.65),transparent 60%),
-    radial-gradient(900px 650px at 90% 20%,rgba(190,150,255,.55),transparent 60%),
-    radial-gradient(1000px 700px at 55% 100%,rgba(130,235,225,.50),transparent 60%),
-    #e6eeff;
-  background-attachment:fixed;
-}
-/* floating colour blobs (bubbles) */
-body.glass-mode::before,body.glass-mode::after{
-  content:'';position:fixed;z-index:-1;pointer-events:none;border-radius:50%;filter:blur(70px);opacity:.55;
-}
-body.glass-mode::before{width:460px;height:460px;left:-120px;top:30%;background:var(--blob1);animation:glassFloat1 18s ease-in-out infinite alternate;}
-body.glass-mode::after{width:520px;height:520px;right:-140px;bottom:-120px;background:var(--blob2);animation:glassFloat2 22s ease-in-out infinite alternate;}
-body.glass-mode.glass-light::before,body.glass-mode.glass-light::after{opacity:.5;}
-@keyframes glassFloat1{from{transform:translate(0,0) scale(1);}to{transform:translate(160px,-120px) scale(1.25);}}
-@keyframes glassFloat2{from{transform:translate(0,0) scale(1);}to{transform:translate(-180px,-100px) scale(1.2);}}
-
-/* glass surfaces */
-body.glass-mode .card,body.glass-mode .stat-card,body.glass-mode .settings-section,
-body.glass-mode #header,body.glass-mode #main-tabs-bar,body.glass-mode .login-box{
-  -webkit-backdrop-filter:blur(18px) saturate(160%);backdrop-filter:blur(18px) saturate(160%);
-  box-shadow:var(--glass-shadow);
-}
-body.glass-mode .stat-card{background:var(--card2);}
-body.glass-mode #header{background:var(--bg4);border-bottom:1px solid var(--border2);}
-body.glass-mode #main-tabs-bar{background:var(--bg2);border-bottom:1px solid var(--border);}
-body.glass-mode #main-tabs,body.glass-mode .modal,body.glass-mode .toast{
-  background:var(--glass-modal);-webkit-backdrop-filter:blur(26px) saturate(170%);backdrop-filter:blur(26px) saturate(170%);
-  box-shadow:var(--glass-shadow),0 20px 50px rgba(0,0,0,.25);border:1px solid var(--border2);
-}
-body.glass-mode .toast-success,body.glass-mode .toast-error,body.glass-mode .toast-warning,body.glass-mode .toast-info{background:var(--glass-modal);}
-body.glass-mode .modal-header{background:var(--bg4);}
-body.glass-mode .modal-overlay{background:rgba(5,8,25,.55);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}
-body.glass-mode.glass-light .modal-overlay{background:rgba(60,80,150,.30);}
-body.glass-mode thead,body.glass-mode.light-mode thead{background:var(--bg4);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);}
-body.glass-mode th{border-bottom:1px solid var(--border2);}
-body.glass-mode td{border-bottom:1px solid var(--border);transition:background .2s;}
-body.glass-mode tbody tr:hover td{background:color-mix(in srgb,var(--neon) 14%,transparent);}
-body.glass-mode input,body.glass-mode select,body.glass-mode textarea{
-  background:var(--bg3);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid var(--border2);
-}
-body.glass-mode input:focus,body.glass-mode select:focus,body.glass-mode textarea:focus{
-  border-color:var(--neon);box-shadow:0 0 0 3px color-mix(in srgb,var(--neon) 25%,transparent),0 0 18px color-mix(in srgb,var(--neon) 35%,transparent);
-}
-body.glass-mode select option{background:var(--glass-opt);color:var(--text);}
-body.glass-mode #login-screen{background:transparent!important;}
-body.glass-mode ::-webkit-scrollbar-track{background:transparent;}
-body.glass-mode ::-webkit-scrollbar-thumb{background:var(--border2);}
-body.glass-mode ::-webkit-scrollbar-thumb:hover{background:var(--neon);}
-
-/* hover / click effects */
-body.glass-mode .card,body.glass-mode .stat-card,body.glass-mode .settings-section,
-body.glass-mode .btn,body.glass-mode .tab,body.glass-mode #tab-menu-toggle{
-  transition:transform .25s ease,box-shadow .25s ease,border-color .25s ease,background-color .25s ease,filter .25s ease;
-}
-body.glass-mode .card:hover,body.glass-mode .stat-card:hover,body.glass-mode .settings-section:hover{
-  transform:translateY(-3px);
-  border-color:color-mix(in srgb,var(--neon) 55%,transparent);
-  box-shadow:var(--glass-shadow),0 0 26px color-mix(in srgb,var(--neon) 30%,transparent);
-  background-image:radial-gradient(circle 190px at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--neon) 24%,transparent),color-mix(in srgb,var(--neon2) 10%,transparent) 55%,transparent 75%);
-}
-body.glass-mode .tab:hover,body.glass-mode #tab-menu-toggle:hover{
-  background-image:radial-gradient(circle 90px at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--neon) 30%,transparent),transparent 70%);
-  box-shadow:0 0 16px color-mix(in srgb,var(--neon) 35%,transparent);
-}
-body.glass-mode .tab.active{box-shadow:0 0 18px color-mix(in srgb,var(--neon) 55%,transparent);}
-body.glass-mode .btn{border:1px solid rgba(255,255,255,.28);box-shadow:inset 0 1px 0 rgba(255,255,255,.3);}
-body.glass-mode .btn:hover{transform:translateY(-2px) scale(1.04);filter:brightness(1.18) saturate(1.2);box-shadow:0 6px 22px color-mix(in srgb,var(--neon) 45%,transparent),inset 0 1px 0 rgba(255,255,255,.4);}
-body.glass-mode .btn:active{transform:translateY(0) scale(.96);}
-body.glass-mode .btn-neon{background:color-mix(in srgb,var(--neon) 12%,transparent);}
-body.glass-mode .close-btn:hover{transform:rotate(90deg) scale(1.15);}
-body.glass-mode .close-btn{transition:transform .25s,color .2s;}
-
-/* cursor: glowing orb + ring + click ripple (glass mode only) */
-#glass-cursor{position:fixed;left:0;top:0;pointer-events:none;z-index:2147483000;display:none;}
-body.glass-mode #glass-cursor{display:block;}
-#glass-cursor .gc-glow{position:absolute;width:260px;height:260px;margin:-130px 0 0 -130px;border-radius:50%;
-  background:radial-gradient(circle,color-mix(in srgb,var(--neon) 30%,transparent),color-mix(in srgb,var(--neon2) 14%,transparent) 45%,transparent 70%);
-  mix-blend-mode:screen;animation:gcHue 7s linear infinite;transition:width .3s,height .3s,margin .3s,opacity .3s;opacity:.8;}
-body.glass-mode.glass-light #glass-cursor .gc-glow{mix-blend-mode:normal;opacity:.55;}
-#glass-cursor .gc-ring{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;
-  border:2px solid var(--neon);box-shadow:0 0 14px var(--neon),inset 0 0 8px color-mix(in srgb,var(--neon) 40%,transparent);
-  transition:width .25s,height .25s,margin .25s,border-color .25s,background .25s;animation:gcHue 7s linear infinite;}
-#glass-cursor .gc-dot{position:absolute;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:#fff;box-shadow:0 0 8px var(--neon);}
-#glass-cursor.gc-hover .gc-ring{width:56px;height:56px;margin:-28px 0 0 -28px;background:color-mix(in srgb,var(--neon) 14%,transparent);border-color:var(--neon3);}
-#glass-cursor.gc-hover .gc-glow{width:340px;height:340px;margin:-170px 0 0 -170px;opacity:1;}
-#glass-cursor.gc-down .gc-ring{width:22px;height:22px;margin:-11px 0 0 -11px;}
-@keyframes gcHue{from{filter:hue-rotate(0deg);}to{filter:hue-rotate(360deg);}}
-.glass-ripple{position:fixed;pointer-events:none;z-index:2147482999;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;
-  border:2px solid var(--neon);background:radial-gradient(circle,color-mix(in srgb,var(--neon) 45%,transparent),transparent 70%);
-  animation:glassRipple .7s ease-out forwards;}
-.glass-ripple.r2{border-color:var(--neon3);animation-delay:.08s;}
-@keyframes glassRipple{from{transform:scale(1);opacity:.9;}to{transform:scale(11);opacity:0;}}
-@media (hover:none),(pointer:coarse){#glass-cursor{display:none!important;}body.glass-mode .card:hover,body.glass-mode .stat-card:hover{transform:none;}}
-@media (prefers-reduced-motion:reduce){body.glass-mode::before,body.glass-mode::after,#glass-cursor *{animation:none!important;}.glass-ripple{display:none;}}
-/* ===================== /GLASS MODE ===================== */
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;min-height:100vh;overflow-x:hidden;transition:background .3s,color .3s;}
 /* SCROLLBAR */
@@ -1323,8 +1201,6 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
         <select id="set-mode" onchange="previewMode()">
           <option value="dark">🌙 Dark Mode (Neon)</option>
           <option value="light">☀️ Light Mode (Colourful)</option>
-          <option value="glass">🔮 Glass Mode (Dark Glass)</option>
-          <option value="glass-light">🪟 Glass Mode (Light Glass)</option>
         </select>
       </div>
       <div class="form-group">
@@ -5458,7 +5334,7 @@ const HEADER_BTN_DEFS = [
   {id:'po',      label:'📝 Purchase Order Module', html:()=>`<button class="btn btn-sm" style="background:var(--bg3);border:1px solid var(--neon2);color:var(--neon2);" onclick="showTab('purchaseorders')">📝 Purchase Orders</button>`},
   {id:'fastbilling', label:'⚡ Fast Billing', html:()=>`<button class="btn btn-sm" style="background:var(--bg3);border:1px solid #ffb020;color:#ffb020;" onclick="showTab('fastbilling')">⚡ Fast Billing</button>`},
   {id:'settings',label:'⚙️ Settings', html:()=>`<button class="btn btn-yellow btn-sm" onclick="openModal('settingsModal')">⚙️ Settings</button>`},
-  {id:'mode',    label:'🔮 Theme Mode Toggle (Dark / Light / Glass)', html:()=>`<button class="btn btn-sm" id="modeToggleBtn" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);" onclick="toggleModeQuick()" title="Switch theme: Dark → Light → Glass → Light Glass">${modeIcon(settings.mode)}</button>`},
+  {id:'mode',    label:'🌙 Dark/Light Mode Toggle', html:()=>`<button class="btn btn-sm" id="modeToggleBtn" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);" onclick="toggleModeQuick()" title="Toggle Dark/Light Mode">${settings.mode==='light'?'☀️':'🌙'}</button>`},
   {id:'emplogin',label:'👤 Employee Login', html:()=>`<button class="btn btn-sm" style="background:var(--bg3);border:1px solid var(--neon4);color:var(--neon4);" onclick="openEmpLoginModal()" title="Employee login — see only your own dispatch/attendance/commission">👤 Employee Login</button>`}
 ];
 function renderHeaderButtons(){
@@ -5595,22 +5471,15 @@ function applySettings(){
   if(sm) sm.value = settings.mode||'dark';
   renderHeaderButtons();
   const btn=document.getElementById('modeToggleBtn');
-  if(btn) btn.textContent = modeIcon(settings.mode);
+  if(btn) btn.textContent = (settings.mode==='light')?'🌙':'☀️';
   applyTheme();
   renderHeaderButtonsSettings();
 }
-const MODE_ORDER=['dark','light','glass','glass-light'];
-const MODE_LABEL={'dark':'Dark mode','light':'Light mode','glass':'Glass mode (Dark)','glass-light':'Glass mode (Light)'};
-const MODE_ICON={'dark':'🌙','light':'☀️','glass':'🔮','glass-light':'🪟'};
-function modeLabel(m){return MODE_LABEL[m]||'Dark mode';}
-function modeIcon(m){return MODE_ICON[m]||'🌙';}
 function applyTheme(){
   const mode = settings.mode||'dark';
   const accent = settings.theme||'cyan';
-  document.body.classList.remove('light-mode','glass-mode','glass-light','theme-purple','theme-green','theme-pink','theme-orange','theme-blue');
-  if(mode==='light'||mode==='glass-light') document.body.classList.add('light-mode');
-  if(mode==='glass'||mode==='glass-light') document.body.classList.add('glass-mode');
-  if(mode==='glass-light') document.body.classList.add('glass-light');
+  document.body.classList.remove('light-mode','theme-purple','theme-green','theme-pink','theme-orange','theme-blue');
+  if(mode==='light') document.body.classList.add('light-mode');
   if(accent!=='cyan') document.body.classList.add('theme-'+accent);
 }
 function previewMode(){
@@ -5619,13 +5488,12 @@ function previewMode(){
   applyTheme();
 }
 function toggleModeQuick(){
-  settings.mode = MODE_ORDER[(Math.max(0,MODE_ORDER.indexOf(settings.mode||'dark'))+1)%MODE_ORDER.length];
-  { const sm=document.getElementById('set-mode'); if(sm) sm.value=settings.mode; }
+  settings.mode = (settings.mode==='light') ? 'dark' : 'light';
   const btn=document.getElementById('modeToggleBtn');
-  if(btn) btn.textContent = modeIcon(settings.mode);
+  if(btn) btn.textContent = settings.mode==='light'?'🌙':'☀️';
   applyTheme();
   safeSetItem('sau_settings', JSON.stringify(settings));
-  toast(modeLabel(settings.mode)+' activated','info');
+  toast(settings.mode==='light'?'Light mode activated':'Dark mode activated','info');
 }
 function setMode(mode){
   settings.mode = mode;
@@ -5633,7 +5501,7 @@ function setMode(mode){
   if(sm) sm.value = mode;
   applyTheme();
   safeSetItem('sau_settings', JSON.stringify(settings));
-  toast(modeLabel(mode)+' enabled','success');
+  toast(mode==='light'?'Light mode enabled':'Dark mode enabled','success');
 }
 function resetSettings(){
   if(!confirm('Reset all settings to defaults?')) return;
@@ -27605,51 +27473,5 @@ function mktLineSvg(months, lastIdx, slope, mean){
   s += `<text x="${W-pr}" y="12" text-anchor="end" style="fill:var(--neon5);font-size:10px">- - - trend line</text>`;
   return s + '</svg>';
 }
-</script>
-<script>
-/* ===== GLASS MODE: cursor orb, hover spotlight, click ripple ===== */
-(function(){
-  function init(){
-    var cur=document.createElement('div');
-    cur.id='glass-cursor';
-    cur.innerHTML='<div class="gc-glow"></div><div class="gc-ring"></div><div class="gc-dot"></div>';
-    document.body.appendChild(cur);
-    var glow=cur.querySelector('.gc-glow'),ring=cur.querySelector('.gc-ring'),dot=cur.querySelector('.gc-dot');
-    var tx=-200,ty=-200,rx=-200,ry=-200,gx=-200,gy=-200,raf=0;
-    var INTERACTIVE='button,a,.btn,.tab,#tab-menu-toggle,input,select,textarea,label,tr,.close-btn,[onclick]';
-    var SPOT='.card,.stat-card,.settings-section,.tab,#tab-menu-toggle';
-    function on(){return document.body.classList.contains('glass-mode');}
-    function loop(){
-      rx+=(tx-rx)*.22; ry+=(ty-ry)*.22; gx+=(tx-gx)*.10; gy+=(ty-gy)*.10;
-      dot.style.transform='translate('+tx+'px,'+ty+'px)';
-      ring.style.transform='translate('+rx+'px,'+ry+'px)';
-      glow.style.transform='translate('+gx+'px,'+gy+'px)';
-      raf=requestAnimationFrame(loop);
-    }
-    document.addEventListener('mousemove',function(e){
-      if(!on()) return;
-      tx=e.clientX; ty=e.clientY;
-      if(!raf) raf=requestAnimationFrame(loop);
-      var t=e.target;
-      if(t&&t.closest){
-        cur.classList.toggle('gc-hover',!!t.closest(INTERACTIVE));
-        var sp=t.closest(SPOT);
-        if(sp){var r=sp.getBoundingClientRect();sp.style.setProperty('--mx',(e.clientX-r.left)+'px');sp.style.setProperty('--my',(e.clientY-r.top)+'px');}
-      }
-    },{passive:true});
-    document.addEventListener('mousedown',function(e){
-      if(!on()) return;
-      cur.classList.add('gc-down');
-      ['','r2'].forEach(function(c){
-        var d=document.createElement('div');d.className='glass-ripple '+c;
-        d.style.left=e.clientX+'px';d.style.top=e.clientY+'px';
-        document.body.appendChild(d);setTimeout(function(){d.remove();},900);
-      });
-    },true);
-    document.addEventListener('mouseup',function(){cur.classList.remove('gc-down');},true);
-    document.addEventListener('mouseleave',function(){tx=ty=-300;});
-  }
-  if(document.body) init(); else document.addEventListener('DOMContentLoaded',init);
-})();
 </script>
 </body></html>
