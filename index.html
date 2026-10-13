@@ -2093,6 +2093,7 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
     </div>
     <div class="form-group"><label>Mode</label><select id="mkt-pm-mode"><option>Cash</option><option>Bank</option><option>Cheque</option><option>Online</option></select></div>
     <div class="form-group"><label>Note</label><input type="text" id="mkt-pm-note"></div>
+    <div class="form-group"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="mkt-pm-slip" checked> 🧾 Save ke baad customer ki receiving slip dikhayen</label></div>
   </div>
   <div class="modal-footer">
     <button class="btn btn-green" onclick="mktSavePayment()">💾 Save Payment</button>
@@ -2107,6 +2108,31 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
   <div class="modal-header"><h3 id="mkt-dm-title">Detail</h3><button class="close-btn" onclick="closeModal('mktDetailModal')">✕</button></div>
   <div class="modal-body" id="mkt-dm-body"></div>
   <div class="modal-footer"><button class="btn btn-neon" onclick="closeModal('mktDetailModal')">Close</button></div>
+</div>
+</div>
+
+<!-- MARKETING: payment slip / receiving (Thermal + A4) -->
+<div class="modal-overlay" id="mktSlipModal">
+<div class="modal modal-md">
+  <div class="modal-header"><h3 id="mkt-slip-title">🧾 Payment Slip</h3><button class="close-btn" onclick="closeModal('mktSlipModal')">✕</button></div>
+  <div class="modal-body">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:10px;">
+      <button type="button" class="btn btn-sm" id="mkt-slip-b-thermal" onclick="mktSlipSetSize('thermal')">🧾 Thermal Preview</button>
+      <button type="button" class="btn btn-sm" id="mkt-slip-b-a4" onclick="mktSlipSetSize('a4')">📄 A4 Preview</button>
+      <div class="form-group" style="margin:0;"><label style="font-size:10px;">Thermal Width</label>
+        <select id="mkt-slip-width" onchange="mktSlipRefresh()"><option value="80">80 mm</option><option value="58">58 mm</option></select></div>
+      <div class="form-group" style="margin:0;"><label style="font-size:10px;">Thermal Text Size</label>
+        <select id="mkt-slip-font" onchange="mktSlipRefresh()"><option value="11">Chhota</option><option value="13">Medium (bold)</option><option value="15">Bara</option><option value="17">Bohat bara</option></select></div>
+    </div>
+    <div style="background:#fff;color:#000;border-radius:8px;padding:10px;overflow:auto;max-height:60vh;display:flex;justify-content:center;">
+      <div id="mkt-slip-preview"></div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="mktSlipPrint('thermal')">🖨️ Thermal Print</button>
+    <button class="btn btn-purple" onclick="mktSlipPrint('a4')">🖨️ A4 Print</button>
+    <button class="btn btn-neon" onclick="closeModal('mktSlipModal')">Close</button>
+  </div>
 </div>
 </div>
 
@@ -4518,13 +4544,14 @@ Switch Socket"></textarea>
     <div style="overflow-x:auto;">
     <table class="items-table" id="itemsTable">
       <thead><tr>
-        <th>Description *</th><th>HS Code</th><th>UOM</th><th>Qty</th><th>Rate</th><th>Tax%</th><th>Basic Amt</th><th>Tax Amt</th><th>Total</th><th></th>
+        <th>Description *</th><th>HS Code</th><th>UOM</th><th>DC Qty</th><th style="color:var(--danger);">❌ Reject Qty</th><th>Net Qty</th><th>Rate</th><th>Tax%</th><th>Basic Amt</th><th>Tax Amt</th><th>Total</th><th></th>
       </tr></thead>
       <tbody id="itemsTableBody"></tbody>
     </table>
     </div>
     <div style="text-align:right;margin-top:8px;font-size:13px;font-weight:700;color:var(--neon);">
       Grand Total: <span id="dc-grand-total">0.00</span>
+      <div id="dc-rej-summary" style="font-size:11px;font-weight:600;margin-top:3px;"></div>
     </div>
     <!-- FREIGHT CHARGES (separate — never added into Grand Total) -->
     <div class="form-row mt-8" style="background:var(--bg3);border-radius:8px;padding:8px 10px;">
@@ -7004,6 +7031,70 @@ function sortDropdownHtml(id, onchangeFn, defaultVal){
 }
 function fmtDate(d){ if(!d) return ''; try{ return new Date(d).toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'}); }catch{return d;} }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+// ==================== QTY REJECTION (DC items) ====================
+// Model: it.qty     = NET / billable qty  (so every existing total — ledger, reports, PO, FBR — keeps working untouched)
+//        it.origQty = qty written on the original challan
+//        it.rejQty  = total rejected so far (cumulative), it.rejNote = latest reason
+//        it.qtyLog  = full history of every qty change (latest shown first, older ones behind a toggle)
+function _qn(n){ n=parseFloat(n)||0; return Number.isInteger(n)?String(n):String(+n.toFixed(2)); }
+function itemOrigQty(it){ if(!it) return 0; const o=(it.origQty!==undefined&&it.origQty!=='')?parseFloat(it.origQty):parseFloat(it.qty); return isNaN(o)?0:o; }
+function itemRejQty(it){ return it?(parseFloat(it.rejQty)||0):0; }
+function dcRejTotal(rec){ return (rec&&rec.items||[]).reduce((s,it)=>s+itemRejQty(it),0); }
+function rejBadgeHTML(rec){ const r=dcRejTotal(rec); return r>0?` <span style="color:var(--danger);font-weight:700;" title="Rejected qty is challan mein se minus ho chuki hai">❌${_qn(r)} rej</span>`:''; }
+function rejTagHTML(it){
+  const r=itemRejQty(it); if(r<=0) return '';
+  return `<div style="font-size:10px;font-weight:600;color:var(--danger);line-height:1.35;white-space:nowrap;">Total ${_qn(itemOrigQty(it))} − Rej ${_qn(r)}</div>`+(it.rejNote?`<div style="font-size:9px;color:var(--text3);">${_lgEsc(it.rejNote)}</div>`:'');
+}
+function rejPlainText(it){
+  const r=itemRejQty(it); if(r<=0) return '';
+  return `Challan qty ${_qn(itemOrigQty(it))}, rejected ${_qn(r)}, billed ${_qn(it.qty)}`+(it.rejNote?` (${it.rejNote})`:'');
+}
+function _qtyLogLine(e){
+  const dt=e.ts?new Date(e.ts).toLocaleString():'';
+  const head=e.kind==='reject'?(e.delta>=0?`❌ ${_qn(e.delta)} reject`:`↩️ ${_qn(Math.abs(e.delta))} reject wapas`):'✏️ Qty badli';
+  return `${head}: pehle <b>${_qn(e.prevNet)}</b> → ab <b>${_qn(e.net)}</b> (Total ${_qn(e.orig)}, Reject ${_qn(e.rej)})${e.note?` — ${_lgEsc(e.note)}`:''} <span style="color:var(--text3);">· ${dt}${e.user?' · '+_lgEsc(e.user):''}</span>`;
+}
+function qtyItemHistHTML(it){
+  const log=(it&&Array.isArray(it.qtyLog))?it.qtyLog:[]; if(!log.length) return '';
+  const last=log[log.length-1], older=log.slice(0,-1).reverse(), hid='qh'+uid();
+  let h=`<div style="font-size:10px;line-height:1.5;margin-top:3px;white-space:normal;"><span style="color:var(--danger);">${_qtyLogLine(last)}</span>`;
+  if(older.length) h+=` <a href="javascript:void(0)" onclick="toggleQtyHist('${hid}')" style="color:var(--neon);white-space:nowrap;">📜 Purani history (${older.length})</a><div id="${hid}" style="display:none;margin-top:3px;padding-left:8px;border-left:2px solid var(--border2);color:var(--text2);">${older.map(_qtyLogLine).join('<br>')}</div>`;
+  return h+'</div>';
+}
+function toggleQtyHist(id){ const el=document.getElementById(id); if(el) el.style.display=(el.style.display==='none'?'block':'none'); }
+function qtyHistoryHTML(rec){
+  const rows=(rec.items||[]).filter(it=>itemRejQty(it)>0||(it.qtyLog&&it.qtyLog.length));
+  if(!rows.length) return '';
+  let h=`<div class="accent-box mt-8" style="border-color:var(--danger);"><strong style="color:var(--danger);">❌ Qty Reject / Change Record</strong>`;
+  rows.forEach(it=>{
+    const o=itemOrigQty(it), r=itemRejQty(it), n=parseFloat(it.qty)||0;
+    h+=`<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--border2);"><div><strong>${_lgEsc(it.desc)}</strong></div>
+      <div style="font-size:12px;">Is challan mein total qty <strong>${_qn(o)}</strong> thi • Reject <strong style="color:var(--danger);">${_qn(r)}</strong> • Bill / baqi qty <strong style="color:var(--neon4);">${_qn(n)}</strong>${it.rejNote?` &nbsp;|&nbsp; 📝 ${_lgEsc(it.rejNote)}`:''}</div>${qtyItemHistHTML(it)}</div>`;
+  });
+  return h+'</div>';
+}
+function _curUserName(){ try{ return (typeof securityData!=='undefined'&&securityData.currentUser)?securityData.currentUser.username:(settings.operatorName||'Operator'); }catch(e){ return 'Operator'; } }
+// Compares freshly-saved items with the previous version of the same DC (matched by item iid) and
+// appends a history entry whenever the challan qty or the rejected qty changed.
+function applyQtyLogs(items, oldItems){
+  const user=_curUserName(), ts=new Date().toISOString(), changes=[];
+  (items||[]).forEach(it=>{
+    const old=(oldItems||[]).find(o=>o&&o.iid&&o.iid===it.iid);
+    const log=(old&&Array.isArray(old.qtyLog))?old.qtyLog.slice():[];
+    const orig=parseFloat(it.origQty)||0, rej=parseFloat(it.rejQty)||0, net=parseFloat(it.qty)||0;
+    let entry=null;
+    if(old){
+      const pO=itemOrigQty(old), pR=itemRejQty(old), pN=parseFloat(old.qty)||0;
+      if(Math.abs(pO-orig)>1e-9||Math.abs(pR-rej)>1e-9)
+        entry={ts,user,kind:(Math.abs(pR-rej)>1e-9)?'reject':'qty-edit',prevOrig:pO,prevRej:pR,prevNet:pN,orig,rej,net,delta:rej-pR,note:it.rejNote||''};
+    } else if(rej>0){
+      entry={ts,user,kind:'reject',prevOrig:orig,prevRej:0,prevNet:orig,orig,rej,net,delta:rej,note:it.rejNote||''};
+    }
+    if(entry){ log.push(entry); changes.push(`${it.desc}: ${_qn(entry.prevNet)}→${_qn(net)} (rej ${_qn(rej)} of ${_qn(orig)})`); }
+    if(log.length) it.qtyLog=log;
+  });
+  return changes;
+}
 function getDCTotal(rec){
   return (rec.items||[]).reduce((s,it)=>{
     const basic = parseFloat(it.qty||0)*parseFloat(it.rate||0);
@@ -7602,7 +7693,7 @@ function renderRecords(){
       <td style="text-align:right;">
         <strong style="font-size:12px;">${fmt(total)}</strong>
         <div style="font-size:9px;color:var(--text3);line-height:1.4;">
-          Qty:${fmt(totalQty)} | Gross:${fmt(basic)}<br>Tax:${fmt(taxAmt)}
+          Qty:${fmt(totalQty)}${rejBadgeHTML(rec)} | Gross:${fmt(basic)}<br>Tax:${fmt(taxAmt)}
         </div>
       </td>
       <td>${statusBadge(st)}</td>
@@ -7822,7 +7913,7 @@ function _editDCOpen(idx){
   loadDispatchIntoModal(rec);
   // Load items
   document.getElementById('itemsTableBody').innerHTML='';
-  (rec.items||[{desc:'',hscode:'',uom:'Pcs',qty:'',rate:'',tax:settings.defaultTax||18}]).forEach(it=>addItemRow(it));
+  (rec.items||[{desc:'',hscode:'',uom:'Pcs',qty:'',rate:'',tax:settings.defaultTax||18}]).forEach(it=>{ if(!it.iid) it.iid=uid(); addItemRow(it); });
   updateGrandTotal();
   openModal('addDcModal');
 }
@@ -7838,29 +7929,41 @@ function addItemRow(it=null){
   const desc = it?it.desc:'';
   const hscode = it?it.hscode:'';
   const uom = it?(it.uom||defUom):defUom;
-  const qty = it?it.qty:'';
+  // "DC Qty" box always shows the ORIGINAL challan qty; rejection is typed separately and
+  // the billable (net) qty is worked out automatically.
+  const origQ = it ? ((it.origQty!==undefined && it.origQty!=='') ? it.origQty : it.qty) : '';
+  const rej = it ? itemRejQty(it) : 0;
+  const rejNote = it && it.rejNote ? it.rejNote : '';
   const rate = it?it.rate:'';
   const tax = it?(it.tax||defTax):defTax;
-  const basic = it ? parseFloat(it.qty||0)*parseFloat(it.rate||0) : 0;
+  const net = Math.max(0,(parseFloat(origQ)||0)-rej);
+  const basic = it ? net*parseFloat(it.rate||0) : 0;
   const taxAmt = basic*parseFloat(tax||0)/100;
   const total = basic+taxAmt;
   const tbody = document.getElementById('itemsTableBody');
   const tr = document.createElement('tr');
   const rowId = uid();
   tr.dataset.rowid = rowId;
+  tr.dataset.iid = (it&&it.iid)?it.iid:uid();
   tr.innerHTML = `
     <td><input type="text" value="${desc}" placeholder="Description" list="desc-master-list" oninput="updateGrandTotal();dcAutoFillHsCode(this)" onchange="dcAutoFillHsCode(this)" style="min-width:180px;"></td>
     <td><input type="text" value="${hscode}" placeholder="HS Code" oninput="formatHsCodeInput(this)" style="width:110px;"></td>
     <td><select onchange="updateGrandTotal()" style="width:70px;">
       ${['Pcs','Nos','Sets','Kg','Mtr','Box','Rolls','Lot','Units','Ltr','Bags','Sheets'].map(u=>`<option ${u===uom?'selected':''}>${u}</option>`).join('')}
     </select></td>
-    <td><input type="number" value="${qty}" placeholder="0" oninput="calcRow(this);updateGrandTotal()" style="width:70px;"></td>
-    <td><input type="number" value="${rate}" placeholder="0.00" oninput="calcRow(this);updateGrandTotal()" style="width:90px;"></td>
-    <td><input type="number" value="${tax}" placeholder="18" oninput="calcRow(this);updateGrandTotal()" style="width:55px;"></td>
+    <td><input type="number" class="it-qty" value="${origQ}" placeholder="0" oninput="calcRow(this);updateGrandTotal()" style="width:70px;"></td>
+    <td style="min-width:130px;">
+      <input type="number" class="it-rej" min="0" step="any" value="${rej||''}" placeholder="0" title="Is challan mein se kitni qty reject hui (total)" oninput="calcRow(this);updateGrandTotal()" style="width:70px;border-color:var(--danger);">
+      <input type="text" class="it-rejnote" value="${_lgEsc(rejNote)}" placeholder="reject note / wajah" style="width:125px;font-size:10px;margin-top:3px;">
+      ${it?qtyItemHistHTML(it):''}
+    </td>
+    <td class="item-net" style="font-weight:800;color:var(--neon4);font-size:12px;">${_qn(net)}${rej>0?`<div style="font-size:9px;font-weight:600;color:var(--danger);">${_qn(origQ)} − ${_qn(rej)}</div>`:''}</td>
+    <td><input type="number" class="it-rate" value="${rate}" placeholder="0.00" oninput="calcRow(this);updateGrandTotal()" style="width:90px;"></td>
+    <td><input type="number" class="it-tax" value="${tax}" placeholder="18" oninput="calcRow(this);updateGrandTotal()" style="width:55px;"></td>
     <td class="item-basic" style="color:var(--neon4);font-size:11px;">${fmt(basic)}</td>
     <td class="item-taxamt" style="color:var(--neon5);font-size:11px;">${fmt(taxAmt)}</td>
     <td class="item-total" style="color:var(--neon);font-size:11px;font-weight:700;">${fmt(total)}</td>
-    <td><input type="text" value="${it&&it.itemInvNo?it.itemInvNo:''}" placeholder="inv#" style="width:75px;font-size:10px;" title="Optional: override invoice no for this item"></td>
+    <td><input type="text" class="it-invno" value="${it&&it.itemInvNo?it.itemInvNo:''}" placeholder="inv#" style="width:75px;font-size:10px;" title="Optional: override invoice no for this item"></td>
     <td><button type="button" class="btn btn-red btn-xs" onclick="removeItemRow(this)">✕</button></td>
   `;
   tbody.appendChild(tr);
@@ -7919,33 +8022,31 @@ function dcAutoFillHsCode(inputEl){
   const found = findHsCodeForDesc(desc, partyName);
   if(found) hscodeInput.value = found;
 }
-function calcRow(inp){
-  const tr = inp.closest('tr');
-  const inputs = tr.querySelectorAll('input[type="number"]');
-  const qty = parseFloat(inputs[0].value)||0;
-  const rate = parseFloat(inputs[1].value)||0;
-  const tax = parseFloat(inputs[2].value)||0;
-  const basic = qty*rate;
-  const taxAmt = basic*tax/100;
+function _rowCalc(tr){
+  const g=(c)=>parseFloat(tr.querySelector(c)?.value)||0;
+  const q=g('.it-qty'), rej=g('.it-rej'), rate=g('.it-rate'), tax=g('.it-tax');
+  const net=Math.max(0,q-rej);
+  const basic=net*rate, taxAmt=basic*tax/100;
+  const rejEl=tr.querySelector('.it-rej');
+  if(rejEl) rejEl.style.background = rej>q ? 'rgba(255,45,120,.3)' : '';
+  const netEl=tr.querySelector('.item-net');
+  if(netEl) netEl.innerHTML = _qn(net)+(rej>0?`<div style="font-size:9px;font-weight:600;color:var(--danger);">${_qn(q)} − ${_qn(rej)}</div>`:'');
   tr.querySelector('.item-basic').textContent = fmt(basic);
   tr.querySelector('.item-taxamt').textContent = fmt(taxAmt);
   tr.querySelector('.item-total').textContent = fmt(basic+taxAmt);
+  return {q,rej,net,basic,taxAmt};
 }
+function calcRow(inp){ const tr = inp.closest('tr'); if(tr) _rowCalc(tr); }
 function removeItemRow(btn){ btn.closest('tr').remove(); updateGrandTotal(); }
 function updateGrandTotal(){
-  let total = 0;
+  let total = 0, tO=0, tR=0, tN=0;
   document.querySelectorAll('#itemsTableBody tr').forEach(tr=>{
-    const inputs = tr.querySelectorAll('input[type="number"]');
-    const qty = parseFloat(inputs[0]?.value)||0;
-    const rate = parseFloat(inputs[1]?.value)||0;
-    const tax = parseFloat(inputs[2]?.value)||0;
-    const basic = qty*rate;
-    total += basic + basic*tax/100;
-    tr.querySelector('.item-basic').textContent=fmt(qty*rate);
-    tr.querySelector('.item-taxamt').textContent=fmt((qty*rate)*(tax/100));
-    tr.querySelector('.item-total').textContent=fmt(basic+basic*tax/100);
+    const r=_rowCalc(tr);
+    total += r.basic + r.taxAmt; tO+=r.q; tR+=r.rej; tN+=r.net;
   });
   document.getElementById('dc-grand-total').textContent = fmt(total);
+  const sEl=document.getElementById('dc-rej-summary');
+  if(sEl) sEl.innerHTML = tR>0 ? `<span style="color:var(--text2);">Total qty ${_qn(tO)}</span> &nbsp;|&nbsp; <span style="color:var(--danger);">❌ Reject ${_qn(tR)}</span> &nbsp;|&nbsp; <span style="color:var(--neon4);">✅ Bill hone wali qty ${_qn(tN)}</span>` : '';
   updateFreightPreview(total);
 }
 // Freight is shown SEPARATELY, on purpose — it is never folded into the DC's
@@ -8002,13 +8103,22 @@ function getItemsFromTable(){
     const tds = tr.querySelectorAll('td');
     const desc = tds[0].querySelector('input').value.trim();
     if(!desc) return;
-    const itemInvNo = tds[9]?.querySelector('input')?.value?.trim()||'';
+    const qRaw = tr.querySelector('.it-qty').value;
+    const origN = parseFloat(qRaw)||0;
+    const rejN = parseFloat(tr.querySelector('.it-rej').value)||0;
+    const netN = Math.max(0, origN-rejN);
+    const itemInvNo = tr.querySelector('.it-invno')?.value?.trim()||'';
     items.push({
+      iid: tr.dataset.iid || uid(),
       desc, hscode: tds[1].querySelector('input').value.trim(),
-      uom: tds[2].querySelector('select').value,
-      qty: tds[3].querySelector('input').value,
-      rate: tds[4].querySelector('input').value,
-      tax: tds[5].querySelector('input').value,
+      uom: tr.querySelector('select').value,
+      // qty = NET (billable) qty, so ledger / totals / reports / PO all follow it automatically
+      qty: rejN>0 ? String(netN) : qRaw,
+      origQty: qRaw,
+      rejQty: rejN,
+      rejNote: rejN>0 ? (tr.querySelector('.it-rejnote')?.value.trim()||'') : '',
+      rate: tr.querySelector('.it-rate').value,
+      tax: tr.querySelector('.it-tax').value,
       itemInvNo: itemInvNo||undefined
     });
   });
@@ -8163,6 +8273,12 @@ async function saveDC(){
   if(!date||!dcNo||!party){toast('Date, DC No, and Party are required!','warning');return;}
   const items = getItemsFromTable();
   if(!items.length){toast('Add at least one item!','warning');return;}
+  {
+    const badRej = items.find(it=>(parseFloat(it.rejQty)||0) > (parseFloat(it.origQty)||0));
+    if(badRej){ toast(`"${badRej.desc}": reject qty (${badRej.rejQty}) DC qty (${badRej.origQty}) se zyada nahi ho sakti`,'warning'); return; }
+  }
+  // Qty history (pehle total itna tha -> ab itna hai) — compared against the saved version of this DC
+  const _qtyChanges = applyQtyLogs(items, (editingDcIdx!==null && db[editingDcIdx]) ? (db[editingDcIdx].items||[]) : []);
   // Auto-add any new item descriptions to the master Descriptions list (with alert),
   // same idea as auto-adding a new party.
   items.forEach(it=>ensureDescInMaster(it.desc, it.hscode, it.uom));
@@ -8264,10 +8380,10 @@ async function saveDC(){
   if(editingDcIdx!==null){
     oldRec = {...db[editingDcIdx]};
     db[editingDcIdx]={...db[editingDcIdx],...rec};
-    logAudit('edit','DC/Invoice',`DC #${rec.dcNo} (${rec.partyName}) updated`, oldRec, db[editingDcIdx]);
+    logAudit('edit','DC/Invoice',`DC #${rec.dcNo} (${rec.partyName}) updated${_qtyChanges.length?' — Qty: '+_qtyChanges.join('; '):''}`, oldRec, db[editingDcIdx]);
     toast('DC updated!','success');
   }
-  else { db.push(rec); if(settings.approvalWorkflowEnabled){ rec.approvalStatus='pending_manager'; rec.approvalHistory=[{stage:'Staff', by:securityData.currentUser?securityData.currentUser.username:'Unknown', date:new Date().toISOString(), action:'created'}]; rec.readyForInv=false; } logAudit('create','DC/Invoice',`DC #${rec.dcNo} (${rec.partyName}) created`, undefined, rec); toast('DC added!','success'); }
+  else { db.push(rec); if(settings.approvalWorkflowEnabled){ rec.approvalStatus='pending_manager'; rec.approvalHistory=[{stage:'Staff', by:securityData.currentUser?securityData.currentUser.username:'Unknown', date:new Date().toISOString(), action:'created'}]; rec.readyForInv=false; } logAudit('create','DC/Invoice',`DC #${rec.dcNo} (${rec.partyName}) created${_qtyChanges.length?' — Qty: '+_qtyChanges.join('; '):''}`, undefined, rec); toast('DC added!','success'); }
   if(rec.invNo && editingDcIdx===null){ addAutoLedger(rec, db.length-1); }
   else if(rec.invNo && editingDcIdx!==null){ syncAutoLedgerFromDC(rec, oldRec); }
   syncPartiesFromDB();
@@ -8762,7 +8878,7 @@ function quickView(idx){
     html+=`<tr>
       <td>${i+1}</td>
       <td>${it.desc}</td><td>${it.hscode||'<span class="red">⚠️ Missing</span>'}</td>
-      <td>${it.uom}</td><td><strong>${it.qty}</strong></td><td>${fmt(it.rate)}</td><td>${it.tax}%</td>
+      <td>${it.uom}</td><td><strong>${it.qty}</strong>${rejTagHTML(it)}</td><td>${fmt(it.rate)}</td><td>${it.tax}%</td>
       <td style="text-align:right;">${cur} ${fmt(b)}</td>
       <td style="text-align:right;color:var(--neon5);">${cur} ${fmt(t)}</td>
       <td style="text-align:right;font-weight:700;color:var(--neon);">${cur} ${fmt(inc)}</td>
@@ -8788,6 +8904,7 @@ function quickView(idx){
       </div>`;
     }
   }
+  html+=qtyHistoryHTML(rec);
   if(rec.note) html+=`<div class="accent-box mt-8"><strong>📝 Note:</strong> ${rec.note}</div>`;
   // Show dispatch info
   if(rec.dispatch && rec.dispatch.method){
@@ -10075,7 +10192,7 @@ function renderLedger(){
             const t=b*parseFloat(it.tax||0)/100;
             iQty+=parseFloat(it.qty||0); iBasic+=b; iTax+=t; iTotal+=b+t;
             detailHtml+=`<tr><td>${ix+1}</td><td>${it.desc}</td><td>${it.hscode||'-'}</td><td>${it.uom}</td>
-              <td><strong>${it.qty}</strong></td><td>${fmt(it.rate)}</td><td>${it.tax}%</td>
+              <td><strong>${it.qty}</strong>${rejTagHTML(it)}</td><td>${fmt(it.rate)}</td><td>${it.tax}%</td>
               <td style="text-align:right;">${fmt(b)}</td><td style="text-align:right;color:var(--neon5);">${fmt(t)}</td>
               <td style="text-align:right;font-weight:700;color:var(--neon);">${fmt(b+t)}</td></tr>`;
           });
@@ -10163,7 +10280,7 @@ function viewLedgerInvoice(ledgerId){
       const b=parseFloat(it.qty||0)*parseFloat(it.rate||0);
       const t=b*parseFloat(it.tax||0)/100;
       basic+=b; tax+=t;
-      html+=`<tr><td>${it.desc}</td><td>${it.hscode||'-'}</td><td>${it.uom}</td><td>${it.qty}</td><td>${fmt(it.rate)}</td><td>${it.tax}%</td><td>${fmt(b)}</td><td>${fmt(t)}</td><td><strong>${fmt(b+t)}</strong></td></tr>`;
+      html+=`<tr><td>${it.desc}</td><td>${it.hscode||'-'}</td><td>${it.uom}</td><td>${it.qty}${rejTagHTML(it)}</td><td>${fmt(it.rate)}</td><td>${it.tax}%</td><td>${fmt(b)}</td><td>${fmt(t)}</td><td><strong>${fmt(b+t)}</strong></td></tr>`;
     });
     html+=`</tbody></table></div>
     <div style="text-align:right;margin-top:10px;font-size:13px;">
@@ -15254,7 +15371,7 @@ function cbData(input){
     (rec.items||[]).forEach((it,ii)=>{
       const qty = parseFloat(it.qty||0), rate = parseFloat(it.rate||0), tax = parseFloat(it.tax||0);
       const gross = qty*rate, taxAmt = gross*tax/100;
-      items.push({desc:cbItemDesc(rec,ii), dcDesc:it.desc||'', hscode:it.hscode||'', uom:it.uom||'', qtyTxt:String(it.qty==null?'':it.qty), rate, tax, gross, taxAmt, total:gross+taxAmt, dcNo:String(rec.dcNo||'')});
+      items.push({desc:cbItemDesc(rec,ii), dcDesc:it.desc||'', hscode:it.hscode||'', uom:it.uom||'', qtyTxt:String(it.qty==null?'':it.qty), rate, tax, gross, taxAmt, total:gross+taxAmt, dcNo:String(rec.dcNo||''), rejTxt:rejPlainText(it)});
     });
   });
   const gross = items.reduce((s,i)=>s+i.gross,0), taxAmt = items.reduce((s,i)=>s+i.taxAmt,0);
@@ -15291,7 +15408,7 @@ function cbBuildHTML(input){
   const d = cbData(input), E = _lgEsc, c = d.cur, td = 'border:1px solid #000;padding:4px 6px;';
   const showItemDc = d.multi && cbOpt('itemDc');
   const rows = d.items.map((it,i)=>`<tr>
-    <td style="${td}text-align:center;">${i+1}</td><td style="${td}">${E(it.desc)}${showItemDc?`<div style="font-size:9px;color:#555;">DC # ${E(it.dcNo)}</div>`:''}</td><td style="${td}text-align:center;">${E(it.hscode)}</td>
+    <td style="${td}text-align:center;">${i+1}</td><td style="${td}">${E(it.desc)}${showItemDc?`<div style="font-size:9px;color:#555;">DC # ${E(it.dcNo)}</div>`:''}${it.rejTxt?`<div style="font-size:9px;color:#555;">${E(it.rejTxt)}</div>`:''}</td><td style="${td}text-align:center;">${E(it.hscode)}</td>
     <td style="${td}text-align:center;">${E(it.uom)}</td><td style="${td}text-align:center;">${E(it.qtyTxt)}</td>
     <td style="${td}text-align:right;">${fmt(it.rate)}</td><td style="${td}text-align:center;">${it.tax}%</td>
     <td style="${td}text-align:right;">${fmt(it.gross)}</td><td style="${td}text-align:right;">${fmt(it.taxAmt)}</td><td style="${td}text-align:right;font-weight:bold;">${fmt(it.total)}</td></tr>`).join('');
@@ -15393,7 +15510,7 @@ function cbDrawBill(doc, input){
   doc.autoTable({
     startY:y, margin:{left:14,right:14},
     head:[['Sr#','Description','HS Code','UOM','Qty','Rate','Tax%','Gross Amt','Sales Tax','Total (Incl.)']],
-    body:d.items.map((it,i)=>[i+1, it.desc + (showItemDc ? '\nDC # '+it.dcNo : ''), it.hscode, it.uom, it.qtyTxt, fmt(it.rate), it.tax+'%', fmt(it.gross), fmt(it.taxAmt), fmt(it.total)]),
+    body:d.items.map((it,i)=>[i+1, it.desc + (showItemDc ? '\nDC # '+it.dcNo : '') + (it.rejTxt ? '\n'+it.rejTxt : ''), it.hscode, it.uom, it.qtyTxt, fmt(it.rate), it.tax+'%', fmt(it.gross), fmt(it.taxAmt), fmt(it.total)]),
     styles:{fontSize:7.5, cellPadding:1.6, lineColor:[0,0,0], lineWidth:0.15, textColor:[0,0,0]},
     headStyles:{fillColor:[235,235,235], textColor:[0,0,0], fontStyle:'bold', halign:'center', fontSize:7},
     columnStyles:{0:{cellWidth:9,halign:'center'},2:{cellWidth:17,halign:'center'},3:{cellWidth:11,halign:'center'},4:{cellWidth:11,halign:'center'},5:{cellWidth:15,halign:'right'},6:{cellWidth:11,halign:'center'},7:{cellWidth:21,halign:'right'},8:{cellWidth:18,halign:'right'},9:{cellWidth:22,halign:'right',fontStyle:'bold'}}
@@ -15705,7 +15822,7 @@ function openDCPrint(idx){
 function buildDCChallanHTML(rec){
   const items = (rec.items||[]).map((it,i)=>`<tr>
     <td style="border:1px solid #000;padding:5px 8px;text-align:center;">${i+1}</td>
-    <td style="border:1px solid #000;padding:5px 8px;">${it.desc}</td>
+    <td style="border:1px solid #000;padding:5px 8px;">${it.desc}${itemRejQty(it)>0?`<div style="font-size:11px;color:#333;margin-top:2px;">Total qty on challan: ${_qn(itemOrigQty(it))} | Rejected: ${_qn(itemRejQty(it))} | Net: ${_qn(it.qty)}${it.rejNote?" — "+it.rejNote:""}</div>`:""}</td>
     <td style="border:1px solid #000;padding:5px 8px;text-align:center;">${it.uom||''}</td>
     <td style="border:1px solid #000;padding:5px 8px;text-align:center;">${it.qty}</td>
   </tr>`).join('');
@@ -15729,6 +15846,7 @@ function buildDCChallanHTML(rec){
       </tr></thead>
       <tbody>${items}</tbody>
     </table>
+    ${dcRejTotal(rec)>0?`<div style="margin-top:8px;font-size:12px;border:1px solid #000;padding:5px 8px;"><strong>Note:</strong> Is challan ki total qty ${_qn((rec.items||[]).reduce((s,x)=>s+itemOrigQty(x),0))} thi, ${_qn(dcRejTotal(rec))} reject ho gai — baqi ${_qn((rec.items||[]).reduce((s,x)=>s+(parseFloat(x.qty)||0),0))} qty is challan ke against hai.</div>`:''}
     <div style="display:flex;justify-content:space-between;margin-top:50px;font-size:13px;">
       <div style="text-align:center;width:45%;">
         <div>Prepared By: ________________________</div>
@@ -19812,7 +19930,7 @@ function openPOTimeline(idx){
     const total = getDCTotal(x.r);
     return `<tr>
       <td>${x.r.date||'-'}</td><td>${x.r.dcNo||'-'}</td><td>${x.r.invNo||'-'}</td><td>${x.r.invDate||'-'}</td>
-      <td>${(x.r.items||[]).map(it=>`${it.desc} (${it.qty})`).join(', ')}</td>
+      <td>${(x.r.items||[]).map(it=>`${it.desc} (${it.qty}${itemRejQty(it)>0?` ❌${_qn(itemRejQty(it))} rej`:''})`).join(', ')}</td>
       <td style="text-align:right;">${cur} ${fmt(total)}</td>
     </tr>`;
   }).join('') : `<tr><td colspan="6" style="text-align:center;color:var(--text3);">No DC raised against this PO yet</td></tr>`;
@@ -20954,6 +21072,14 @@ function buildTimelineEvents(rec){
     const st = computeDispatchStatus(rec.dispatch);
     if(st==='Closed') events.push({date:null, label:'✅ Closed', detail:''});
   }
+  // Qty reject / change history (latest only by default; full history behind the toggle on the timeline)
+  (rec.items||[]).forEach(it=>{
+    const log=Array.isArray(it.qtyLog)?it.qtyLog:[];
+    (window._tlQtyAll?log:log.slice(-1)).forEach(e=>{
+      events.push({date:e.ts, label:e.kind==='reject'?(e.delta>=0?'❌ Qty Reject':'↩️ Reject Wapas'):'✏️ Qty Changed',
+        detail:`${_lgEsc(it.desc)}: pehle ${_qn(e.prevNet)} → ab ${_qn(e.net)} (Total ${_qn(e.orig)}, Reject ${_qn(e.rej)})${e.note?' — '+_lgEsc(e.note):''}${e.user?' · by '+_lgEsc(e.user):''}`});
+    });
+  });
   if(rec.cancelled) events.push({date:null, label:'❌ Cancelled', detail:''});
   // Sort by date (nulls last, in original insertion order)
   const withDate = events.filter(e=>e.date).sort((a,b)=>a.date.localeCompare(b.date));
@@ -20969,12 +21095,23 @@ function timelineEventsHTML(sorted){
       ${e.detail?`<div style="font-size:12px;color:var(--text2);">${e.detail}</div>`:''}
     </div>`).join('') || '<div style="color:var(--text3);">No timeline events found for this record.</div>';
 }
-function showRecordTimeline(idx){
+function showRecordTimeline(idx, keepToggle){
   const rec = db[idx];
   if(!rec) return;
+  if(!keepToggle) window._tlQtyAll = false;
   const sorted = buildTimelineEvents(rec);
   document.getElementById('timelineModalTitle').textContent = `🕐 Timeline — DC #${rec.dcNo} (${rec.partyName})`;
-  document.getElementById('timeline-body').innerHTML = timelineEventsHTML(sorted);
+  let head = '';
+  const rejItems = (rec.items||[]).filter(it=>itemRejQty(it)>0);
+  if(rejItems.length){
+    head += `<div style="margin:0 0 14px -2px;padding:8px 10px;background:var(--bg3);border:1px solid var(--danger);border-radius:8px;font-size:12px;">
+      <strong style="color:var(--danger);">❌ Qty Reject (abhi ki position)</strong>`+
+      rejItems.map(it=>`<div style="margin-top:3px;">${_lgEsc(it.desc)}: pehle total <b>${_qn(itemOrigQty(it))}</b> → ab <b style="color:var(--neon4);">${_qn(it.qty)}</b> (reject ${_qn(itemRejQty(it))})${it.rejNote?' — '+_lgEsc(it.rejNote):''}</div>`).join('')+`</div>`;
+  }
+  if((rec.items||[]).some(it=>Array.isArray(it.qtyLog)&&it.qtyLog.length>1)){
+    head += `<div style="margin:0 0 12px -2px;"><button class="btn btn-neon btn-xs" onclick="window._tlQtyAll=!window._tlQtyAll;showRecordTimeline(${idx},true)">${window._tlQtyAll?'🔼 Sirf latest qty change dikhayen':'📜 Purani qty history bhi dikhayen'}</button></div>`;
+  }
+  document.getElementById('timeline-body').innerHTML = head + timelineEventsHTML(sorted);
   openModal('timelineModal');
 }
 
@@ -26852,7 +26989,7 @@ loadSupplierPOData();
 var mktData = { marketingIds:[], partyMap:{}, orders:[], settings:{} };
 var mktSub = 'persons';
 var mktSelDc = new Set();
-var MKT_DEFAULT_SETTINGS = { base:'gross', basis:'all', onlyInvoiced:true, rateDc:1, rateCash:1, rateCredit:1, perEmp:{} };
+var MKT_DEFAULT_SETTINGS = { base:'gross', basis:'all', onlyInvoiced:true, rateDc:1, rateCash:1, rateCredit:1, perEmp:{}, slipSize:'thermal', slipWidth:'80', slipFont:13 };
 
 function mktNorm(){
   if(!mktData || typeof mktData!=='object') mktData = {};
@@ -27160,7 +27297,8 @@ function mktRenderSales(){
   document.getElementById('mkt-s-body').innerHTML = rows.map((r,i)=>{
     const act = r.src==='dc'
       ? `<button class="btn btn-neon btn-xs" onclick="mktShowDetail('${r.id}')">👁️</button> <button class="btn btn-xs" style="background:var(--bg3);color:var(--text2);" title="Person change" onclick="mktOpenAssign(${r.idx})">📣</button>`
-      : `<button class="btn btn-neon btn-xs" onclick="mktShowDetail('${r.id}')">👁️</button> <button class="btn btn-green btn-xs" title="Payment add" onclick="mktOpenPay('${mktJs(r.oid)}')">💰</button>`;
+      : `<button class="btn btn-neon btn-xs" onclick="mktShowDetail('${r.id}')">👁️</button> <button class="btn btn-green btn-xs" title="Payment add" onclick="mktOpenPay('${mktJs(r.oid)}')">💰</button>
+      <button class="btn btn-purple btn-xs" title="Payment Slip (Thermal / A4)" onclick="mktSlipOpen('${mktJs(r.oid)}')">🧾</button>`;
     const kindLbl = r.kind==='dc' ? '📄 DC/PO' : (r.kind==='cash' ? '💵 Cash' : '📒 Credit');
     return `<tr><td style="color:var(--text3);font-size:11px;">${i+1}</td><td style="white-space:nowrap;">${fmtDate(r.date)}</td><td>${kindLbl}</td>
       <td><strong style="color:var(--neon);">${mktEsc(r.dcNo||'-')}</strong></td><td>${mktEsc(r.poNo||'-')}</td>
@@ -27219,9 +27357,9 @@ function mktShowDetail(id){
       Amount: <strong>${fmt(total)}</strong> | Received: <strong style="color:var(--neon4);">${fmt(paid)}</strong> | Pending: <strong style="color:var(--neon3);">${fmt(Math.max(0,total-paid))}</strong>
       ${od.note?`<br>Note: ${mktEsc(od.note)}`:''}</div>`;
     html += `<div style="font-weight:700;margin-bottom:4px;">💰 Payments</div>` + ((od.payments||[]).length
-      ? `<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Mode</th><th>Note</th><th style="text-align:right;">Amount</th><th></th></tr></thead><tbody>${od.payments.map(p=>`<tr><td>${fmtDate(p.date)}</td><td>${mktEsc(p.mode||'-')}</td><td>${mktEsc(p.note||'')}</td><td style="text-align:right;">${fmt(p.amount)}</td><td><button class="btn btn-red btn-xs" onclick="mktDeletePayment('${mktJs(od.id)}','${mktJs(p.id)}')">🗑️</button></td></tr>`).join('')}</tbody></table></div>`
+      ? `<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Mode</th><th>Note</th><th style="text-align:right;">Amount</th><th></th></tr></thead><tbody>${od.payments.map(p=>`<tr><td>${fmtDate(p.date)}</td><td>${mktEsc(p.mode||'-')}</td><td>${mktEsc(p.note||'')}</td><td style="text-align:right;">${fmt(p.amount)}</td><td style="white-space:nowrap;"><button class="btn btn-purple btn-xs" title="Is receiving ki slip" onclick="closeModal('mktDetailModal');mktSlipOpen('${mktJs(od.id)}','${mktJs(p.id)}')">🧾</button> <button class="btn btn-red btn-xs" onclick="mktDeletePayment('${mktJs(od.id)}','${mktJs(p.id)}')">🗑️</button></td></tr>`).join('')}</tbody></table></div>`
       : '<div style="color:var(--text3);font-size:12px;">Abhi koi payment nahi aayi.</div>');
-    html += `<div style="margin-top:10px;"><button class="btn btn-green btn-sm" onclick="closeModal('mktDetailModal');mktOpenPay('${mktJs(od.id)}')">➕ Payment Add Karein</button></div>`;
+    html += `<div style="margin-top:10px;"><button class="btn btn-green btn-sm" onclick="closeModal('mktDetailModal');mktOpenPay('${mktJs(od.id)}')">➕ Payment Add Karein</button> <button class="btn btn-purple btn-sm" onclick="closeModal('mktDetailModal');mktSlipOpen('${mktJs(od.id)}')">🧾 Payment Slip (Thermal / A4)</button></div>`;
   }
   body.innerHTML = html; openModal('mktDetailModal');
 }
@@ -27241,6 +27379,7 @@ function mktRenderOrders(){
     <td>${mktStatusBadge(r.status)}</td>
     <td style="white-space:nowrap;"><button class="btn btn-neon btn-xs" onclick="mktShowDetail('${r.id}')">👁️</button>
       <button class="btn btn-green btn-xs" title="Payment add" onclick="mktOpenPay('${mktJs(r.oid)}')">💰</button>
+      <button class="btn btn-purple btn-xs" title="Payment Slip (Thermal / A4)" onclick="mktSlipOpen('${mktJs(r.oid)}')">🧾</button>
       <button class="btn btn-yellow btn-xs" onclick="mktOpenOrder('${mktJs(r.oid)}')">✏️</button>
       <button class="btn btn-red btn-xs" onclick="mktDeleteOrder('${mktJs(r.oid)}')">🗑️</button></td></tr>`).join('')
     || '<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:18px;">Koi order nahi. ➕ New Order se add karein.</td></tr>';
@@ -27321,13 +27460,148 @@ function mktSavePayment(){
   if(amount<=0 || !date){ toast('Date aur amount likhein','warning'); return; }
   const bal = (parseFloat(od.amount)||0)-mktOrderPaid(od);
   if(amount>bal+0.5 && !confirm(`Amount baqi (${fmt(bal)}) se zyada hai. Phir bhi save karein?`)) return;
-  (od.payments = od.payments||[]).push({id:'P'+uid(), date, amount, mode:document.getElementById('mkt-pm-mode').value, note:document.getElementById('mkt-pm-note').value.trim()});
+  const _pay = {id:'P'+uid(), date, amount, mode:document.getElementById('mkt-pm-mode').value, note:document.getElementById('mkt-pm-note').value.trim()};
+  (od.payments = od.payments||[]).push(_pay);
+  const _wantSlip = !!document.getElementById('mkt-pm-slip')?.checked;
   saveMktData(); closeModal('mktPayModal'); mktRender(); toast('Payment save ho gayi ✓','success');
+  if(_wantSlip) mktSlipOpen(od.id, _pay.id);
 }
 function mktDeletePayment(oid, pid){
   const od = mktData.orders.find(o=>o.id===oid); if(!od) return;
   if(!confirm('Ye payment delete karein?')) return;
   od.payments = (od.payments||[]).filter(p=>p.id!==pid); saveMktData(); mktRender(); mktShowDetail('od:'+oid);
+}
+
+// ---------- payment slip / receiving (Thermal + A4) ----------
+// Slip a customer can be handed: order details, every payment (date, mode, amount, balance after it),
+// total received, balance, and a big CLEARED / PENDING status. Thermal text is printed bold for clear reading.
+function mktSlipData(oid, pid){
+  const od = mktData.orders.find(o=>o.id===oid); if(!od) return null;
+  const total = parseFloat(od.amount)||0;
+  const pays = (od.payments||[]).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  let run = 0;
+  const rows = pays.map(p=>{ const a = parseFloat(p.amount)||0; run += a; return {p, a, bal:Math.max(0,total-run)}; });
+  const paid = run, bal = Math.max(0,total-paid);
+  return {od, total, rows, paid, bal, cleared:(total>0 && bal<1), hl:pid||''};
+}
+function mktSlipHTML(oid, pid, size){
+  const d = mktSlipData(oid, pid); if(!d) return '<div>Order nahi mila</div>';
+  const od = d.od, E = mktEsc, cur = settings.currency||'PKR';
+  const S = mktData.settings, th = size==='thermal';
+  const hlRow = d.rows.find(r=>r.p.id===d.hl);
+  const company = E(settings.companyName||'SAU CORPORATION');
+  const addr = E((settings.address||'').replace(/\n/g,' '));
+  const phone = E(settings.phone||'');
+  const person = E(mktEmpName(od.empId, od.empName));
+  const statusTxt = d.cleared ? '&#10004; CLEARED — PAID IN FULL' : 'PENDING';
+  const printedAt = new Date().toLocaleString();
+  if(th){
+    const w = parseInt(S.slipWidth)||80, fs = parseInt(S.slipFont)||13;
+    const line = `<div style="border-top:2px dashed #000;margin:5px 0;"></div>`;
+    const kv = (k,v,big)=>`<div style="display:flex;justify-content:space-between;gap:6px;${big?`font-size:${fs+2}px;`:''}"><span>${k}</span><span style="text-align:right;">${v}</span></div>`;
+    const pays = d.rows.length ? d.rows.map((r,i)=>`<div style="margin:4px 0;${r.p.id===d.hl?'border:2px solid #000;padding:3px;':''}">
+        <div style="display:flex;justify-content:space-between;gap:6px;"><span>${i+1}) ${E(fmtDate(r.p.date))}</span><span>${E(r.p.mode||'-')}</span></div>
+        <div style="display:flex;justify-content:space-between;gap:6px;font-size:${fs+1}px;"><span>Jama: ${fmt(r.a)}</span><span>Baqi: ${fmt(r.bal)}</span></div>
+        ${r.p.note?`<div style="font-size:${Math.max(fs-2,9)}px;">${E(r.p.note)}</div>`:''}
+        ${r.p.id===d.hl?`<div style="text-align:center;">&#9664; IS RECEIVING &#9654;</div>`:''}
+      </div>`).join('') : `<div style="text-align:center;margin:6px 0;">Abhi tak koi payment nahi aayi</div>`;
+    return `<div style="width:${w-4}mm;font-family:Arial,Helvetica,sans-serif;font-weight:bold;font-size:${fs}px;line-height:1.4;color:#000;">
+      <div style="text-align:center;font-size:${fs+4}px;">${company}</div>
+      ${addr?`<div style="text-align:center;font-size:${Math.max(fs-2,9)}px;">${addr}</div>`:''}
+      ${phone?`<div style="text-align:center;font-size:${Math.max(fs-2,9)}px;">Ph: ${phone}</div>`:''}
+      ${line}
+      <div style="text-align:center;font-size:${fs+3}px;letter-spacing:1px;">PAYMENT SLIP</div>
+      ${line}
+      ${kv('Order #', E(od.id))}
+      ${kv('Date', E(fmtDate(od.date)))}
+      ${kv('Party', E(od.party))}
+      ${od.poNo?kv('PO #', E(od.poNo)):''}
+      ${kv('Type', od.type==='cash'?'Cash':'Credit')}
+      ${kv('Taken by', person)}
+      ${od.note?`<div>Note: ${E(od.note)}</div>`:''}
+      ${line}
+      ${kv('TOTAL AMOUNT', cur+' '+fmt(d.total), true)}
+      ${line}
+      <div style="text-align:center;">--- PAYMENTS ---</div>
+      ${pays}
+      ${line}
+      ${kv('Total Received', cur+' '+fmt(d.paid), true)}
+      ${kv(d.cleared?'Balance':'BALANCE (BAQI)', cur+' '+fmt(d.bal), true)}
+      ${hlRow?`${line}${kv('Aaj ki Receiving', cur+' '+fmt(hlRow.a), true)}`:''}
+      ${line}
+      <div style="border:3px solid #000;text-align:center;padding:6px 2px;font-size:${fs+4}px;">${statusTxt}${d.cleared?'':`<div style="font-size:${fs+1}px;">Balance: ${cur} ${fmt(d.bal)}</div>`}</div>
+      <div style="margin-top:16px;display:flex;justify-content:space-between;gap:8px;font-size:${Math.max(fs-2,9)}px;"><span>Received By:<br>__________</span><span>Customer:<br>__________</span></div>
+      <div style="text-align:center;margin-top:8px;font-size:${Math.max(fs-3,8)}px;">Shukriya! | ${E(printedAt)}</div>
+    </div>`;
+  }
+  // ---- A4 ----
+  const rowsHtml = d.rows.length ? d.rows.map((r,i)=>`<tr style="${r.p.id===d.hl?'background:#e8e8e8;font-weight:bold;':''}">
+      <td style="border:1px solid #000;padding:5px 8px;text-align:center;">${i+1}</td>
+      <td style="border:1px solid #000;padding:5px 8px;">${E(fmtDate(r.p.date))}</td>
+      <td style="border:1px solid #000;padding:5px 8px;">${E(r.p.mode||'-')}</td>
+      <td style="border:1px solid #000;padding:5px 8px;">${E(r.p.note||'')}${r.p.id===d.hl?' <b>&#9664; is receiving</b>':''}</td>
+      <td style="border:1px solid #000;padding:5px 8px;text-align:right;">${fmt(r.a)}</td>
+      <td style="border:1px solid #000;padding:5px 8px;text-align:right;">${fmt(r.bal)}</td></tr>`).join('')
+    : `<tr><td colspan="6" style="border:1px solid #000;padding:10px;text-align:center;">Abhi tak koi payment nahi aayi</td></tr>`;
+  return `<div style="width:190mm;max-width:100%;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#000;">
+    <div style="text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:10px;">
+      ${settings.logoBase64?`<img src="${settings.logoBase64}" style="max-height:60px;max-width:180px;margin-bottom:4px;"><br>`:''}
+      <div style="font-size:22px;font-weight:bold;">${company}</div>
+      ${addr?`<div style="font-size:12px;">${addr}</div>`:''}${phone?`<div style="font-size:12px;">Ph: ${phone}</div>`:''}
+    </div>
+    <div style="text-align:center;font-size:20px;font-weight:bold;letter-spacing:2px;margin:8px 0 12px;">PAYMENT SLIP / RECEIVING</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:10px;"><tr>
+      <td style="padding:2px 0;"><b>Party:</b> ${E(od.party)}</td><td style="text-align:right;"><b>Order #:</b> ${E(od.id)}</td></tr><tr>
+      <td style="padding:2px 0;"><b>Order Date:</b> ${E(fmtDate(od.date))}${od.poNo?` &nbsp;|&nbsp; <b>PO #:</b> ${E(od.poNo)}`:''}</td><td style="text-align:right;"><b>Type:</b> ${od.type==='cash'?'Cash':'Credit'} &nbsp;|&nbsp; <b>Taken by:</b> ${person}</td></tr>
+      ${od.note?`<tr><td colspan="2" style="padding:2px 0;"><b>Note:</b> ${E(od.note)}</td></tr>`:''}
+    </table>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead><tr style="background:#f0f0f0;"><th style="border:1px solid #000;padding:6px 8px;width:36px;">#</th><th style="border:1px solid #000;padding:6px 8px;">Date</th><th style="border:1px solid #000;padding:6px 8px;">Mode</th><th style="border:1px solid #000;padding:6px 8px;">Note</th><th style="border:1px solid #000;padding:6px 8px;text-align:right;">Received (${cur})</th><th style="border:1px solid #000;padding:6px 8px;text-align:right;">Balance After (${cur})</th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    <table style="width:260px;margin:12px 0 0 auto;border-collapse:collapse;font-size:14px;">
+      <tr><td style="padding:3px 6px;"><b>Total Amount</b></td><td style="padding:3px 6px;text-align:right;"><b>${cur} ${fmt(d.total)}</b></td></tr>
+      <tr><td style="padding:3px 6px;"><b>Total Received</b></td><td style="padding:3px 6px;text-align:right;"><b>${cur} ${fmt(d.paid)}</b></td></tr>
+      <tr style="border-top:2px solid #000;"><td style="padding:4px 6px;font-size:16px;"><b>${d.cleared?'Balance':'Balance (Baqi)'}</b></td><td style="padding:4px 6px;text-align:right;font-size:16px;"><b>${cur} ${fmt(d.bal)}</b></td></tr>
+      ${hlRow?`<tr><td style="padding:3px 6px;"><b>Is dafa ki Receiving</b></td><td style="padding:3px 6px;text-align:right;"><b>${cur} ${fmt(hlRow.a)}</b></td></tr>`:''}
+    </table>
+    <div style="margin:16px auto 0;width:60%;border:3px solid #000;text-align:center;padding:10px;font-size:22px;font-weight:bold;letter-spacing:1px;">${statusTxt}${d.cleared?'':`<div style="font-size:15px;margin-top:3px;">Balance: ${cur} ${fmt(d.bal)}</div>`}</div>
+    <div style="display:flex;justify-content:space-between;margin-top:50px;font-size:13px;"><div>Received By: ____________________</div><div>Customer Signature: ____________________</div></div>
+    <div style="text-align:center;margin-top:14px;font-size:10px;color:#444;">Computer generated slip — ${E(printedAt)}</div>
+  </div>`;
+}
+function mktSlipOpen(oid, pid){
+  const od = mktData.orders.find(o=>o.id===oid); if(!od){ toast('Order nahi mila','error'); return; }
+  const S = mktData.settings;
+  window._mktSlip = {oid, pid:pid||'', size:S.slipSize||'thermal'};
+  document.getElementById('mkt-slip-width').value = String(S.slipWidth||'80');
+  document.getElementById('mkt-slip-font').value = String(S.slipFont||13);
+  document.getElementById('mkt-slip-title').textContent = '🧾 Payment Slip — '+od.id+' ('+od.party+')';
+  mktSlipRefresh();
+  openModal('mktSlipModal');
+}
+function mktSlipSetSize(sz){ if(!window._mktSlip) return; window._mktSlip.size = sz; mktData.settings.slipSize = sz; saveMktData(); mktSlipRefresh(); }
+function mktSlipRefresh(){
+  const c = window._mktSlip; if(!c) return;
+  const S = mktData.settings;
+  const wEl = document.getElementById('mkt-slip-width'), fEl = document.getElementById('mkt-slip-font');
+  if(wEl && fEl && (S.slipWidth!==wEl.value || String(S.slipFont)!==fEl.value)){ S.slipWidth = wEl.value; S.slipFont = parseInt(fEl.value)||13; saveMktData(); }
+  document.getElementById('mkt-slip-preview').innerHTML = mktSlipHTML(c.oid, c.pid, c.size);
+  ['thermal','a4'].forEach(k=>{ const b = document.getElementById('mkt-slip-b-'+k); if(b) b.className = 'btn btn-sm '+(c.size===k?'btn-green':'btn-neon'); });
+}
+function mktSlipPrint(size){
+  const c = window._mktSlip; if(!c) return;
+  const th = size==='thermal', w = parseInt(mktData.settings.slipWidth)||80;
+  const html = mktSlipHTML(c.oid, c.pid, size);
+  const win = window.open('','_blank');
+  if(!win){ toast('Popup block hai — browser mein popup allow karein','warning'); return; }
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Slip ${mktEsc(c.oid)}</title><style>
+    @page{size:${th?w+'mm auto':'A4 portrait'};margin:${th?'2mm':'10mm'};}
+    html,body{margin:0;padding:0;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    ${th?'body *{font-weight:bold !important;color:#000 !important;}':''}
+  </style></head><body>${html}</body></html>`);
+  win.document.close();
+  setTimeout(()=>win.print(),300);
 }
 
 // ---------- 4) commission ----------
