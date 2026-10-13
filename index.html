@@ -484,6 +484,7 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
 
     <div class="tab-group-label">Operations</div>
     <div class="tab" onclick="showTab('employees')" id="tab-employees">👔 Employees</div>
+    <div class="tab" onclick="showTab('marketing')" id="tab-marketing">📣 Marketing</div>
     <div class="tab" onclick="showTab('stock')" id="tab-stock">📦 Stock</div>
     <div class="tab" onclick="showTab('purchaseorders')" id="tab-purchaseorders">📝 Purchase Orders</div>
     <div class="tab" onclick="showTab('warehouses')" id="tab-warehouses">🏭 Warehouses</div>
@@ -1860,6 +1861,253 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
     </div>
     <div id="cr-test-result" style="margin-top:8px;font-size:13px;"></div>
   </div>
+</div>
+
+<!-- ====== MARKETING TAB (v85) ====== -->
+<div class="tab-panel" id="panel-marketing">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">📣 Marketing Management</div>
+      <div class="flex-gap" id="mkt-subtabs">
+        <button class="btn btn-sm btn-purple" data-sub="persons" onclick="mktSetSub('persons')">👥 Persons &amp; Assign</button>
+        <button class="btn btn-sm btn-neon" data-sub="sales" onclick="mktSetSub('sales')">📋 Sales</button>
+        <button class="btn btn-sm btn-neon" data-sub="orders" onclick="mktSetSub('orders')">🧾 Orders</button>
+        <button class="btn btn-sm btn-neon" data-sub="comm" onclick="mktSetSub('comm')">💰 Commission</button>
+        <button class="btn btn-sm btn-neon" data-sub="dash" onclick="mktSetSub('dash')">📊 Dashboard</button>
+      </div>
+    </div>
+
+    <!-- ===== 1) PERSONS & ASSIGN ===== -->
+    <div id="mkt-sec-persons">
+      <div class="accent-box" style="margin-bottom:12px;font-size:12px;">
+        1️⃣ Neeche employees mein se jo Marketing wala hai us ko <strong>Marketing</strong> tick karein (Employees tab mein bhi har employee ke saath 📣 button hai).<br>
+        2️⃣ Phir Records tab mein har DC/PO ke Actions mein 📣 button se us DC ka marketing person select karein, ya yahan se party / DCs select karke assign karein.
+      </div>
+
+      <div style="font-weight:700;color:var(--neon2);margin:6px 0;">👔 Employees — Marketing Person Select Karein</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Marketing</th><th>Name</th><th>Designation</th><th>Department</th><th>Assigned DCs</th><th>Orders</th></tr></thead>
+        <tbody id="mkt-persons-body"></tbody>
+      </table></div>
+
+      <div style="font-weight:700;color:var(--neon2);margin:18px 0 6px;">👥 Party Se Assign (ek party ke sab bills ek click mein)</div>
+      <div class="form-row">
+        <div class="form-group"><label>Marketing Person</label><select class="mkt-person-sel" id="mkt-pa-person"></select></div>
+        <div class="form-group"><label>Party</label><input type="text" id="mkt-pa-party" list="mkt-party-list" placeholder="Party select / type karein"><datalist id="mkt-party-list"></datalist></div>
+      </div>
+      <label style="display:block;font-size:12px;margin-bottom:4px;"><input type="checkbox" id="mkt-pa-override"> Jo DCs pehle kisi aur person ko assigned hain unhein bhi change karo</label>
+      <label style="display:block;font-size:12px;margin-bottom:8px;"><input type="checkbox" id="mkt-pa-auto" checked> Is party ke aaindah naye DCs bhi automatically isi person ko assign hon</label>
+      <button class="btn btn-green btn-sm" onclick="mktAssignParty()">✅ Party Ke Sab DCs Assign Karo</button>
+      <div id="mkt-partymap" style="margin-top:10px;"></div>
+
+      <div style="font-weight:700;color:var(--neon2);margin:18px 0 6px;">📋 DCs Khud Select Karke Assign Karein</div>
+      <div class="search-bar">
+        <select class="mkt-person-sel" id="mkt-da-person" style="width:200px;"></select>
+        <input type="text" id="mkt-da-search" placeholder="🔍 Party / DC / PO / Invoice" oninput="mktRenderDcPicker()" style="max-width:260px;">
+        <select id="mkt-da-show" onchange="mktRenderDcPicker()" style="width:190px;">
+          <option value="unassigned">Sirf Unassigned</option>
+          <option value="all">Sab DCs</option>
+          <option value="assigned">Sirf Assigned</option>
+        </select>
+        <button class="btn btn-green btn-sm" onclick="mktAssignSelectedDcs()">✅ Selected Assign</button>
+        <button class="btn btn-red btn-sm" onclick="mktUnassignSelectedDcs()">✖ Selected Unassign</button>
+      </div>
+      <div id="mkt-da-info" style="font-size:12px;color:var(--text2);margin-bottom:6px;"></div>
+      <div class="tbl-wrap" style="max-height:420px;overflow:auto;"><table>
+        <thead><tr><th><input type="checkbox" onchange="mktToggleAllDc(this)"></th><th>Date</th><th>DC No</th><th>Party</th><th>PO No</th><th>Invoice</th><th style="text-align:right;">Amount</th><th>Marketing Person</th></tr></thead>
+        <tbody id="mkt-da-body"></tbody>
+      </table></div>
+    </div>
+
+    <!-- ===== 2) SALES ===== -->
+    <div id="mkt-sec-sales" style="display:none;">
+      <div class="search-bar">
+        <select class="mkt-person-sel" data-all="1" id="mkt-s-person" onchange="mktRenderSales()" style="width:200px;"></select>
+        <input type="date" id="mkt-s-from" onchange="mktRenderSales()" title="From date">
+        <input type="date" id="mkt-s-to" onchange="mktRenderSales()" title="To date">
+        <input type="text" id="mkt-s-party" list="mkt-party-list" placeholder="Party" oninput="mktRenderSales()" style="width:150px;">
+        <select id="mkt-s-status" onchange="mktRenderSales()" style="width:130px;">
+          <option value="">Sab Status</option><option value="paid">✅ Paid</option><option value="partial">🟡 Partial</option><option value="pending">🔴 Pending</option>
+        </select>
+        <select id="mkt-s-src" onchange="mktRenderSales()" style="width:130px;">
+          <option value="">DC + Orders</option><option value="dc">Sirf DC/PO</option><option value="order">Sirf Orders</option>
+        </select>
+        <button class="btn btn-sm btn-neon" onclick="mktClearSalesFilters()">✕ Clear</button>
+        <button class="btn btn-sm btn-purple" onclick="mktExportPdf()">📄 PDF</button>
+      </div>
+      <div id="mkt-s-cards" class="form-row" style="margin-bottom:12px;"></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>#</th><th>Date</th><th>Type</th><th>DC / Order</th><th>PO No</th><th>Invoice</th><th>Party</th><th>Person</th><th style="text-align:right;">Amount</th><th style="text-align:right;">Received</th><th style="text-align:right;">Pending</th><th>Status</th><th style="text-align:right;">Commission</th><th>Action</th></tr></thead>
+        <tbody id="mkt-s-body"></tbody>
+      </table></div>
+      <div style="font-weight:700;color:var(--neon2);margin:18px 0 6px;">🏢 Party-wise Summary</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Party</th><th>Bills</th><th style="text-align:right;">Amount</th><th style="text-align:right;">Received</th><th style="text-align:right;">Pending</th></tr></thead>
+        <tbody id="mkt-s-party-body"></tbody>
+      </table></div>
+    </div>
+
+    <!-- ===== 3) ORDERS ===== -->
+    <div id="mkt-sec-orders" style="display:none;">
+      <div class="search-bar">
+        <button class="btn btn-green btn-sm" onclick="mktOpenOrder()">➕ New Order (Cash / Credit)</button>
+        <select class="mkt-person-sel" data-all="1" id="mkt-o-person" onchange="mktRenderOrders()" style="width:200px;"></select>
+        <select id="mkt-o-status" onchange="mktRenderOrders()" style="width:130px;">
+          <option value="">Sab Status</option><option value="paid">✅ Paid</option><option value="partial">🟡 Partial</option><option value="pending">🔴 Pending</option>
+        </select>
+        <select id="mkt-o-type" onchange="mktRenderOrders()" style="width:120px;">
+          <option value="">Cash + Credit</option><option value="cash">💵 Cash</option><option value="credit">📒 Credit</option>
+        </select>
+        <input type="text" id="mkt-o-search" placeholder="🔍 Party / PO / note" oninput="mktRenderOrders()" style="max-width:220px;">
+      </div>
+      <div id="mkt-o-info" style="font-size:12px;color:var(--text2);margin-bottom:6px;"></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Date</th><th>Order ID</th><th>Person</th><th>Party</th><th>PO No</th><th>Type</th><th style="text-align:right;">Amount</th><th style="text-align:right;">Received</th><th style="text-align:right;">Pending</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="mkt-o-body"></tbody>
+      </table></div>
+    </div>
+
+    <!-- ===== 4) COMMISSION ===== -->
+    <div id="mkt-sec-comm" style="display:none;">
+      <div style="font-weight:700;color:var(--neon2);margin:4px 0 6px;">⚙️ Commission Setting</div>
+      <div class="form-row">
+        <div class="form-group"><label>DC / PO par Commission %</label><input type="number" step="0.01" id="mkt-c-rateDc"></div>
+        <div class="form-group"><label>Cash Order par %</label><input type="number" step="0.01" id="mkt-c-rateCash"></div>
+        <div class="form-group"><label>Credit Order par %</label><input type="number" step="0.01" id="mkt-c-rateCredit"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Commission kis amount par</label>
+          <select id="mkt-c-base"><option value="gross">Gross (Tax ke baghair)</option><option value="total">Total (Tax samet)</option></select></div>
+        <div class="form-group"><label>Kab commission banay</label>
+          <select id="mkt-c-basis"><option value="all">Pori sale par (payment aaye ya na aaye)</option><option value="received">Sirf received payment par</option></select></div>
+      </div>
+      <label style="display:block;font-size:12px;margin-bottom:8px;"><input type="checkbox" id="mkt-c-onlyInv"> DC par commission sirf tab jab invoice ban chuka ho</label>
+
+      <div style="font-weight:600;font-size:12px;margin:8px 0 4px;">👤 Har Person Ka Alag % (khali chhorein to upar wala default lagay ga)</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Person</th><th>DC/PO %</th><th>Cash %</th><th>Credit %</th></tr></thead>
+        <tbody id="mkt-c-per"></tbody>
+      </table></div>
+      <button class="btn btn-green btn-sm" style="margin-top:8px;" onclick="mktSaveCommSettings()">💾 Setting Save Karein</button>
+
+      <div style="font-weight:700;color:var(--neon2);margin:20px 0 6px;">💰 Commission Hisab (Date to Date)</div>
+      <div class="search-bar">
+        <select class="mkt-person-sel" data-all="1" id="mkt-c-person" onchange="mktRenderComm()" style="width:200px;"></select>
+        <input type="date" id="mkt-c-from" onchange="mktRenderComm()">
+        <input type="date" id="mkt-c-to" onchange="mktRenderComm()">
+        <button class="btn btn-xs btn-neon" onclick="mktCommPreset('month')">Is Mahina</button>
+        <button class="btn btn-xs btn-neon" onclick="mktCommPreset('last')">Pichla Mahina</button>
+        <button class="btn btn-xs btn-neon" onclick="mktCommPreset('year')">Is Saal</button>
+        <button class="btn btn-xs btn-neon" onclick="mktCommPreset('all')">Sab</button>
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Person</th><th>Bills</th><th style="text-align:right;">Total Sale</th><th style="text-align:right;">Received</th><th style="text-align:right;">Pending</th><th style="text-align:right;">Commission Banti Hai</th></tr></thead>
+        <tbody id="mkt-c-body"></tbody>
+      </table></div>
+      <div id="mkt-c-detail" style="margin-top:12px;"></div>
+    </div>
+
+    <!-- ===== 5) DASHBOARD ===== -->
+    <div id="mkt-sec-dash" style="display:none;">
+      <div class="search-bar">
+        <select class="mkt-person-sel" data-all="1" id="mkt-d-person" onchange="mktRenderDash()" style="width:200px;"></select>
+        <select id="mkt-d-year" onchange="mktRenderDash()" style="width:110px;"></select>
+        <select id="mkt-d-src" onchange="mktRenderDash()" style="width:130px;">
+          <option value="">DC + Orders</option><option value="dc">Sirf DC/PO</option><option value="order">Sirf Orders</option>
+        </select>
+      </div>
+      <div id="mkt-d-cards" class="form-row" style="margin-bottom:12px;"></div>
+      <div id="mkt-d-trend" class="accent-box" style="margin-bottom:12px;"></div>
+      <div style="font-weight:700;color:var(--neon2);margin:6px 0;">📊 Har Mahine Ka Kaam (Sale vs Received)</div>
+      <div id="mkt-d-bar" style="overflow-x:auto;"></div>
+      <div style="font-weight:700;color:var(--neon2);margin:16px 0 6px;">📈 Poore Saal Ka Graph (Sale Upar Ja Rahi Hai Ya Neeche)</div>
+      <div id="mkt-d-line" style="overflow-x:auto;"></div>
+      <div class="tbl-wrap" style="margin-top:12px;"><table>
+        <thead><tr><th>Month</th><th>Bills</th><th style="text-align:right;">Sale</th><th style="text-align:right;">Received</th><th style="text-align:right;">Pending</th><th style="text-align:right;">Commission</th><th>Pichle Mahine Se</th></tr></thead>
+        <tbody id="mkt-d-body"></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+
+<!-- MARKETING: assign person to ONE DC -->
+<div class="modal-overlay" id="mktAssignModal">
+<div class="modal modal-sm">
+  <div class="modal-header"><h3>📣 Marketing Person Select Karein</h3><button class="close-btn" onclick="closeModal('mktAssignModal')">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="mkt-am-idx">
+    <div id="mkt-am-info" style="font-size:12px;color:var(--text2);margin-bottom:10px;"></div>
+    <div class="form-group"><label>Ye DC / PO kis marketing person ka hai?</label><select id="mkt-am-person"></select></div>
+    <label style="display:block;font-size:12px;"><input type="checkbox" id="mkt-am-party"> Is party ke baqi (unassigned) DCs bhi isi person ko do, aur naye DCs auto assign hon</label>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="mktSaveAssign()">💾 Save</button>
+    <button class="btn btn-neon" onclick="closeModal('mktAssignModal')">Cancel</button>
+  </div>
+</div>
+</div>
+
+<!-- MARKETING: cash / credit order -->
+<div class="modal-overlay" id="mktOrderModal">
+<div class="modal modal-md">
+  <div class="modal-header"><h3 id="mkt-om-title">🧾 New Order</h3><button class="close-btn" onclick="closeModal('mktOrderModal')">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="mkt-om-id">
+    <div class="form-row">
+      <div class="form-group"><label>Marketing Person *</label><select class="mkt-person-sel" id="mkt-om-person"></select></div>
+      <div class="form-group"><label>Date *</label><input type="date" id="mkt-om-date"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Party / Customer Name *</label><input type="text" id="mkt-om-party" list="mkt-party-list" placeholder="Party ya customer ka naam"></div>
+      <div class="form-group"><label>PO Number (optional)</label><input type="text" id="mkt-om-po"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Sale Type *</label>
+        <select id="mkt-om-type" onchange="mktOrderTypeChanged()"><option value="cash">💵 Cash</option><option value="credit">📒 Credit</option></select></div>
+      <div class="form-group"><label>Total Amount *</label><input type="number" step="0.01" id="mkt-om-amount" oninput="mktOrderTypeChanged()"></div>
+    </div>
+    <div class="accent-box" style="margin-bottom:10px;">
+      <label style="display:block;font-size:13px;margin-bottom:6px;"><input type="checkbox" id="mkt-om-paid" onchange="mktOrderPaidToggle()"> ✅ <strong>Paid</strong> — customer ne pori payment de di</label>
+      <div class="form-group" style="margin-bottom:0;"><label>Ya partial received amount (jitna mila)</label><input type="number" step="0.01" id="mkt-om-part" placeholder="0"></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px;">Paid tick na ho aur amount 0 ho to order <strong>Pending</strong> rahe ga. Baad mein payment Orders list se add kar sakte hain.</div>
+    </div>
+    <div class="form-group"><label>Note</label><textarea id="mkt-om-note" rows="2"></textarea></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="mktSaveOrder()">💾 Save Order</button>
+    <button class="btn btn-neon" onclick="closeModal('mktOrderModal')">Cancel</button>
+  </div>
+</div>
+</div>
+
+<!-- MARKETING: add payment to order -->
+<div class="modal-overlay" id="mktPayModal">
+<div class="modal modal-sm">
+  <div class="modal-header"><h3>💰 Payment Add Karein</h3><button class="close-btn" onclick="closeModal('mktPayModal')">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="mkt-pm-id">
+    <div id="mkt-pm-info" class="accent-box" style="margin-bottom:10px;font-size:12px;"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Date</label><input type="date" id="mkt-pm-date"></div>
+      <div class="form-group"><label>Amount</label><input type="number" step="0.01" id="mkt-pm-amount"></div>
+    </div>
+    <div class="form-group"><label>Mode</label><select id="mkt-pm-mode"><option>Cash</option><option>Bank</option><option>Cheque</option><option>Online</option></select></div>
+    <div class="form-group"><label>Note</label><input type="text" id="mkt-pm-note"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="mktSavePayment()">💾 Save Payment</button>
+    <button class="btn btn-neon" onclick="closeModal('mktPayModal')">Cancel</button>
+  </div>
+</div>
+</div>
+
+<!-- MARKETING: detail view -->
+<div class="modal-overlay" id="mktDetailModal">
+<div class="modal modal-md">
+  <div class="modal-header"><h3 id="mkt-dm-title">Detail</h3><button class="close-btn" onclick="closeModal('mktDetailModal')">✕</button></div>
+  <div class="modal-body" id="mkt-dm-body"></div>
+  <div class="modal-footer"><button class="btn btn-neon" onclick="closeModal('mktDetailModal')">Close</button></div>
+</div>
 </div>
 
 <!-- ====== EMPLOYEES TAB (Module 4) ====== -->
@@ -5383,7 +5631,7 @@ async function buildFullBackupData(){
     db, cheques, ledgerData:ledgerData, fbrParties, descMaster, settings, partyOpeningBalances, ledgerGroupsJson: JSON.stringify(ledgerGroups),
     digitalInvoices: diWithPdf,
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
-    savedQuotations, quotSettings, rrSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
+    savedQuotations, quotSettings, rrSettings, employees, mktData, crmData, emailHistory, emailTemplates, autoNumberSettings,
     stockItems, stockMovements, salesReturns, returnReceipts, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     fbCustomers, fbBills, fbQuotations, fbLedger, fbSettings, fbDescriptions, fbStockItems, fbStockMovements,
     documentManager: docsWithBlob,
@@ -5571,7 +5819,7 @@ function buildCloudSyncData(){
   return {
     db, cheques, ledgerData, fbrParties, descMaster, settings, partyOpeningBalances, ledgerGroupsJson: JSON.stringify(ledgerGroups),
     partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
-    savedQuotations, quotSettings, rrSettings, employees, crmData, emailHistory, emailTemplates, autoNumberSettings,
+    savedQuotations, quotSettings, rrSettings, employees, mktData, crmData, emailHistory, emailTemplates, autoNumberSettings,
     stockItems, stockMovements, salesReturns, returnReceipts, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     fbCustomers, fbBills, fbQuotations, fbLedger, fbSettings, fbDescriptions, fbStockItems, fbStockMovements,
     securityData: (typeof securityData!=='undefined'?securityData:null),
@@ -6311,6 +6559,7 @@ async function applyRestoredBackupData(data){
   }
   if(data.employees) { employees = data.employees; saveEmployees(); }
   if(data.crmData) { crmData = data.crmData; saveCrmData(); }
+  if(data.mktData) { mktData = data.mktData; saveMktData(); }
   if(data.emailHistory) { emailHistory = data.emailHistory; saveEmailHistory(); }
   if(data.emailTemplates) { emailTemplates = data.emailTemplates; saveEmailTemplatesList(); }
   if(data.autoNumberSettings) { autoNumberSettings = data.autoNumberSettings; saveAutoNumberSettingsToStorage(); }
@@ -6645,7 +6894,7 @@ const DZ_MODULES = [
   {key:'quotation',label:'💬 Quotation'},{key:'descriptions',label:'📄 Descriptions'},{key:'digitalinvoices',label:'📎 D.Invoices'},{key:'commercialbills',label:'🧾 Comm. Bills'},{key:'docmanager',label:'📁 Documents'},
   {key:'parties',label:'👥 Parties'},{key:'partylookup',label:'📨 Party Lookup'},{key:'crm',label:'🤝 CRM'},
   {key:'sendcenter',label:'📤 Send Center'},{key:'dispatch',label:'🚚 Dispatch'},
-  {key:'employees',label:'👔 Employees'},{key:'stock',label:'📦 Stock'},{key:'purchaseorders',label:'📝 Purchase Orders'},
+  {key:'employees',label:'👔 Employees'},{key:'marketing',label:'📣 Marketing'},{key:'stock',label:'📦 Stock'},{key:'purchaseorders',label:'📝 Purchase Orders'},
   {key:'warehouses',label:'🏭 Warehouses'},{key:'hscodes',label:'🏷️ HS Codes'},
   {key:'cheques',label:'🏦 Cheques'},{key:'salesreturns',label:'🔄 Sales Returns'},{key:'bank',label:'🏛️ Bank'},
   {key:'expenses',label:'💸 Expenses'},{key:'pantry',label:'🍵 Pantry'},{key:'receipts',label:'🧾 Receipts'},
@@ -7027,6 +7276,7 @@ function renderTabContent(id){
   if(id==='dispatch') { renderDispatchTab(); renderEnvelopeDispatchTab(); }
   if(id==='courierrates') { renderCourierRatesTab(); }
   if(id==='employees') { renderEmployees(); renderAttendanceDashboard(); renderSalarySlipsTable(); populateAttendanceSettingsUI(); }
+  if(id==='marketing') { mktRender(); }
   if(id==='docmanager') renderDocManager();
   if(id==='crm') renderCrmTab();
   if(id==='sendcenter') renderSendCenter();
@@ -7092,7 +7342,7 @@ const MOBILE_MORE_GROUPS = [
     {id:'courierrates',label:'Courier Rates',icon:'🚚'}
   ]},
   {label:'Operations', tabs:[
-    {id:'employees',label:'Employees',icon:'👔'},{id:'stock',label:'Stock',icon:'📦'},
+    {id:'employees',label:'Employees',icon:'👔'},{id:'marketing',label:'Marketing',icon:'📣'},{id:'stock',label:'Stock',icon:'📦'},
     {id:'warehouses',label:'Warehouses',icon:'🏭'},{id:'hscodes',label:'HS Codes',icon:'🏷️'}
   ]},
   {label:'Finance', tabs:[
@@ -7293,6 +7543,7 @@ function dcNoSortValue(dcNo){
   return m ? parseFloat(m[0]) : -Infinity;
 }
 function renderRecords(){
+  try{ if(typeof mktAutoApplyParty==='function') mktAutoApplyParty(); }catch(e){}
   populatePartyList();
   populateMonthFilter();
   const recs = getFilteredRecords();
@@ -7363,6 +7614,7 @@ function renderRecords(){
         ${rec.dispatch&&rec.dispatch.method?`<span title="${rec.dispatch.method==='leopards'?'Leopards: ':'Bilty: '}${rec.dispatch.trackingNo||''}" style="cursor:pointer;" onclick="quickView(${idx})">${rec.dispatch.method==='leopards'?'🐆':'🚛'}</span>`:''}
         <button class="btn btn-neon btn-xs" onclick="openDCPrint(${idx})" title="Print DC">🖨️</button>
         ${rec.invNo?(()=>{ const sc=getSendStatusColor(rec); const colorMap={gray:'#888',yellow:'#ffbb00',green:'#00ff9d'}; return `<button class="btn btn-xs" style="background:${colorMap[sc]};color:${sc==='gray'?'#fff':'#000'};" onclick="openSendStatusModal(${idx})" title="Send Status">📤</button>`; })():''}
+        <button class="btn btn-xs" style="background:var(--bg3);color:var(--neon5);border:1px solid var(--neon5);" onclick="mktOpenAssign(${idx})" title="${rec.mktEmpId?('Marketing: '+mktEmpName(rec.mktEmpId,rec.mktEmpName)).replace(/"/g,''):'Marketing person select karein'}">📣${rec.mktEmpId?' '+(mktEmpName(rec.mktEmpId,rec.mktEmpName)||'').split(' ')[0].replace(/[<>&"]/g,''):''}</button>
         <button class="btn btn-red btn-xs" onclick="deleteRecord(${idx})">🗑️</button>
       </td>
     </tr>`;
@@ -11423,6 +11675,7 @@ function init(){
   loadBrandPriceLists();
   loadDocumentManager();
   loadCrmData();
+  loadMktData();
   loadEmailCenter();
   loadSendLog();
   loadSalarySlips();
@@ -15597,7 +15850,7 @@ const PERM_LABELS = {
   records:'📋 Records (View/Add/Edit)',dashboard:'📊 Dashboard',ledger:'📒 Ledger',
   fbr:'🧾 FBR/Tax',reports:'📄 Reports',quotation:'💬 Quotation',parties:'👥 Parties',cheques:'🏦 Cheques',
   hscodes:'🏷️ HS Codes',tools:'🔧 Tools',settings:'⚙️ Settings',digitalinvoices:'📎 Digital Invoices',commercialbills:'🧾 Commercial Bills',
-  partylookup:'📨 Party Lookup', dispatch:'🚚 Dispatch', employees:'👔 Employees',
+  partylookup:'📨 Party Lookup', dispatch:'🚚 Dispatch', employees:'👔 Employees', marketing:'📣 Marketing',
   docmanager:'📁 Documents', crm:'🤝 CRM', sendcenter:'📤 Send Center', stock:'📦 Stock',
   purchaseorders:'📝 Purchase Orders', warehouses:'🏭 Warehouses', expenses:'💸 Expenses', pantry:'🍵 Pantry',
   bank:'🏛️ Bank', auditlog:'📜 Audit Log', aisearch:'🤖 AI Search', analytics:'📊 Analytics',
@@ -15608,7 +15861,7 @@ const ROLE_PRESETS = {
   'Super Admin': PERM_ALL,
   'Admin': PERM_ALL,
   'Accounts': ['dashboard','ledger','fbr','reports','cheques','bank','expenses','pantry','auditlog','commercialbills'],
-  'Sales': ['dashboard','records','quotation','parties','crm','sendcenter','digitalinvoices','commercialbills'],
+  'Sales': ['dashboard','records','quotation','parties','crm','sendcenter','digitalinvoices','commercialbills','marketing'],
   'Store': ['dashboard','stock','purchaseorders','warehouses','hscodes'],
   'Dispatch': ['dashboard','dispatch','records','employees','pantry'],
   'Viewer': ['dashboard','reports']
@@ -16331,7 +16584,7 @@ function renderEmployees(){
       <td>${e.name}</td><td>${e.department||'-'}</td><td>${e.designation||'-'}${onProbation?' <span style="font-size:10px;color:orange;">(Probation)</span>':''}</td><td>${e.phone||'-'}</td><td>${e.cnic||'-'}</td>
       <td>${e.salary||'-'}</td><td>${e.joining||'-'}</td><td>${statusBadges[status]||status}</td><td>${leaveDisplay}</td>
       <td><button class="btn btn-xs btn-purple" onclick="openEmployeeIdCard(${x.idx})">🪪 ID Card</button> <button class="btn btn-xs btn-neon" onclick="openSalaryHistory(${x.idx})">📈 History</button> <button class="btn btn-xs btn-neon" onclick="openAttendanceCalendar(${x.idx})">📅 Calendar</button></td>
-      <td><button class="btn btn-xs btn-neon" onclick="openEmployeeModal(${x.idx})">✏️</button> <button class="btn btn-xs btn-red" onclick="deleteEmployee(${x.idx})">🗑️</button></td>
+      <td><button class="btn btn-xs btn-neon" onclick="openEmployeeModal(${x.idx})">✏️</button> <button class="btn btn-xs ${mktIsMarketing(e.id)?'btn-green':'btn-neon'}" onclick="mktToggleMarketing('${e.id}')" title="Is employee ko Marketing person select/unselect karein">📣 ${mktIsMarketing(e.id)?'Marketing ✓':'Marketing'}</button> <button class="btn btn-xs btn-red" onclick="deleteEmployee(${x.idx})">🗑️</button></td>
     </tr>`;
   }).join('');
   renderBirthdayWidget();
@@ -26591,5 +26844,634 @@ function exportSupplierPOPDF(idxOrArg){
 // Initialise on first load so the tab, settings and auto-number are ready
 // before the user ever opens the module.
 loadSupplierPOData();
+
+// ==================== MARKETING MODULE (v85) ====================
+// Data layout:
+//  - DC records get  rec.mktEmpId / rec.mktEmpName  (so it travels with the DC in backups & cloud sync)
+//  - mktData = { marketingIds:[empId], partyMap:{party:{empId,auto}}, orders:[...], settings:{...} }
+var mktData = { marketingIds:[], partyMap:{}, orders:[], settings:{} };
+var mktSub = 'persons';
+var mktSelDc = new Set();
+var MKT_DEFAULT_SETTINGS = { base:'gross', basis:'all', onlyInvoiced:true, rateDc:1, rateCash:1, rateCredit:1, perEmp:{} };
+
+function mktNorm(){
+  if(!mktData || typeof mktData!=='object') mktData = {};
+  if(!Array.isArray(mktData.marketingIds)) mktData.marketingIds = [];
+  if(!mktData.partyMap || typeof mktData.partyMap!=='object') mktData.partyMap = {};
+  if(!Array.isArray(mktData.orders)) mktData.orders = [];
+  mktData.settings = Object.assign({}, MKT_DEFAULT_SETTINGS, mktData.settings||{});
+  if(!mktData.settings.perEmp) mktData.settings.perEmp = {};
+}
+function loadMktData(){
+  try{ const d = localStorage.getItem('sau_mkt_data'); mktData = d ? JSON.parse(d) : {}; }catch(e){ mktData = {}; }
+  mktNorm();
+}
+function saveMktData(){ mktNorm(); safeSetItem('sau_mkt_data', JSON.stringify(mktData)); }
+
+// ---------- helpers ----------
+function mktEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function mktJs(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+function mktToday(){ return new Date().toISOString().slice(0,10); }
+function mktShort(n){
+  n = Math.round(n||0); const a = Math.abs(n);
+  const t = (v,s)=> (Math.round(v*10)/10).toString().replace(/\.0$/,'')+s;
+  if(a>=1e7) return t(n/1e7,'Cr');
+  if(a>=1e5) return t(n/1e5,'L');
+  if(a>=1e3) return t(n/1e3,'k');
+  return String(n);
+}
+function mktIsMarketing(id){ return !!id && mktData.marketingIds.includes(id); }
+function mktPersons(){ return employees.filter(e=>e && e.id && mktData.marketingIds.includes(e.id)); }
+function mktEmpName(id, fallback){
+  const e = employees.find(x=>x.id===id);
+  return e ? e.name : (fallback || id || '-');
+}
+function mktRates(empId){
+  const S = mktData.settings, p = (S.perEmp||{})[empId] || {};
+  const pick = (v,d)=> (v===''||v===undefined||v===null||isNaN(parseFloat(v))) ? d : parseFloat(v);
+  return { rateDc:pick(p.rateDc,S.rateDc), rateCash:pick(p.rateCash,S.rateCash), rateCredit:pick(p.rateCredit,S.rateCredit) };
+}
+function mktStatusBadge(st){
+  if(st==='paid') return '<span class="badge badge-paid">✅ Paid</span>';
+  if(st==='partial') return '<span class="badge badge-pending">🟡 Partial</span>';
+  return '<span class="badge badge-unpaid">🔴 Pending</span>';
+}
+function mktCard(label, value, cls, sub){
+  return `<div class="stat-card ${cls||'c1'}"><div style="font-size:11px;color:var(--text3);">${label}</div><div style="font-size:17px;font-weight:800;margin-top:2px;">${value}</div>${sub?`<div style="font-size:10px;color:var(--text3);margin-top:2px;">${sub}</div>`:''}</div>`;
+}
+function mktOrderPaid(od){ return (od.payments||[]).reduce((s,p)=>s+(parseFloat(p.amount)||0),0); }
+
+// ---------- payments for a DC invoice, taken from the Ledger ----------
+function mktLedgerPaymentsFor(party, invNo){
+  const out = []; invNo = String(invNo||'').trim(); if(!invNo) return out;
+  let scope = [party]; try{ scope = lgScopeParties(party); }catch(e){}
+  ledgerData.filter(l=>l.type==='payment' && scope.includes(l.partyName)).forEach(l=>{
+    const invs = (l.invNo||'').split(',').map(s=>s.trim()).filter(Boolean);
+    if(!invs.includes(invNo)) return;
+    let amt = 0;
+    if(l.allocations && l.allocations.length){ const a = l.allocations.find(x=>x.invNo===invNo); if(a) amt = a.amount||0; }
+    else amt = ((l.amount||0)+(l.deduction||0)-(l.freight||0))/invs.length;
+    out.push({date:l.date, amount:amt, ref:l.refNo||'', mode:l.paymode||'', note:l.narration||''});
+  });
+  return out.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+}
+
+// ---------- unified sales rows (DCs + manual orders) ----------
+function mktBuildRow(r){
+  const S = mktData.settings, rates = mktRates(r.empId);
+  r.paid = Math.max(0, Math.min(r.paid||0, r.total||0));
+  r.pending = Math.max(0, (r.total||0) - r.paid);
+  r.status = (r.pending<1) ? 'paid' : (r.paid<=0.5 ? 'pending' : 'partial');
+  r.rate = r.kind==='dc' ? rates.rateDc : (r.kind==='cash' ? rates.rateCash : rates.rateCredit);
+  r.commissionable = !(r.kind==='dc' && S.onlyInvoiced && !r.invoiced);
+  let base = S.base==='total' ? r.total : r.basic;
+  if(S.basis==='received') base = r.total>0 ? base*(r.paid/r.total) : 0;
+  r.commBase = base;
+  r.commission = r.commissionable ? base*r.rate/100 : 0;
+  return r;
+}
+function mktRows(o){
+  o = o||{}; const rows = [];
+  if(!o.src || o.src==='dc'){
+    db.forEach((rec,idx)=>{
+      if(!rec.mktEmpId || rec.cancelled || rec.voidOnly) return;
+      if(o.empId && rec.mktEmpId!==o.empId) return;
+      const total = getDCTotal(rec), basic = getDCBasic(rec), invoiced = !!rec.invNo;
+      let paid = 0;
+      if(invoiced){ try{ paid = getInvoicePaidAmount(rec.partyName, rec.invNo); }catch(e){ paid = 0; } }
+      rows.push(mktBuildRow({id:'dc'+idx, src:'dc', idx, date:rec.date||'', party:rec.partyName||'', dcNo:rec.dcNo||'', poNo:rec.poNo||'',
+        invNo:rec.invNo||'', kind:'dc', empId:rec.mktEmpId, empName:mktEmpName(rec.mktEmpId, rec.mktEmpName), total, basic, paid, invoiced}));
+    });
+  }
+  if(!o.src || o.src==='order'){
+    (mktData.orders||[]).forEach(od=>{
+      if(o.empId && od.empId!==o.empId) return;
+      const total = parseFloat(od.amount)||0;
+      rows.push(mktBuildRow({id:'od:'+od.id, src:'order', oid:od.id, date:od.date||'', party:od.party||'', dcNo:od.id, poNo:od.poNo||'', invNo:'',
+        kind:od.type==='cash'?'cash':'credit', empId:od.empId, empName:mktEmpName(od.empId, od.empName), total, basic:total, paid:mktOrderPaid(od), invoiced:true}));
+    });
+  }
+  let out = rows;
+  if(o.from) out = out.filter(r=>r.date>=o.from);
+  if(o.to) out = out.filter(r=>r.date<=o.to);
+  if(o.party){ const q = o.party.toLowerCase(); out = out.filter(r=>r.party.toLowerCase().includes(q)); }
+  if(o.status) out = out.filter(r=>r.status===o.status);
+  return out.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+}
+function mktSum(rows){
+  const s = {n:rows.length, total:0, paid:0, pending:0, comm:0, unpaidCnt:0, zeroCnt:0};
+  rows.forEach(r=>{ s.total+=r.total; s.paid+=r.paid; s.pending+=r.pending; s.comm+=r.commission; if(r.status!=='paid') s.unpaidCnt++; if(r.status==='pending') s.zeroCnt++; });
+  return s;
+}
+
+// ---------- UI plumbing ----------
+function mktSetSub(sub){
+  mktSub = sub;
+  ['persons','sales','orders','comm','dash'].forEach(k=>{
+    const el = document.getElementById('mkt-sec-'+k); if(el) el.style.display = (k===sub)?'':'none';
+  });
+  document.querySelectorAll('#mkt-subtabs button').forEach(b=>{
+    b.className = 'btn btn-sm ' + (b.dataset.sub===sub ? 'btn-purple' : 'btn-neon');
+  });
+  if(sub==='comm') mktFillCommSettings();
+  mktRenderSub();
+}
+function mktRenderSub(){
+  if(mktSub==='persons'){ mktRenderPersons(); mktRenderDcPicker(); }
+  else if(mktSub==='sales') mktRenderSales();
+  else if(mktSub==='orders') mktRenderOrders();
+  else if(mktSub==='comm') mktRenderComm();
+  else if(mktSub==='dash') mktRenderDash();
+}
+function mktRender(){
+  try{ mktAutoApplyParty(); }catch(e){}
+  mktFillSelects();
+  mktSetSub(mktSub);
+}
+function mktFillSelects(){
+  // party datalist
+  const pl = document.getElementById('mkt-party-list');
+  if(pl){
+    const names = new Set(); db.forEach(r=>{ if(r.partyName) names.add(r.partyName); });
+    (fbrParties||[]).forEach(p=>{ if(p.partyName) names.add(p.partyName); });
+    pl.innerHTML = [...names].sort().map(n=>`<option value="${mktEsc(n)}">`).join('');
+  }
+  // person selects
+  const current = mktPersons().map(e=>({id:e.id,name:e.name}));
+  const hist = new Map(current.map(p=>[p.id,p.name]));
+  db.forEach(r=>{ if(r.mktEmpId && !hist.has(r.mktEmpId)) hist.set(r.mktEmpId, mktEmpName(r.mktEmpId, r.mktEmpName)); });
+  mktData.orders.forEach(o=>{ if(o.empId && !hist.has(o.empId)) hist.set(o.empId, mktEmpName(o.empId, o.empName)); });
+  document.querySelectorAll('.mkt-person-sel').forEach(sel=>{
+    const prev = sel.value, all = sel.dataset.all==='1';
+    const list = all ? [...hist].map(([id,name])=>({id,name})) : current;
+    sel.innerHTML = `<option value="">${all?'👥 Sab Marketing Persons':'-- Person Select Karein --'}</option>` +
+      list.map(p=>`<option value="${mktEsc(p.id)}">${mktEsc(p.name)}</option>`).join('');
+    if(prev && list.some(p=>p.id===prev)) sel.value = prev;
+    else if(!all && current.length===1) sel.value = current[0].id;
+  });
+}
+
+// ---------- 1) persons & assignment ----------
+function mktToggleMarketing(id){
+  if(!id) return;
+  const i = mktData.marketingIds.indexOf(id);
+  if(i>=0){ mktData.marketingIds.splice(i,1); toast('Marketing se hata diya (is ke purane assigned DCs ka record wesa hi rahe ga)','info'); }
+  else { mktData.marketingIds.push(id); toast('Marketing person select ho gaya ✓','success'); }
+  saveMktData();
+  try{ renderEmployees(); }catch(e){}
+  if(document.getElementById('panel-marketing').classList.contains('active')) mktRender();
+}
+function mktRenderPersons(){
+  const tb = document.getElementById('mkt-persons-body'); if(!tb) return;
+  if(!employees.length){ tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:14px;">Pehle Employees tab mein employees add karein</td></tr>'; return; }
+  const looks = e=>/market/i.test((e.designation||'')+' '+(e.department||''));
+  const list = employees.filter(e=>e&&e.id).slice().sort((a,b)=>(mktIsMarketing(b.id)-mktIsMarketing(a.id))||(looks(b)-looks(a)));
+  tb.innerHTML = list.map(e=>{
+    const nDc = db.filter(r=>r.mktEmpId===e.id && !r.cancelled).length;
+    const nOd = mktData.orders.filter(o=>o.empId===e.id).length;
+    return `<tr><td><input type="checkbox" ${mktIsMarketing(e.id)?'checked':''} onchange="mktToggleMarketing('${mktJs(e.id)}')"></td>
+      <td><strong>${mktEsc(e.name)}</strong>${looks(e)?' <span style="font-size:10px;color:var(--neon5);">(Marketing designation)</span>':''}</td>
+      <td>${mktEsc(e.designation||'-')}</td><td>${mktEsc(e.department||'-')}</td><td>${nDc}</td><td>${nOd}</td></tr>`;
+  }).join('');
+  // party map list
+  const pm = document.getElementById('mkt-partymap'); if(!pm) return;
+  const keys = Object.keys(mktData.partyMap);
+  pm.innerHTML = keys.length ? `<div style="font-size:12px;font-weight:600;margin-bottom:4px;">Auto-assign Parties:</div>` +
+    keys.map(k=>{ const m = mktData.partyMap[k];
+      return `<span class="badge badge-ready" style="margin:2px;">${mktEsc(k)} → ${mktEsc(mktEmpName(m.empId))}${m.auto?'':' (sirf purane)'} <a href="#" style="color:var(--neon3);margin-left:4px;" onclick="mktRemovePartyMap('${mktJs(k)}');return false;">✕</a></span>`; }).join('') : '';
+}
+function mktRemovePartyMap(party){ delete mktData.partyMap[party]; saveMktData(); mktRenderPersons(); toast('Party auto-assign hata diya','info'); }
+function mktAutoApplyParty(){
+  const pm = mktData.partyMap||{}; if(!Object.keys(pm).length) return 0;
+  let n = 0;
+  db.forEach(r=>{
+    if(r.mktEmpId || r.cancelled || r.voidOnly) return;
+    const m = pm[r.partyName];
+    if(m && m.auto && m.empId){ r.mktEmpId = m.empId; r.mktEmpName = mktEmpName(m.empId); n++; }
+  });
+  if(n){ try{ saveData(); }catch(e){} }
+  return n;
+}
+function mktAssignParty(){
+  const empId = document.getElementById('mkt-pa-person').value;
+  const party = document.getElementById('mkt-pa-party').value.trim();
+  const override = document.getElementById('mkt-pa-override').checked;
+  const auto = document.getElementById('mkt-pa-auto').checked;
+  if(!empId){ toast('Pehle marketing person select karein','warning'); return; }
+  if(!party){ toast('Party select karein','warning'); return; }
+  let n = 0;
+  db.forEach(r=>{
+    if(r.partyName!==party || r.cancelled || r.voidOnly) return;
+    if(r.mktEmpId && r.mktEmpId!==empId && !override) return;
+    if(r.mktEmpId===empId) return;
+    r.mktEmpId = empId; r.mktEmpName = mktEmpName(empId); n++;
+  });
+  mktData.partyMap[party] = {empId, auto};
+  saveMktData(); if(n) saveData();
+  toast(`${party}: ${n} DC(s) ${mktEmpName(empId)} ko assign ho gaye ✓`, 'success');
+  mktRender(); try{ renderRecords(); }catch(e){}
+}
+function mktRenderDcPicker(){
+  const tb = document.getElementById('mkt-da-body'); if(!tb) return;
+  const q = (document.getElementById('mkt-da-search').value||'').toLowerCase();
+  const show = document.getElementById('mkt-da-show').value;
+  let list = db.map((r,idx)=>({r,idx})).filter(x=>!x.r.cancelled && !x.r.voidOnly);
+  if(show==='unassigned') list = list.filter(x=>!x.r.mktEmpId);
+  else if(show==='assigned') list = list.filter(x=>x.r.mktEmpId);
+  if(q) list = list.filter(x=>[x.r.partyName,x.r.dcNo,x.r.poNo,x.r.invNo].join(' ').toLowerCase().includes(q));
+  list.sort((a,b)=>String(b.r.date||'').localeCompare(String(a.r.date||'')));
+  const total = list.length, shown = list.slice(0,300);
+  document.getElementById('mkt-da-info').textContent = `${total} DC(s) mile${total>300?' — pehle 300 dikhaye ja rahe hain, search/party se filter karein':''} | Selected: ${mktSelDc.size}`;
+  tb.innerHTML = shown.map(x=>{
+    const r = x.r;
+    return `<tr><td><input type="checkbox" ${mktSelDc.has(x.idx)?'checked':''} onchange="mktToggleDc(${x.idx},this.checked)"></td>
+      <td style="white-space:nowrap;">${fmtDate(r.date)}</td><td><strong style="color:var(--neon);">${mktEsc(r.dcNo||'-')}</strong></td>
+      <td>${mktEsc(r.partyName||'-')}</td><td>${mktEsc(r.poNo||'-')}</td><td>${mktEsc(r.invNo||'-')}</td>
+      <td style="text-align:right;">${fmt(getDCTotal(r))}</td>
+      <td>${r.mktEmpId?`<span class="badge badge-ready">${mktEsc(mktEmpName(r.mktEmpId, r.mktEmpName))}</span>`:'<span style="color:var(--text3);">—</span>'}</td></tr>`;
+  }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:14px;">Koi DC nahi mila</td></tr>';
+  window._mktVisibleDc = shown.map(x=>x.idx);
+}
+function mktToggleDc(idx, on){ if(on) mktSelDc.add(idx); else mktSelDc.delete(idx); const el = document.getElementById('mkt-da-info'); if(el) el.textContent = el.textContent.replace(/Selected: \d+/, 'Selected: '+mktSelDc.size); }
+function mktToggleAllDc(cb){ (window._mktVisibleDc||[]).forEach(i=>{ if(cb.checked) mktSelDc.add(i); else mktSelDc.delete(i); }); mktRenderDcPicker(); }
+function mktAssignSelectedDcs(){
+  const empId = document.getElementById('mkt-da-person').value;
+  if(!empId){ toast('Pehle marketing person select karein','warning'); return; }
+  if(!mktSelDc.size){ toast('Koi DC select nahi kiya','warning'); return; }
+  let n = 0; mktSelDc.forEach(i=>{ if(db[i]){ db[i].mktEmpId = empId; db[i].mktEmpName = mktEmpName(empId); n++; } });
+  saveData(); mktSelDc.clear();
+  toast(`${n} DC(s) ${mktEmpName(empId)} ko assign ho gaye ✓`,'success');
+  mktRender(); try{ renderRecords(); }catch(e){}
+}
+function mktUnassignSelectedDcs(){
+  if(!mktSelDc.size){ toast('Koi DC select nahi kiya','warning'); return; }
+  if(!confirm(`${mktSelDc.size} DC(s) ka marketing person hata dein?`)) return;
+  mktSelDc.forEach(i=>{ if(db[i]){ delete db[i].mktEmpId; delete db[i].mktEmpName; } });
+  saveData(); mktSelDc.clear(); mktRender(); try{ renderRecords(); }catch(e){}
+  toast('Unassign ho gaye','info');
+}
+
+// ---------- single-DC assign (Records → Actions → 📣) ----------
+function mktOpenAssign(idx){
+  const rec = db[idx]; if(!rec) return;
+  const persons = mktPersons();
+  if(!persons.length){ toast('Pehle Employees tab mein kisi ko 📣 Marketing select karein','warning'); return; }
+  document.getElementById('mkt-am-idx').value = idx;
+  document.getElementById('mkt-am-info').innerHTML = `DC <strong>${mktEsc(rec.dcNo||'-')}</strong> | PO: ${mktEsc(rec.poNo||'-')} | ${mktEsc(rec.partyName||'-')} | <strong>${fmt(getDCTotal(rec))}</strong>`;
+  const sel = document.getElementById('mkt-am-person');
+  sel.innerHTML = '<option value="">-- Koi nahi (unassign) --</option>' + persons.map(p=>`<option value="${mktEsc(p.id)}">${mktEsc(p.name)}</option>`).join('');
+  sel.value = rec.mktEmpId || '';
+  document.getElementById('mkt-am-party').checked = false;
+  openModal('mktAssignModal');
+}
+function mktSaveAssign(){
+  const idx = parseInt(document.getElementById('mkt-am-idx').value); const rec = db[idx]; if(!rec) return;
+  const empId = document.getElementById('mkt-am-person').value;
+  const withParty = document.getElementById('mkt-am-party').checked;
+  if(!empId){ delete rec.mktEmpId; delete rec.mktEmpName; }
+  else { rec.mktEmpId = empId; rec.mktEmpName = mktEmpName(empId); }
+  let extra = 0;
+  if(empId && withParty){
+    db.forEach(r=>{ if(r.partyName===rec.partyName && !r.mktEmpId && !r.cancelled && !r.voidOnly){ r.mktEmpId = empId; r.mktEmpName = mktEmpName(empId); extra++; } });
+    mktData.partyMap[rec.partyName] = {empId, auto:true}; saveMktData();
+  }
+  saveData(); closeModal('mktAssignModal'); renderRecords();
+  toast(empId ? `✓ ${mktEmpName(empId)} ko assign hua${extra?` (+${extra} aur DC party ke)`:''}` : 'Marketing person hata diya','success');
+  if(document.getElementById('panel-marketing').classList.contains('active')) mktRender();
+}
+
+// ---------- 2) sales ----------
+function mktSalesOpts(){
+  return { empId:document.getElementById('mkt-s-person').value, from:document.getElementById('mkt-s-from').value, to:document.getElementById('mkt-s-to').value,
+    party:document.getElementById('mkt-s-party').value.trim(), status:document.getElementById('mkt-s-status').value, src:document.getElementById('mkt-s-src').value };
+}
+function mktClearSalesFilters(){
+  ['mkt-s-person','mkt-s-from','mkt-s-to','mkt-s-party','mkt-s-status','mkt-s-src'].forEach(id=>{ document.getElementById(id).value=''; });
+  mktRenderSales();
+}
+function mktRenderSales(){
+  const rows = mktRows(mktSalesOpts()); const s = mktSum(rows);
+  const cur = settings.currency||'PKR';
+  document.getElementById('mkt-s-cards').innerHTML =
+    mktCard('Total Sale', cur+' '+fmt(s.total), 'c1', s.n+' bills / orders') +
+    mktCard('✅ Payment Aa Gayi', cur+' '+fmt(s.paid), 'c4', (s.n-s.unpaidCnt)+' bills paid') +
+    mktCard('🔴 Payment Baqi', cur+' '+fmt(s.pending), 'c3', s.unpaidCnt+' bills ki payment baqi ('+s.zeroCnt+' mein kuch nahi aaya)') +
+    mktCard('💰 Commission', cur+' '+fmt(s.comm), 'c5', 'Commission tab ki setting ke mutabiq');
+  document.getElementById('mkt-s-body').innerHTML = rows.map((r,i)=>{
+    const act = r.src==='dc'
+      ? `<button class="btn btn-neon btn-xs" onclick="mktShowDetail('${r.id}')">👁️</button> <button class="btn btn-xs" style="background:var(--bg3);color:var(--text2);" title="Person change" onclick="mktOpenAssign(${r.idx})">📣</button>`
+      : `<button class="btn btn-neon btn-xs" onclick="mktShowDetail('${r.id}')">👁️</button> <button class="btn btn-green btn-xs" title="Payment add" onclick="mktOpenPay('${mktJs(r.oid)}')">💰</button>`;
+    const kindLbl = r.kind==='dc' ? '📄 DC/PO' : (r.kind==='cash' ? '💵 Cash' : '📒 Credit');
+    return `<tr><td style="color:var(--text3);font-size:11px;">${i+1}</td><td style="white-space:nowrap;">${fmtDate(r.date)}</td><td>${kindLbl}</td>
+      <td><strong style="color:var(--neon);">${mktEsc(r.dcNo||'-')}</strong></td><td>${mktEsc(r.poNo||'-')}</td>
+      <td>${r.src==='dc'?(r.invNo?`<strong style="color:var(--neon4);">${mktEsc(r.invNo)}</strong>`:'<span style="color:var(--text3);font-size:10px;">Inv nahi</span>'):'-'}</td>
+      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${mktEsc(r.party)}">${mktEsc(r.party||'-')}</td>
+      <td>${mktEsc(r.empName)}</td><td style="text-align:right;">${fmt(r.total)}</td><td style="text-align:right;color:var(--neon4);">${fmt(r.paid)}</td>
+      <td style="text-align:right;color:var(--neon3);">${fmt(r.pending)}</td><td>${mktStatusBadge(r.status)}</td>
+      <td style="text-align:right;">${r.commissionable?fmt(r.commission):'<span style="color:var(--text3);font-size:10px;">—</span>'}</td><td style="white-space:nowrap;">${act}</td></tr>`;
+  }).join('') || '<tr><td colspan="14" style="text-align:center;color:var(--text3);padding:18px;">Koi sale nahi mili. Pehle DCs assign karein ya Orders tab mein order add karein.</td></tr>';
+  // party summary
+  const pm = {};
+  rows.forEach(r=>{ const k = r.party||'-'; const o = pm[k] || (pm[k]={n:0,total:0,paid:0,pending:0}); o.n++; o.total+=r.total; o.paid+=r.paid; o.pending+=r.pending; });
+  document.getElementById('mkt-s-party-body').innerHTML = Object.keys(pm).sort((a,b)=>pm[b].pending-pm[a].pending).map(k=>{
+    const o = pm[k]; return `<tr><td>${mktEsc(k)}</td><td>${o.n}</td><td style="text-align:right;">${fmt(o.total)}</td><td style="text-align:right;color:var(--neon4);">${fmt(o.paid)}</td><td style="text-align:right;color:var(--neon3);">${fmt(o.pending)}</td></tr>`;
+  }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:10px;">—</td></tr>';
+}
+function mktExportPdf(){
+  const rows = mktRows(mktSalesOpts());
+  if(!rows.length){ toast('Export ke liye koi data nahi','warning'); return; }
+  if(!(window.jspdf && window.jspdf.jsPDF)){ toast('PDF library load nahi hui (internet check karein)','error'); return; }
+  const o = mktSalesOpts(), s = mktSum(rows);
+  const doc = new window.jspdf.jsPDF({orientation:'landscape'});
+  doc.setFontSize(14); doc.text('Marketing Sales Statement — '+(o.empId?mktEmpName(o.empId):'All Persons'), 14, 14);
+  doc.setFontSize(9); doc.text(`Period: ${o.from||'start'} to ${o.to||'today'}   |   Total: ${fmt(s.total)}   Received: ${fmt(s.paid)}   Pending: ${fmt(s.pending)}   Commission: ${fmt(s.comm)}`, 14, 20);
+  if(typeof doc.autoTable!=='function'){ toast('PDF table plugin load nahi hua','error'); return; }
+  doc.autoTable({ startY:25, styles:{fontSize:7.5}, headStyles:{fillColor:[40,40,90]},
+    head:[['Date','Type','DC/Order','PO','Invoice','Party','Person','Amount','Received','Pending','Status','Comm.']],
+    body: rows.map(r=>[r.date, r.kind.toUpperCase(), r.dcNo, r.poNo, r.invNo, r.party, r.empName, fmt(r.total), fmt(r.paid), fmt(r.pending), r.status, r.commissionable?fmt(r.commission):'-']),
+    foot:[['','','','','','','TOTAL',fmt(s.total),fmt(s.paid),fmt(s.pending),'',fmt(s.comm)]], footStyles:{fillColor:[40,40,90]} });
+  doc.save('Marketing_Sales_'+mktToday()+'.pdf');
+}
+
+// ---------- detail modal ----------
+function mktShowDetail(id){
+  const body = document.getElementById('mkt-dm-body'), title = document.getElementById('mkt-dm-title');
+  let html = '';
+  if(id.startsWith('dc')){
+    const rec = db[parseInt(id.slice(2))]; if(!rec) return;
+    const total = getDCTotal(rec); const pays = rec.invNo ? mktLedgerPaymentsFor(rec.partyName, rec.invNo) : [];
+    const paid = pays.reduce((s,p)=>s+p.amount,0);
+    title.textContent = '📄 DC '+(rec.dcNo||'');
+    html = `<div class="accent-box" style="margin-bottom:10px;font-size:13px;line-height:1.7;">
+      <strong>${mktEsc(rec.partyName||'-')}</strong><br>Date: ${fmtDate(rec.date)} | PO: ${mktEsc(rec.poNo||'-')} | Invoice: ${mktEsc(rec.invNo||'nahi bana')}<br>
+      Marketing Person: <strong>${mktEsc(mktEmpName(rec.mktEmpId, rec.mktEmpName))}</strong><br>
+      Amount: <strong>${fmt(total)}</strong> | Received: <strong style="color:var(--neon4);">${fmt(Math.min(paid,total))}</strong> | Pending: <strong style="color:var(--neon3);">${fmt(Math.max(0,total-paid))}</strong></div>`;
+    html += `<div style="font-weight:700;margin-bottom:4px;">📒 Ledger Payments (auto sync)</div>` + (pays.length
+      ? `<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Ref</th><th>Mode</th><th style="text-align:right;">Amount</th></tr></thead><tbody>${pays.map(p=>`<tr><td>${fmtDate(p.date)}</td><td>${mktEsc(p.ref||'-')}</td><td>${mktEsc(p.mode||'-')}</td><td style="text-align:right;">${fmt(p.amount)}</td></tr>`).join('')}</tbody></table></div>`
+      : `<div style="color:var(--text3);font-size:12px;">${rec.invNo?'Is invoice ki koi payment ledger mein nahi mili.':'Invoice banne ke baad ledger payments yahan nazar aayengi.'}</div>`);
+  } else {
+    const oid = id.slice(3); const od = mktData.orders.find(o=>o.id===oid); if(!od) return;
+    const total = parseFloat(od.amount)||0, paid = mktOrderPaid(od);
+    title.textContent = '🧾 Order '+od.id;
+    html = `<div class="accent-box" style="margin-bottom:10px;font-size:13px;line-height:1.7;">
+      <strong>${mktEsc(od.party)}</strong> | ${od.type==='cash'?'💵 Cash':'📒 Credit'}<br>Date: ${fmtDate(od.date)} | PO: ${mktEsc(od.poNo||'-')}<br>
+      Marketing Person: <strong>${mktEsc(mktEmpName(od.empId, od.empName))}</strong><br>
+      Amount: <strong>${fmt(total)}</strong> | Received: <strong style="color:var(--neon4);">${fmt(paid)}</strong> | Pending: <strong style="color:var(--neon3);">${fmt(Math.max(0,total-paid))}</strong>
+      ${od.note?`<br>Note: ${mktEsc(od.note)}`:''}</div>`;
+    html += `<div style="font-weight:700;margin-bottom:4px;">💰 Payments</div>` + ((od.payments||[]).length
+      ? `<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Mode</th><th>Note</th><th style="text-align:right;">Amount</th><th></th></tr></thead><tbody>${od.payments.map(p=>`<tr><td>${fmtDate(p.date)}</td><td>${mktEsc(p.mode||'-')}</td><td>${mktEsc(p.note||'')}</td><td style="text-align:right;">${fmt(p.amount)}</td><td><button class="btn btn-red btn-xs" onclick="mktDeletePayment('${mktJs(od.id)}','${mktJs(p.id)}')">🗑️</button></td></tr>`).join('')}</tbody></table></div>`
+      : '<div style="color:var(--text3);font-size:12px;">Abhi koi payment nahi aayi.</div>');
+    html += `<div style="margin-top:10px;"><button class="btn btn-green btn-sm" onclick="closeModal('mktDetailModal');mktOpenPay('${mktJs(od.id)}')">➕ Payment Add Karein</button></div>`;
+  }
+  body.innerHTML = html; openModal('mktDetailModal');
+}
+
+// ---------- 3) orders ----------
+function mktRenderOrders(){
+  const emp = document.getElementById('mkt-o-person').value, st = document.getElementById('mkt-o-status').value;
+  const ty = document.getElementById('mkt-o-type').value, q = (document.getElementById('mkt-o-search').value||'').toLowerCase();
+  let rows = mktRows({empId:emp, src:'order', status:st});
+  if(ty) rows = rows.filter(r=>r.kind===ty);
+  if(q) rows = rows.filter(r=>[r.party,r.poNo,r.dcNo].join(' ').toLowerCase().includes(q));
+  const s = mktSum(rows);
+  document.getElementById('mkt-o-info').innerHTML = `<strong>${rows.length}</strong> orders | Total: <strong>${fmt(s.total)}</strong> | Received: <strong style="color:var(--neon4);">${fmt(s.paid)}</strong> | Pending: <strong style="color:var(--neon3);">${fmt(s.pending)}</strong>`;
+  document.getElementById('mkt-o-body').innerHTML = rows.map(r=>`<tr><td style="white-space:nowrap;">${fmtDate(r.date)}</td><td><strong style="color:var(--neon);">${mktEsc(r.oid)}</strong></td>
+    <td>${mktEsc(r.empName)}</td><td>${mktEsc(r.party)}</td><td>${mktEsc(r.poNo||'-')}</td><td>${r.kind==='cash'?'💵 Cash':'📒 Credit'}</td>
+    <td style="text-align:right;">${fmt(r.total)}</td><td style="text-align:right;color:var(--neon4);">${fmt(r.paid)}</td><td style="text-align:right;color:var(--neon3);">${fmt(r.pending)}</td>
+    <td>${mktStatusBadge(r.status)}</td>
+    <td style="white-space:nowrap;"><button class="btn btn-neon btn-xs" onclick="mktShowDetail('${r.id}')">👁️</button>
+      <button class="btn btn-green btn-xs" title="Payment add" onclick="mktOpenPay('${mktJs(r.oid)}')">💰</button>
+      <button class="btn btn-yellow btn-xs" onclick="mktOpenOrder('${mktJs(r.oid)}')">✏️</button>
+      <button class="btn btn-red btn-xs" onclick="mktDeleteOrder('${mktJs(r.oid)}')">🗑️</button></td></tr>`).join('')
+    || '<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:18px;">Koi order nahi. ➕ New Order se add karein.</td></tr>';
+}
+function mktOpenOrder(oid){
+  if(!mktPersons().length){ toast('Pehle Employees tab mein kisi ko 📣 Marketing select karein','warning'); return; }
+  mktFillSelects();
+  const od = oid ? mktData.orders.find(o=>o.id===oid) : null;
+  const box = document.getElementById('mkt-om-paid').closest('.accent-box');
+  document.getElementById('mkt-om-id').value = od ? od.id : '';
+  document.getElementById('mkt-om-title').textContent = od ? '✏️ Order Edit — '+od.id : '🧾 New Order';
+  document.getElementById('mkt-om-person').value = od ? od.empId : (document.getElementById('mkt-o-person').value || document.getElementById('mkt-om-person').value || '');
+  document.getElementById('mkt-om-date').value = od ? od.date : mktToday();
+  document.getElementById('mkt-om-party').value = od ? od.party : '';
+  document.getElementById('mkt-om-po').value = od ? (od.poNo||'') : '';
+  document.getElementById('mkt-om-type').value = od ? od.type : 'cash';
+  document.getElementById('mkt-om-amount').value = od ? od.amount : '';
+  document.getElementById('mkt-om-note').value = od ? (od.note||'') : '';
+  document.getElementById('mkt-om-paid').checked = false;
+  document.getElementById('mkt-om-part').value = ''; document.getElementById('mkt-om-part').disabled = false;
+  box.style.display = od ? 'none' : '';
+  openModal('mktOrderModal');
+}
+function mktOrderTypeChanged(){ /* reserved for future hints */ }
+function mktOrderPaidToggle(){
+  const on = document.getElementById('mkt-om-paid').checked, p = document.getElementById('mkt-om-part');
+  p.disabled = on; if(on) p.value = '';
+}
+function mktNextOrderId(){
+  let max = 0; mktData.orders.forEach(o=>{ const m = /(\d+)$/.exec(o.id||''); if(m) max = Math.max(max, parseInt(m[1])); });
+  return 'MO-'+String(max+1).padStart(4,'0');
+}
+function mktSaveOrder(){
+  const id = document.getElementById('mkt-om-id').value;
+  const empId = document.getElementById('mkt-om-person').value;
+  const date = document.getElementById('mkt-om-date').value;
+  const party = document.getElementById('mkt-om-party').value.trim();
+  const poNo = document.getElementById('mkt-om-po').value.trim();
+  const type = document.getElementById('mkt-om-type').value;
+  const amount = parseFloat(document.getElementById('mkt-om-amount').value)||0;
+  const note = document.getElementById('mkt-om-note').value.trim();
+  if(!empId){ toast('Marketing person select karein','warning'); return; }
+  if(!party || !date || amount<=0){ toast('Party, date aur amount zaroori hain','warning'); return; }
+  if(id){
+    const od = mktData.orders.find(o=>o.id===id); if(!od) return;
+    Object.assign(od, {empId, empName:mktEmpName(empId), date, party, poNo, type, amount, note});
+    toast('Order update ho gaya ✓','success');
+  } else {
+    const paidFull = document.getElementById('mkt-om-paid').checked;
+    const part = parseFloat(document.getElementById('mkt-om-part').value)||0;
+    const od = {id:mktNextOrderId(), empId, empName:mktEmpName(empId), date, party, poNo, type, amount, note, payments:[], createdAt:new Date().toISOString()};
+    const recv = paidFull ? amount : Math.min(part, amount);
+    if(recv>0) od.payments.push({id:'P'+uid(), date, amount:recv, mode:type==='cash'?'Cash':'', note:paidFull?'Paid at sale':'Received at sale'});
+    mktData.orders.push(od);
+    toast(recv>=amount-0.5 ? 'Order save — ✅ Paid' : (recv>0 ? 'Order save — 🟡 Partial' : 'Order save — 🔴 Pending'),'success');
+  }
+  saveMktData(); closeModal('mktOrderModal'); mktRender();
+}
+function mktDeleteOrder(oid){
+  const od = mktData.orders.find(o=>o.id===oid); if(!od) return;
+  if(!confirm(`Order ${oid} (${od.party}, ${fmt(od.amount)}) delete karein?`)) return;
+  mktData.orders = mktData.orders.filter(o=>o.id!==oid); saveMktData(); mktRender(); toast('Order delete ho gaya','info');
+}
+function mktOpenPay(oid){
+  const od = mktData.orders.find(o=>o.id===oid); if(!od) return;
+  const bal = Math.max(0,(parseFloat(od.amount)||0)-mktOrderPaid(od));
+  document.getElementById('mkt-pm-id').value = oid;
+  document.getElementById('mkt-pm-info').innerHTML = `<strong>${mktEsc(od.party)}</strong> (${od.id})<br>Amount: ${fmt(od.amount)} | Received: ${fmt(mktOrderPaid(od))} | <strong style="color:var(--neon3);">Baqi: ${fmt(bal)}</strong>`;
+  document.getElementById('mkt-pm-date').value = mktToday();
+  document.getElementById('mkt-pm-amount').value = bal>0 ? bal : '';
+  document.getElementById('mkt-pm-note').value = '';
+  openModal('mktPayModal');
+}
+function mktSavePayment(){
+  const od = mktData.orders.find(o=>o.id===document.getElementById('mkt-pm-id').value); if(!od) return;
+  const amount = parseFloat(document.getElementById('mkt-pm-amount').value)||0;
+  const date = document.getElementById('mkt-pm-date').value;
+  if(amount<=0 || !date){ toast('Date aur amount likhein','warning'); return; }
+  const bal = (parseFloat(od.amount)||0)-mktOrderPaid(od);
+  if(amount>bal+0.5 && !confirm(`Amount baqi (${fmt(bal)}) se zyada hai. Phir bhi save karein?`)) return;
+  (od.payments = od.payments||[]).push({id:'P'+uid(), date, amount, mode:document.getElementById('mkt-pm-mode').value, note:document.getElementById('mkt-pm-note').value.trim()});
+  saveMktData(); closeModal('mktPayModal'); mktRender(); toast('Payment save ho gayi ✓','success');
+}
+function mktDeletePayment(oid, pid){
+  const od = mktData.orders.find(o=>o.id===oid); if(!od) return;
+  if(!confirm('Ye payment delete karein?')) return;
+  od.payments = (od.payments||[]).filter(p=>p.id!==pid); saveMktData(); mktRender(); mktShowDetail('od:'+oid);
+}
+
+// ---------- 4) commission ----------
+function mktFillCommSettings(){
+  const S = mktData.settings;
+  document.getElementById('mkt-c-rateDc').value = S.rateDc; document.getElementById('mkt-c-rateCash').value = S.rateCash; document.getElementById('mkt-c-rateCredit').value = S.rateCredit;
+  document.getElementById('mkt-c-base').value = S.base; document.getElementById('mkt-c-basis').value = S.basis; document.getElementById('mkt-c-onlyInv').checked = !!S.onlyInvoiced;
+  const per = S.perEmp||{};
+  const ps = mktPersons();
+  document.getElementById('mkt-c-per').innerHTML = ps.length ? ps.map(p=>{ const v = per[p.id]||{};
+    return `<tr><td>${mktEsc(p.name)}</td>
+      <td><input type="number" step="0.01" data-emp="${mktEsc(p.id)}" data-k="rateDc" value="${v.rateDc??''}" placeholder="default" style="width:90px;"></td>
+      <td><input type="number" step="0.01" data-emp="${mktEsc(p.id)}" data-k="rateCash" value="${v.rateCash??''}" placeholder="default" style="width:90px;"></td>
+      <td><input type="number" step="0.01" data-emp="${mktEsc(p.id)}" data-k="rateCredit" value="${v.rateCredit??''}" placeholder="default" style="width:90px;"></td></tr>`; }).join('')
+    : '<tr><td colspan="4" style="text-align:center;color:var(--text3);">Koi marketing person select nahi</td></tr>';
+}
+function mktSaveCommSettings(){
+  const S = mktData.settings, num = id=>{ const v = parseFloat(document.getElementById(id).value); return isNaN(v)?0:v; };
+  S.rateDc = num('mkt-c-rateDc'); S.rateCash = num('mkt-c-rateCash'); S.rateCredit = num('mkt-c-rateCredit');
+  S.base = document.getElementById('mkt-c-base').value; S.basis = document.getElementById('mkt-c-basis').value; S.onlyInvoiced = document.getElementById('mkt-c-onlyInv').checked;
+  const per = {};
+  document.querySelectorAll('#mkt-c-per input[data-emp]').forEach(inp=>{
+    if(inp.value==='') return; const e = inp.dataset.emp; (per[e] = per[e]||{})[inp.dataset.k] = parseFloat(inp.value);
+  });
+  S.perEmp = per; saveMktData(); toast('Commission setting save ho gayi ✓','success'); mktRenderComm();
+}
+function mktCommPreset(p){
+  const now = new Date(), y = now.getFullYear(), m = now.getMonth();
+  const iso = d=>new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+  let f='', t='';
+  if(p==='month'){ f = iso(new Date(y,m,1)); t = iso(new Date(y,m+1,0)); }
+  else if(p==='last'){ f = iso(new Date(y,m-1,1)); t = iso(new Date(y,m,0)); }
+  else if(p==='year'){ f = y+'-01-01'; t = y+'-12-31'; }
+  document.getElementById('mkt-c-from').value = f; document.getElementById('mkt-c-to').value = t; mktRenderComm();
+}
+function mktRenderComm(){
+  const emp = document.getElementById('mkt-c-person').value, from = document.getElementById('mkt-c-from').value, to = document.getElementById('mkt-c-to').value;
+  const ids = emp ? [emp] : [...new Set([...mktData.marketingIds, ...db.filter(r=>r.mktEmpId).map(r=>r.mktEmpId), ...mktData.orders.map(o=>o.empId)])];
+  let gt = {n:0,total:0,paid:0,pending:0,comm:0}, html = '';
+  ids.forEach(id=>{
+    const s = mktSum(mktRows({empId:id, from, to}));
+    if(!s.n && !emp) return;
+    gt.n+=s.n; gt.total+=s.total; gt.paid+=s.paid; gt.pending+=s.pending; gt.comm+=s.comm;
+    html += `<tr><td><strong>${mktEsc(mktEmpName(id))}</strong></td><td>${s.n}</td><td style="text-align:right;">${fmt(s.total)}</td><td style="text-align:right;color:var(--neon4);">${fmt(s.paid)}</td><td style="text-align:right;color:var(--neon3);">${fmt(s.pending)}</td><td style="text-align:right;font-weight:800;color:var(--neon2);">${fmt(s.comm)}</td></tr>`;
+  });
+  if(html) html += `<tr style="font-weight:800;border-top:2px solid var(--neon2);"><td>TOTAL</td><td>${gt.n}</td><td style="text-align:right;">${fmt(gt.total)}</td><td style="text-align:right;">${fmt(gt.paid)}</td><td style="text-align:right;">${fmt(gt.pending)}</td><td style="text-align:right;color:var(--neon2);">${fmt(gt.comm)}</td></tr>`;
+  document.getElementById('mkt-c-body').innerHTML = html || '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:14px;">Is period mein koi sale nahi</td></tr>';
+  const det = document.getElementById('mkt-c-detail');
+  if(emp){
+    const rows = mktRows({empId:emp, from, to});
+    det.innerHTML = `<div style="font-weight:700;margin-bottom:4px;">🧾 ${mktEsc(mktEmpName(emp))} — Bill by Bill Commission</div><div class="tbl-wrap"><table>
+      <thead><tr><th>Date</th><th>Type</th><th>DC / Order</th><th>Party</th><th style="text-align:right;">Amount</th><th style="text-align:right;">Received</th><th style="text-align:right;">Commission Base</th><th>%</th><th style="text-align:right;">Commission</th></tr></thead><tbody>` +
+      (rows.map(r=>`<tr><td>${fmtDate(r.date)}</td><td>${r.kind==='dc'?'DC/PO':(r.kind==='cash'?'Cash':'Credit')}</td><td>${mktEsc(r.dcNo)}</td><td>${mktEsc(r.party)}</td><td style="text-align:right;">${fmt(r.total)}</td><td style="text-align:right;">${fmt(r.paid)}</td><td style="text-align:right;">${r.commissionable?fmt(r.commBase):'—'}</td><td>${r.commissionable?r.rate+'%':'—'}</td><td style="text-align:right;font-weight:700;">${r.commissionable?fmt(r.commission):'<span style="color:var(--text3);font-size:10px;">Invoice nahi</span>'}</td></tr>`).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--text3);">—</td></tr>') + '</tbody></table></div>';
+  } else det.innerHTML = '<div style="font-size:11px;color:var(--text3);">Bill-by-bill detail dekhne ke liye upar se kisi ek person ko select karein.</div>';
+}
+
+// ---------- 5) dashboard & charts ----------
+var MKT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function mktRenderDash(){
+  const emp = document.getElementById('mkt-d-person').value, src = document.getElementById('mkt-d-src').value;
+  const all = mktRows({empId:emp, src});
+  const ySel = document.getElementById('mkt-d-year'); const curY = String(new Date().getFullYear());
+  const years = [...new Set([curY, ...all.map(r=>(r.date||'').slice(0,4)).filter(y=>/^\d{4}$/.test(y))])].sort().reverse();
+  const prevY = ySel.value;
+  ySel.innerHTML = years.map(y=>`<option value="${y}">${y}</option>`).join('');
+  ySel.value = years.includes(prevY) ? prevY : curY;
+  const year = ySel.value, cur = settings.currency||'PKR';
+  const months = MKT_MONTHS.map((l,i)=>({label:l, n:0, sales:0, recv:0, pend:0, comm:0}));
+  all.filter(r=>(r.date||'').slice(0,4)===year).forEach(r=>{
+    const mi = parseInt(r.date.slice(5,7))-1; if(mi<0||mi>11) return;
+    const m = months[mi]; m.n++; m.sales+=r.total; m.recv+=r.paid; m.pend+=r.pending; m.comm+=r.commission;
+  });
+  const lastIdx = (year===curY) ? new Date().getMonth() : 11;
+  const act = months.slice(0,lastIdx+1);
+  const tot = months.reduce((a,m)=>({n:a.n+m.n,sales:a.sales+m.sales,recv:a.recv+m.recv,pend:a.pend+m.pend,comm:a.comm+m.comm}),{n:0,sales:0,recv:0,pend:0,comm:0});
+  const withSales = act.filter(m=>m.sales>0);
+  const best = withSales.length ? withSales.reduce((a,b)=>b.sales>a.sales?b:a) : null;
+  const low = withSales.length ? withSales.reduce((a,b)=>b.sales<a.sales?b:a) : null;
+  document.getElementById('mkt-d-cards').innerHTML =
+    mktCard(year+' Total Sale', cur+' '+fmt(tot.sales), 'c1', tot.n+' bills / orders') +
+    mktCard('Received', cur+' '+fmt(tot.recv), 'c4') + mktCard('Pending', cur+' '+fmt(tot.pend), 'c3') +
+    mktCard('Commission', cur+' '+fmt(tot.comm), 'c5') +
+    mktCard('Sab se Acha Mahina', best?best.label+' — '+mktShort(best.sales):'-', 'c2') +
+    mktCard('Sab se Kam Mahina', low?low.label+' — '+mktShort(low.sales):'-', 'c6');
+  // trend (least squares over elapsed months)
+  const ys = act.map(m=>m.sales), n = ys.length, mean = ys.reduce((a,b)=>a+b,0)/(n||1);
+  let slope = 0;
+  if(n>=2){ const xm=(n-1)/2; let num=0,den=0; ys.forEach((y,i)=>{ num+=(i-xm)*(y-mean); den+=(i-xm)*(i-xm); }); slope = den? num/den : 0; }
+  const rel = mean>0 ? slope/mean : 0; let msg;
+  if(!tot.sales) msg = '➖ Is saal abhi koi sale nahi.';
+  else if(n<2) msg = '➖ Trend ke liye kam az kam 2 mahine ka data chahiye.';
+  else if(rel>0.03) msg = `📈 <strong style="color:var(--neon4);">Sale upar ja rahi hai</strong> — har mahine taqreeban ${mktShort(slope)} ka izafa.`;
+  else if(rel<-0.03) msg = `📉 <strong style="color:var(--neon3);">Sale neeche aa rahi hai</strong> — har mahine taqreeban ${mktShort(-slope)} ki kami.`;
+  else msg = '➖ <strong>Sale lagbhag barabar</strong> chal rahi hai.';
+  const lastM = act[act.length-1], prevM = act[act.length-2];
+  if(prevM && prevM.sales>0 && lastM) { const ch = (lastM.sales-prevM.sales)/prevM.sales*100; msg += ` | ${lastM.label} vs ${prevM.label}: <strong>${ch>=0?'+':''}${ch.toFixed(1)}%</strong>`; }
+  document.getElementById('mkt-d-trend').innerHTML = msg;
+  document.getElementById('mkt-d-bar').innerHTML = mktBarSvg(months);
+  document.getElementById('mkt-d-line').innerHTML = mktLineSvg(months, lastIdx, slope, mean);
+  document.getElementById('mkt-d-body').innerHTML = months.map((m,i)=>{
+    const p = i>0 ? months[i-1] : null; let ch = '-';
+    if(p && p.sales>0 && m.sales>=0 && i<=lastIdx){ const c = (m.sales-p.sales)/p.sales*100; ch = `<span style="color:${c>=0?'var(--neon4)':'var(--neon3)'};">${c>=0?'▲ +':'▼ '}${c.toFixed(1)}%</span>`; }
+    return `<tr><td><strong>${m.label} ${year}</strong></td><td>${m.n}</td><td style="text-align:right;">${fmt(m.sales)}</td><td style="text-align:right;color:var(--neon4);">${fmt(m.recv)}</td><td style="text-align:right;color:var(--neon3);">${fmt(m.pend)}</td><td style="text-align:right;">${fmt(m.comm)}</td><td>${ch}</td></tr>`;
+  }).join('');
+}
+function mktBarSvg(months){
+  const W=780,H=300,pl=48,pr=10,pt=26,pb=34, cw=W-pl-pr, ch=H-pt-pb;
+  const max = Math.max(1, ...months.map(m=>Math.max(m.sales,m.recv)));
+  const gw = cw/12, bw = gw*0.34;
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:620px;max-width:${W}px;height:auto;" xmlns="http://www.w3.org/2000/svg">`;
+  for(let i=0;i<=4;i++){
+    const y = pt+ch-ch*i/4;
+    s += `<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" style="stroke:var(--border);stroke-width:1"/><text x="${pl-6}" y="${y+3}" text-anchor="end" style="fill:var(--text3);font-size:9px">${mktShort(max*i/4)}</text>`;
+  }
+  s += `<rect x="${pl}" y="6" width="9" height="9" style="fill:var(--neon)"/><text x="${pl+13}" y="14" style="fill:var(--text2);font-size:10px">Sale</text><rect x="${pl+60}" y="6" width="9" height="9" style="fill:var(--neon4)"/><text x="${pl+73}" y="14" style="fill:var(--text2);font-size:10px">Received</text>`;
+  months.forEach((m,i)=>{
+    const gx = pl+gw*i, h1 = ch*m.sales/max, h2 = ch*m.recv/max, x1 = gx+gw*0.12, x2 = x1+bw+2;
+    s += `<rect x="${x1}" y="${pt+ch-h1}" width="${bw}" height="${h1}" rx="2" style="fill:var(--neon)"><title>${m.label}: Sale ${fmt(m.sales)}</title></rect>`;
+    s += `<rect x="${x2}" y="${pt+ch-h2}" width="${bw}" height="${h2}" rx="2" style="fill:var(--neon4)"><title>${m.label}: Received ${fmt(m.recv)}</title></rect>`;
+    if(m.sales>0) s += `<text x="${x1+bw/2}" y="${pt+ch-h1-3}" text-anchor="middle" style="fill:var(--text);font-size:8.5px;font-weight:700">${mktShort(m.sales)}</text>`;
+    s += `<text x="${gx+gw/2}" y="${H-pb+14}" text-anchor="middle" style="fill:var(--text2);font-size:10px">${m.label}</text>`;
+  });
+  return s + '</svg>';
+}
+function mktLineSvg(months, lastIdx, slope, mean){
+  const W=780,H=280,pl=48,pr=16,pt=22,pb=34, cw=W-pl-pr, ch=H-pt-pb;
+  const vis = months.slice(0,lastIdx+1);
+  const max = Math.max(1, ...vis.map(m=>m.sales));
+  const X = i => pl + cw*(i+0.5)/12, Y = v => pt+ch-ch*v/max;
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:620px;max-width:${W}px;height:auto;" xmlns="http://www.w3.org/2000/svg">`;
+  for(let i=0;i<=4;i++){ const y = pt+ch-ch*i/4; s += `<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" style="stroke:var(--border)"/><text x="${pl-6}" y="${y+3}" text-anchor="end" style="fill:var(--text3);font-size:9px">${mktShort(max*i/4)}</text>`; }
+  months.forEach((m,i)=>{ s += `<text x="${X(i)}" y="${H-pb+14}" text-anchor="middle" style="fill:var(--text2);font-size:10px">${m.label}</text>`; });
+  if(vis.length>=2){
+    const n = vis.length, xm=(n-1)/2, a = mean - slope*xm;
+    const clamp = v=>Math.max(0,Math.min(max,v));
+    s += `<line x1="${X(0)}" y1="${Y(clamp(a))}" x2="${X(n-1)}" y2="${Y(clamp(a+slope*(n-1)))}" style="stroke:var(--neon5);stroke-width:2;stroke-dasharray:6 4"/>`;
+    s += `<polyline fill="none" style="stroke:var(--neon);stroke-width:2.5" points="${vis.map((m,i)=>X(i)+','+Y(m.sales)).join(' ')}"/>`;
+  }
+  vis.forEach((m,i)=>{
+    s += `<circle cx="${X(i)}" cy="${Y(m.sales)}" r="4" style="fill:var(--neon)"><title>${m.label}: ${fmt(m.sales)}</title></circle>`;
+    if(m.sales>0) s += `<text x="${X(i)}" y="${Y(m.sales)-8}" text-anchor="middle" style="fill:var(--text);font-size:8.5px;font-weight:700">${mktShort(m.sales)}</text>`;
+  });
+  s += `<text x="${W-pr}" y="12" text-anchor="end" style="fill:var(--neon5);font-size:10px">- - - trend line</text>`;
+  return s + '</svg>';
+}
 </script>
 </body></html>
