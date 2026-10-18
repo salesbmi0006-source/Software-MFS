@@ -4812,6 +4812,11 @@ Switch Socket"></textarea>
         <input type="number" id="led-deduction" placeholder="0.00" oninput="markDedTouched();updateLedFreightSummary();">
         <div id="led-deduction-hint" style="font-size:11px;color:var(--text3);margin-top:4px;"></div>
       </div>
+      <div class="form-group" id="led-dn-wrap">
+        <label>📝 Debit Note <span style="font-weight:400;color:var(--text3);">(optional — isi bill ke against; bill Paid ho jayegi)</span></label>
+        <input type="number" id="led-debitnote" placeholder="0.00" oninput="ledDnChanged()">
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">Credit side par jata hai, deduction ki tarah bill settle karta hai. Alag Debit Note entry ki zaroorat nahi.</div>
+      </div>
       <div class="form-group" id="led-freight-wrap">
         <label>🚚 Freight Charges <span style="font-weight:400;color:var(--text3);">(jo cheque ki total amount mein shaamil hain)</span></label>
         <input type="number" id="led-freight" placeholder="0.00" oninput="markFreightTouched();updateLedFreightSummary();">
@@ -10203,9 +10208,13 @@ function renderLedger(){
         if(billTotal>0) base = billTotal;
       }
       if(frt>0.5) base = base - frt;
-      if(ded>0.5 && base>0){
-        const pct=(ded/base*100);
-        descCell += `<div style="font-size:10px;color:var(--neon5);">✂️ ${pct.toFixed(2)}% cut (${fmt(ded)}) — ${fmt(e.amount)} received${paymodeLabel?' via '+paymodeLabel:''}</div>`;
+      const _dnE = e.debitNoteAmt||0, _dedOnlyE = Math.max(0, ded-_dnE);
+      if(_dnE>0.5) descCell += `<div style="font-size:10px;color:#1fbf75;">📝 Debit Note ${fmt(_dnE)} adjust hua — ${fmt(e.amount)} received${paymodeLabel?' via '+paymodeLabel:''}</div>`;
+      if(_dedOnlyE>0.5 && base>0){
+        const pct=(_dedOnlyE/base*100);
+        descCell += `<div style="font-size:10px;color:var(--neon5);">✂️ ${pct.toFixed(2)}% cut (${fmt(_dedOnlyE)}) — ${fmt(e.amount)} received${paymodeLabel?' via '+paymodeLabel:''}</div>`;
+      } else if(_dnE>0.5){
+        // debit note already explained above
       } else if(base>0){
         descCell += `<div style="font-size:10px;color:#1fbf75;">✅ Full amount received${paymodeLabel?' via '+paymodeLabel:''} — no deduction</div>`;
       }
@@ -10241,7 +10250,7 @@ function renderLedger(){
       <td>${invCell}</td>
       <td style="max-width:220px;">${descCell}</td>
       <td style="text-align:right;">${debit>0?fmt(debit):''}</td>
-      <td style="text-align:right;color:var(--neon4);">${credit>0?fmt(credit):''}${ded>0?`<div style="font-size:10px;color:var(--neon5);font-weight:400;">➖ Ded: ${fmt(ded)}</div>`:''}</td>
+      <td style="text-align:right;color:var(--neon4);">${credit>0?fmt(credit):''}${(ded-(e.debitNoteAmt||0))>0.5?`<div style="font-size:10px;color:var(--neon5);font-weight:400;">➖ Ded: ${fmt(ded-(e.debitNoteAmt||0))}</div>`:''}${(e.debitNoteAmt||0)>0.5?`<div style="font-size:10px;color:#1fbf75;font-weight:400;">📝 Debit Note: ${fmt(e.debitNoteAmt)}</div>`:''}</td>
       <td style="text-align:right;font-weight:700;color:${balance<0?'var(--neon4)':'var(--neon3)'};">${fmt(Math.abs(balance))} ${balance<0?'CR':'DR'}</td>
       <td style="white-space:nowrap;">
         <button class="btn btn-xs lg-tick-btn${isTicked?' on':''}" onclick="lgToggleTick(this,'${e.id}')" title="Manual ledger se match ho gaya? Tick karein (row highlight ho jayegi)">${isTicked?'✔':'☐'}</button>
@@ -10551,7 +10560,7 @@ function lgUpdateSearchInfo(v){
 function openNewLedgerEntry(){
   document.getElementById('led-edit-idx').value='';
   document.getElementById('ledgerModalTitle').textContent='📒 Add Ledger Entry';
-  ['led-ref','led-inv','led-amount','led-deduction','led-narration','led-bank','led-freight','led-freight-note'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
+  ['led-ref','led-inv','led-amount','led-deduction','led-debitnote','led-narration','led-bank','led-freight','led-freight-note'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
   _dedManuallyEdited = false;
   _freightManuallyEdited = false;
   ledGstReset();
@@ -10590,7 +10599,8 @@ function editLedgerEntry(id){
   document.getElementById('led-ref').value=e.refNo||'';
   document.getElementById('led-inv').value=e.invNo||'';
   document.getElementById('led-amount').value=e.amount||'';
-  document.getElementById('led-deduction').value=e.deduction||0;
+  document.getElementById('led-deduction').value=Math.max(0,(e.deduction||0)-(e.debitNoteAmt||0));
+  document.getElementById('led-debitnote').value=e.debitNoteAmt||'';
   if(document.getElementById('led-freight')) document.getElementById('led-freight').value=e.freight||'';
   if(document.getElementById('led-freight-note')) document.getElementById('led-freight-note').value=e.freightNote||'';
   document.getElementById('led-narration').value=e.narration||e.desc||'';
@@ -10616,7 +10626,9 @@ function saveLedgerEntry(){
   const type=document.getElementById('led-type').value;
   const ref=document.getElementById('led-ref').value;
   const amount=parseFloat(document.getElementById('led-amount').value)||0;
-  const deduction=parseFloat(document.getElementById('led-deduction').value)||0;
+  const _dedOnly=parseFloat(document.getElementById('led-deduction').value)||0;
+  const _dn=(type==='payment')?(parseFloat(document.getElementById('led-debitnote').value)||0):0;
+  const deduction=_dedOnly+_dn;   // debit note settles the bill exactly like a deduction
   // Freight only makes sense on a payment — it's the slice of the cheque that
   // covered freight/bilty rather than the bills themselves.
   const freightRaw=parseFloat(document.getElementById('led-freight')?document.getElementById('led-freight').value:0)||0;
@@ -10667,7 +10679,7 @@ function saveLedgerEntry(){
     isEdit=true;
     const before = {...entry};
     entry.partyName=party; entry.date=date; entry.type=type; entry.refNo=ref;
-    entry.invNo=inv; entry.desc=narration; entry.amount=amount; entry.deduction=deduction;
+    entry.invNo=inv; entry.desc=narration; entry.amount=amount; entry.deduction=deduction; entry.debitNoteAmt=_dn;
     entry.narration=narration; entry.paymode=paymode; entry.status=status; entry.bankName=bankName;
     entry.allocations=allocations;
     entry.freight=freight; entry.freightNote=freightNote;
@@ -10676,7 +10688,7 @@ function saveLedgerEntry(){
     entry.gstHold=gstHold; entry.gstHoldDetails=gstHoldDetails;
     logAudit('edit','Ledger',`${type} entry for ${party} — amount ${amount} updated`, before, entry);
   } else {
-    entry = {id:'L'+uid(),partyName:party,date,type,refNo:ref,invNo:inv,dcNo:'',desc:narration,amount,deduction,freight,freightNote,narration,paymode,status,bankName,allocations,attachment:_ledgerAttachment,unitName,gstHold,gstHoldDetails};
+    entry = {id:'L'+uid(),partyName:party,date,type,refNo:ref,invNo:inv,dcNo:'',desc:narration,amount,deduction,debitNoteAmt:_dn,freight,freightNote,narration,paymode,status,bankName,allocations,attachment:_ledgerAttachment,unitName,gstHold,gstHoldDetails};
     ledgerData.push(entry);
     initApprovalForEntity('ledger', entry);
     logAudit('create','Ledger',`${type} entry for ${party} — amount ${amount}`, undefined, entry);
@@ -11740,6 +11752,7 @@ function generateLedgerPDF(partyVal, detailMode, from, to, unitVal){
       if(e.status) desc += (desc?' | ':'')+'Status: '+(statusLabel[e.status]||e.status);
       if(frt>0.5) desc += (desc?' | ':'')+'Freight in cheque: '+fmt(frt)+(e.freightNote?' ('+e.freightNote+')':'');
     }
+    if(e.type==='payment' && e.debitNoteAmt>0.5) desc += (desc?' | ':'')+'Debit Note adjusted: '+fmt(e.debitNoteAmt);
     if(e.type==='payment' && e.gstHold>0.5) desc += (desc?' | ':'')+'GST Hold: '+fmt(e.gstHold)+' (Bill '+(e.gstHoldDetails||[]).map(d=>'#'+d.invNo).join(', ')+') - party ne GST nahi di';
     if(isDebit && e.dcFreight>0.5) desc += (desc?' | ':'')+'DC Freight: '+fmt(e.dcFreight)+' (not in bill)';
     desc += lgPdfTags(e, sel);
@@ -18585,6 +18598,11 @@ function getInvoiceBillTotal(partyName, invNo){
 // Reset to false whenever the Add/Edit Ledger Entry modal is (re)opened.
 let _dedManuallyEdited = false;
 function markDedTouched(){ _dedManuallyEdited = true; }
+function ledDnChanged(){
+  const inv=(document.getElementById('led-inv').value||'').split(',').map(x=>x.trim()).filter(Boolean);
+  try{ autoFillDeduction(inv); }catch(e){}
+  updateLedFreightSummary();
+}
 // Single-invoice case: cheque/cash amount + deduction should together cover the
 // invoice. If the amount entered is less than the invoice total, auto-suggest the
 // gap as the Deduction (still editable — this is a suggestion, not a lock).
@@ -18603,7 +18621,8 @@ function autoFillDeduction(invoices){
   // before working out how much of the invoice the cheque actually covered.
   const freight = parseFloat(document.getElementById('led-freight')?document.getElementById('led-freight').value:0)||0;
   const towardsBill = amount - freight;
-  const gap = billTotal - towardsBill;
+  const _dnv = parseFloat((document.getElementById('led-debitnote')||{}).value)||0;
+  const gap = billTotal - towardsBill - _dnv;
   const freightNote = freight>0.5 ? ` (freight ${fmt(freight)} nikal kar)` : '';
   if(gap > 0.5){
     hintEl.textContent = `Invoice #${invoices[0]} total: ${fmt(billTotal)} — suggested deduction: ${fmt(gap)}${freightNote}`;
@@ -18652,7 +18671,7 @@ function updateLedFreightSummary(){
   if(!box) return;
   const type = document.getElementById('led-type') ? document.getElementById('led-type').value : '';
   const amount = parseFloat(document.getElementById('led-amount').value)||0;
-  const ded = parseFloat(document.getElementById('led-deduction').value)||0;
+  const ded = (parseFloat(document.getElementById('led-deduction').value)||0) + (parseFloat((document.getElementById('led-debitnote')||{}).value)||0);
   const freight = parseFloat(document.getElementById('led-freight')?document.getElementById('led-freight').value:0)||0;
   if(type!=='payment' || (!freight && !ded) || !amount){ box.style.display='none'; box.innerHTML=''; return; }
   const cur = settings.currency||'PKR';
