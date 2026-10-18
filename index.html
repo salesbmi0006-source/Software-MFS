@@ -691,6 +691,7 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
         <option value="summary">Without Details (Summary)</option>
         <option value="with_details">With All Details</option>
       </select>
+      <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:4px 8px;border:1px dashed #f5a623;border-radius:8px;" title="Jin DCs ki invoice abhi nahi bani unhein ledger (aur PDF) mein bhi dikhayein — balance par koi asar nahi"><input type="checkbox" id="ledgerPendingDcQuick" onchange="lgSetPendingOpt('ledgerShowPendingDC',this.checked)"> 📋 Bina-invoice DCs</label>
       <button class="btn btn-neon btn-sm" onclick="clearLedgerFilters()">✕ Clear</button>
       <button class="btn btn-yellow btn-sm" onclick="lgClearTicks()" title="Is ledger ke SAB tick/highlight ek click mein hata dein — ledger apni purani halat mein">🧹 Untick All</button>
       <button class="btn btn-purple btn-sm" onclick="exportLedgerPDF()">📄 PDF</button>
@@ -4846,25 +4847,42 @@ Switch Socket"></textarea>
 </div>
 </div>
 
-<!-- QUICK INVOICE MODAL (ledger-only invoice) -->
+<!-- QUICK INVOICE MODAL (ledger-only invoice; v88: optional "proper DC" mode) -->
 <div class="modal-overlay" id="quickInvModal">
-<div class="modal modal-md">
+<div class="modal modal-lg">
   <div class="modal-header"><h3 id="qi-title">⚡ Quick Invoice (sirf Ledger ke liye)</h3><button class="close-btn" onclick="closeModal('quickInvModal')">✕</button></div>
   <div class="modal-body">
     <input type="hidden" id="qi-edit-id">
-    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">DC banaye baghair invoice ledger mein save hoti hai. Records tab mein search karne par "⚡ Quick Invoice" ke naam se nazar aayegi.</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">DC banaye baghair invoice ledger mein save hoti hai. Records tab mein search karne par "⚡ Quick Invoice" ke naam se nazar aayegi. Agar poori DC wali details bhi dalni hain to neeche <strong>"Proper DC wali sab details"</strong> on karein.</div>
     <div class="form-row">
       <div class="form-group"><label>Party</label><select id="qi-party"><option value="">Select...</option></select></div>
       <div class="form-group"><label>Date</label><input type="date" id="qi-date"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Invoice # *</label><input type="text" id="qi-inv" placeholder="e.g. 619"></div>
-      <div class="form-group"><label>DC # (optional)</label><input type="text" id="qi-dc" placeholder="e.g. 2031"></div>
+      <div class="form-group"><label>DC # <span id="qi-dc-opt" style="font-weight:400;color:var(--text3);">(optional)</span></label><input type="text" id="qi-dc" placeholder="e.g. 2031"></div>
       <div class="form-group"><label>PO # (optional)</label><input type="text" id="qi-po" placeholder="e.g. PO-455"></div>
     </div>
-    <div class="form-group"><label>Amount * <span style="font-weight:400;color:var(--text3);">(total likhein, ya jama kar ke jaise 50000+66112)</span></label>
+    <div class="form-group"><label>Amount * <span id="qi-amt-hint" style="font-weight:400;color:var(--text3);">(total likhein, ya jama kar ke jaise 50000+66112)</span></label>
       <input type="text" id="qi-amt" placeholder="116112" oninput="qiShowSum()"><div id="qi-sum" style="font-size:12px;margin-top:4px;color:var(--neon4);"></div></div>
     <div class="form-group"><label>Note (optional)</label><input type="text" id="qi-note" placeholder="Note..."></div>
+    <div style="border-top:1px dashed var(--bg3);margin-top:12px;padding-top:12px;">
+      <div class="toggle-wrap"><label class="toggle"><input type="checkbox" id="qi-proper" onchange="qiToggleProper()"><span class="toggle-slider"></span></label><label style="margin:0;font-weight:700;">📋 Proper DC wali sab details bhi dalni hain</label></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px;line-height:1.5;">On karne par ye bilkul normal DC ki tarah save hogi (Records, Stock, PO, FBR/Tax report aur Ledger sab mein) — items, HS code, tax waghera ke saath. Off rakhein to pehle ki tarah sirf ledger entry banegi.</div>
+      <div id="qi-proper-box" style="display:none;margin-top:10px;">
+        <div class="form-row">
+          <div class="form-group"><label>Unit (optional)</label><input type="text" id="qi-unit" placeholder="e.g. HD-2"></div>
+          <div class="form-group"><label>Invoice Month (optional)</label><input type="month" id="qi-invmonth" title="Normal DC ki tarah ledger date is mahine ki 1 tareekh ban jati hai. Khali chhorein to upar wali Date use hogi."></div>
+        </div>
+        <div class="tbl-wrap"><table class="items-table"><thead><tr>
+          <th>Description</th><th>HS Code</th><th>UOM</th><th>Qty</th><th>Rate</th><th>Tax%</th><th>Total</th><th></th>
+        </tr></thead><tbody id="qi-items-body"></tbody></table></div>
+        <div class="flex-gap" style="margin-top:8px;justify-content:space-between;align-items:center;">
+          <button type="button" class="btn btn-neon btn-sm" onclick="qiAddItemRow()">➕ Add Item</button>
+          <div id="qi-items-total" style="font-weight:800;color:var(--neon);"></div>
+        </div>
+      </div>
+    </div>
   </div>
   <div class="modal-footer">
     <button class="btn btn-green" onclick="saveQuickInvoice()">💾 Save Invoice</button>
@@ -4878,6 +4896,11 @@ Switch Socket"></textarea>
 <div class="modal modal-md">
   <div class="modal-header"><h3>⚙️ Ledger Settings</h3><button class="close-btn" onclick="closeModal('ledgerSettingsModal')">✕</button></div>
   <div class="modal-body">
+    <div style="font-size:13px;font-weight:700;color:#f5a623;margin-bottom:4px;">📋 DCs jin ki Invoice abhi nahi bani</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.5;">Jo DCs ban chuki hain lekin un ki invoice abhi nahi bani (Pending / Ready for Invoice), unhein ledger mein alag highlighted row ke tor par dikha sakte hain. Ye sirf <strong>information</strong> hai — in ki amount Balance / Outstanding / Total Bills mein <strong>shaamil nahi</strong> hoti. Invoice ban jane par ye row khud normal Bill ban jati hai.</div>
+    <div class="toggle-wrap" style="margin-bottom:8px;"><label class="toggle"><input type="checkbox" id="lgs-show-pdc" onchange="lgSetPendingOpt('ledgerShowPendingDC',this.checked)"><span class="toggle-slider"></span></label><label style="margin:0;">Ledger mein bina-invoice DCs bhi dikhayein</label></div>
+    <div class="toggle-wrap" style="margin-bottom:14px;"><label class="toggle"><input type="checkbox" id="lgs-pdf-pdc" onchange="lgSetPendingOpt('ledgerPdfPendingDC',this.checked)"><span class="toggle-slider"></span></label><label style="margin:0;">Ledger PDF mein bhi un ka record shaamil karein</label></div>
+    <div style="border-top:1px solid var(--bg3);margin-bottom:12px;"></div>
     <div style="font-size:13px;font-weight:700;color:var(--neon2);margin-bottom:4px;">🔗 Combine Parties — ek ledger banayein</div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.5;">Jin parties ka ledger ek chahiye unhein tick karein aur <strong>Combine</strong> dabayein. In ki tamam purani aur aainda ki entries ek hi ledger mein dikhengi (jaise Interloop Faisalabad + Interloop Lahore). Ye sirf ek view hai — koi entry change nahi hoti, is liye kabhi bhi <strong>Uncombine</strong> kar ke dobara alag kar sakte hain.</div>
     <div class="form-row">
@@ -9784,6 +9807,7 @@ function lgsAllParties(){
 }
 function openLedgerSettings(){
   lgsReset();
+  lgsSyncPendingOpts();
   openModal('ledgerSettingsModal');
 }
 function lgsReset(){
@@ -9904,10 +9928,106 @@ function lgsUncombine(gi){
 }
 
 // ==================== LEDGER ====================
+// ==================== LEDGER v88: DCs WITHOUT INVOICE + PAID STATUS IN DETAILS ====================
+// DCs that exist but have no invoice yet. Display-only: they never touch ledgerData, balance, outstanding or totals.
+function lgPendingDCEntries(sel, unitVal, from, to){
+  if(!sel || !settings.ledgerShowPendingDC) return [];
+  const parties = sel.parties || [];
+  const want = unitVal==='__none__' ? '' : (unitVal||'');
+  const out = [];
+  (db||[]).forEach((r,idx)=>{
+    if(!r || !r.dcNo || !parties.includes(r.partyName)) return;
+    if(r.cancelled || r.voidOnly) return;
+    if(String(r.invNo||'').trim()) return;
+    if(from && (r.date||'')<from) return;
+    if(to && (r.date||'')>to) return;
+    if(unitVal){
+      const k = lgUnitKey(r.unitName);
+      const key = k ? (sel.isGroup ? r.partyName+'\u0002'+k : k) : '';
+      if(key!==want) return;
+    }
+    out.push({id:'PDC#'+idx, _pendingDC:true, _dbIdx:idx, type:'pending_dc', date:r.date||'', dcNo:r.dcNo, poNo:r.poNo||'',
+      partyName:r.partyName, refNo:r.dcNo, invNo:'', amount:getDCTotal(r), ready:!!r.readyForInv, note:r.note||'',
+      items:r.items||[], desc:'DC '+r.dcNo, narration:'', _unitTag: lgCleanUnit(r.unitName)});
+  });
+  return out;
+}
+function lgPendingRowHtml(e, sel){
+  const cur = settings.currency||'PKR';
+  const st = e.ready ? '<span style="color:#1fbf75;font-weight:800;">🟢 Ready for invoice</span>' : '<span style="color:#f5a623;font-weight:800;">🟡 Pending</span>';
+  return `<tr style="background:rgba(245,166,35,.08);border-left:3px dashed #f5a623;">
+    <td>${fmtDate(e.date)}</td>
+    <td><span class="badge" style="background:rgba(245,166,35,.22);color:#f5a623;">📋 DC</span></td>
+    <td>${_lgEsc(e.dcNo)}</td>
+    <td><span style="color:#f5a623;font-weight:800;" title="Is DC ki invoice abhi nahi bani">⏳ Invoice nahi bani</span><div style="font-size:10px;">${st}</div></td>
+    <td style="max-width:220px;"><strong>DC:${_lgEsc(e.dcNo)}</strong>${e.poNo?' | PO:'+_lgEsc(e.poNo):''}<div style="font-size:10px;color:var(--text2);">${(e.items||[]).length} item(s) — Est. ${cur} ${fmt(e.amount)} <span style="color:var(--text3);">(balance mein shaamil nahi)</span></div>${e.note?'<div style="font-size:10px;color:var(--text3);">'+_lgEsc(e.note)+'</div>':''}${lgRowTags(e, sel)}</td>
+    <td></td><td></td>
+    <td style="text-align:right;color:var(--text3);font-size:11px;">— invoice ke baad</td>
+    <td style="white-space:nowrap;"><button class="btn btn-neon btn-xs" onclick="quickView(${e._dbIdx})" title="DC dekhein">🔍</button></td>
+  </tr>`;
+}
+function lgPendingDetailCard(e, cur){
+  const rec = db[e._dbIdx];
+  const items = rec ? (rec.items||[]) : (e.items||[]);
+  let iQty=0,iBasic=0,iTax=0,iTotal=0;
+  let h = `<div class="card" style="margin-bottom:10px;border-left:3px dashed #f5a623;">
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+      <div><strong style="color:#f5a623;">DC: ${_lgEsc(e.dcNo)}</strong> <span style="color:#f5a623;font-weight:800;">⏳ Invoice abhi nahi bani</span> | Date: ${fmtDate(e.date)} | PO: ${_lgEsc(e.poNo||'-')} | Party: ${_lgEsc(e.partyName)}${e._unitTag?' | Unit: '+_lgEsc(e._unitTag):''}</div>
+      <div class="flex-gap"><button class="btn btn-neon btn-xs" onclick="quickView(${e._dbIdx})">🔍 View</button></div>
+    </div>
+    <div class="tbl-wrap"><table class="items-table"><thead><tr>
+      <th>#</th><th>Description</th><th>HS Code</th><th>UOM</th><th>Qty</th><th>Rate</th><th>Tax%</th><th>Gross</th><th>Tax</th><th>Incl Tax</th>
+    </tr></thead><tbody>`;
+  items.forEach((it,ix)=>{
+    const b=parseFloat(it.qty||0)*parseFloat(it.rate||0);
+    const t=b*parseFloat(it.tax||0)/100;
+    iQty+=parseFloat(it.qty||0); iBasic+=b; iTax+=t; iTotal+=b+t;
+    h+=`<tr><td>${ix+1}</td><td>${it.desc}</td><td>${it.hscode||'-'}</td><td>${it.uom}</td>
+      <td><strong>${it.qty}</strong>${rejTagHTML(it)}</td><td>${fmt(it.rate)}</td><td>${it.tax}%</td>
+      <td style="text-align:right;">${fmt(b)}</td><td style="text-align:right;color:var(--neon5);">${fmt(t)}</td>
+      <td style="text-align:right;font-weight:700;color:var(--neon);">${fmt(b+t)}</td></tr>`;
+  });
+  h+=`</tbody><tfoot><tr style="background:var(--bg3);font-weight:800;">
+    <td colspan="4" style="text-align:right;">TOTAL (Est.):</td><td>${fmt(iQty)}</td><td></td><td></td>
+    <td style="text-align:right;">${cur} ${fmt(iBasic)}</td><td style="text-align:right;color:var(--neon5);">${cur} ${fmt(iTax)}</td>
+    <td style="text-align:right;color:var(--neon);">${cur} ${fmt(iTotal)}</td></tr></tfoot></table></div></div>`;
+  return h;
+}
+// Paid / Partial / Unpaid badge + payment lines for one bill (used under "Invoice Item Details")
+function lgInvStatus(e, paidMap, payRefs){
+  const inv = String(e.invNo||'').trim();
+  const total = e.amount||0;
+  if(!inv || total<=0.5) return {badge:'', lines:''};
+  const paid = paidMap[inv]||0;
+  let badge;
+  if(paid >= total-0.5) badge = '<span style="color:#1fbf75;font-weight:800;margin-left:6px;" title="Fully paid">✅ Paid</span>';
+  else if(paid > 0.5) badge = `<span style="color:#f5a623;font-weight:800;margin-left:6px;" title="Partially paid">🟡 Partial (${fmt(paid)}/${fmt(total)}) — Baaqi ${fmt(total-paid)}</span>`;
+  else badge = '<span style="color:var(--neon3);font-weight:800;margin-left:6px;">🔴 Unpaid</span>';
+  const gh = (typeof getInvoiceGstHold==='function') ? getInvoiceGstHold(e.partyName, inv) : 0;
+  if(gh>0.5) badge += ` <span style="color:#e67e22;font-weight:800;">🟠 GST Hold ${fmt(gh)}</span>`;
+  const modeLbl = {cash:'💵 Cash',cheque:'🏦 Cheque',bank_transfer:'🏧 Bank Transfer',online:'📲 Online',other:'✏️ Other'};
+  const stLbl = {pending:' ⏳pending', bounced:' ❌bounced'};
+  const refs = (payRefs && payRefs[inv]) || [];
+  const lines = refs.length ? `<div style="font-size:11px;color:var(--text2);margin:0 0 8px;">💰 <strong>Payment:</strong> ${refs.map(r=>`${fmtDate(r.date)} · ${_lgEsc(r.ref||'-')}${r.mode?' · '+(modeLbl[r.mode]||r.mode):''} · <strong style="color:var(--neon4);">${fmt(r.amt)}</strong>${r.ded>0.5?' <span style="color:var(--neon5);">(ded '+fmt(r.ded)+')</span>':''}${stLbl[r.status]||''}`).join(' &nbsp;|&nbsp; ')}</div>` : '';
+  return {badge, lines};
+}
+function lgsSyncPendingOpts(){
+  const a=document.getElementById('lgs-show-pdc'), b=document.getElementById('lgs-pdf-pdc'), c=document.getElementById('ledgerPendingDcQuick');
+  if(a) a.checked = !!settings.ledgerShowPendingDC;
+  if(b){ b.checked = settings.ledgerPdfPendingDC!==false; b.disabled = !settings.ledgerShowPendingDC; }
+  if(c) c.checked = !!settings.ledgerShowPendingDC;
+}
+function lgSetPendingOpt(key, val){
+  settings[key] = !!val;
+  safeSetItem('sau_settings', JSON.stringify(settings));
+  lgsSyncPendingOpts();
+  try{ renderLedger(); }catch(e){}
+}
 function renderLedgerPartyList(){
   populatePartyList();
 }
 function renderLedger(){
+  const _pdcQuick = document.getElementById('ledgerPendingDcQuick'); if(_pdcQuick) _pdcQuick.checked = !!settings.ledgerShowPendingDC;
   const selVal = document.getElementById('ledgerPartySelect').value;
   const sel = lgResolveSelection(selVal);              // a single party OR a combined ledger
   const party = sel ? sel.label : '';
@@ -9963,6 +10083,8 @@ function renderLedger(){
   // so the tick stays correct.
   const scopeAll = an.inScope;
   const paidAmountMap = {};
+  const payRefsByInv = {};   // invoice no -> [{date,ref,mode,amt,ded,status}] (shown under "Invoice Item Details")
+  const _addPayRef = (no, l, amt, ded)=>{ (payRefsByInv[no]=payRefsByInv[no]||[]).push({date:l.date, ref:l.refNo, mode:l.paymode, amt:amt, ded:ded||0, status:l.status}); };
   // Bill amount per invoice number — used below to split an
   // unallocated multi-invoice payment (comma separated invNo, e.g. "500,501")
   // in proportion to what each invoice actually billed, instead of a flat
@@ -9983,20 +10105,20 @@ function renderLedger(){
     // first — otherwise an invoice would look over-paid by exactly the freight amount.
     const net = (l.amount||0) + (l.deduction||0) - (l.freight||0);
     if(l.allocations && l.allocations.length){
-      l.allocations.forEach(a=>{ paidAmountMap[a.invNo] = (paidAmountMap[a.invNo]||0) + (a.amount||0); });
+      l.allocations.forEach(a=>{ paidAmountMap[a.invNo] = (paidAmountMap[a.invNo]||0) + (a.amount||0); _addPayRef(String(a.invNo).trim(), l, a.amount||0, 0); });
     } else if(invoicesOfL.length>1){
       const totalDue = invoicesOfL.reduce((s,no)=> s+(billAmountByInv[no]||0), 0);
       if(totalDue>0){
         invoicesOfL.forEach(no=>{
           const weight = (billAmountByInv[no]||0)/totalDue;
-          paidAmountMap[no] = (paidAmountMap[no]||0) + net*weight;
+          paidAmountMap[no] = (paidAmountMap[no]||0) + net*weight; _addPayRef(no, l, net*weight, 0);
         });
       } else {
         const share = net / invoicesOfL.length;
-        invoicesOfL.forEach(no=>{ paidAmountMap[no] = (paidAmountMap[no]||0) + share; });
+        invoicesOfL.forEach(no=>{ paidAmountMap[no] = (paidAmountMap[no]||0) + share; _addPayRef(no, l, share, 0); });
       }
     } else {
-      paidAmountMap[invoicesOfL[0]] = (paidAmountMap[invoicesOfL[0]]||0) + net;
+      paidAmountMap[invoicesOfL[0]] = (paidAmountMap[invoicesOfL[0]]||0) + net; _addPayRef(invoicesOfL[0], l, net, l.deduction||0);
     }
   });
   // "Previous Balance" always shows first, above every other row, regardless of date/search filters
@@ -10035,7 +10157,19 @@ function renderLedger(){
       <td></td>
     </tr>`;
   }).join('');
-  const rows = entries.map(e=>{
+  // v88: DCs jin ki invoice abhi nahi bani — sirf display rows (balance par asar nahi)
+  let pendRows = lgPendingDCEntries(sel, unitVal, from, to);
+  if(pendRows.length){
+    if(typeFilter || paymodeFilter || tickFilter==='ticked') pendRows = [];
+    else {
+      if(searchRaw) pendRows = pendRows.filter(e=>lgEntryMatchesSearch(e, searchField, searchRaw));
+      if(!isNaN(amtMin)) pendRows = pendRows.filter(e=>e.amount>=amtMin);
+      if(!isNaN(amtMax)) pendRows = pendRows.filter(e=>e.amount<=amtMax);
+    }
+  }
+  const displayEntries = entries.concat(pendRows).sort((a,b)=> (a.date||'').localeCompare(b.date||'') || ((a._pendingDC?1:0)-(b._pendingDC?1:0)) || (a.id||'').localeCompare(b.id||''));
+  const rows = displayEntries.map(e=>{
+    if(e._pendingDC) return lgPendingRowHtml(e, sel);
     const isDebit = e.type==='bill'||e.type==='debit_note';
     const debit = isDebit?e.amount:0;
     // Credit column shows the actual cheque/cash amount received; the Deduction
@@ -10133,6 +10267,14 @@ function renderLedger(){
   }
   gstBar.style.display = totalGstHold>0.5 ? '' : 'none';
   gstBar.innerHTML = totalGstHold>0.5 ? `<strong style="color:#e67e22;">🟠 GST Hold Total: ${cur} ${fmt(totalGstHold)}</strong><div style="color:var(--text2);margin-top:3px;">${gstHoldRows.map(r=>`Bill #${r.invNo} (${fmt(r.bill)}) → ${fmt(r.amount)} <span style="color:var(--text3);">[${r.ref||'-'}, ${fmtDate(r.date)}]</span>`).join(' &nbsp;|&nbsp; ')}</div>` : '';
+  let pdcBar = document.getElementById('ledgerPendingDcBar');
+  if(!pdcBar){
+    pdcBar = document.createElement('div'); pdcBar.id='ledgerPendingDcBar';
+    pdcBar.style.cssText='font-size:12px;background:rgba(245,166,35,.10);border:1px solid #f5a623;border-radius:8px;padding:8px 10px;margin:0 0 8px;';
+    const _t2=document.getElementById('ledgerTbody').closest('table'); _t2.parentElement.insertBefore(pdcBar,_t2);
+  }
+  pdcBar.style.display = pendRows.length ? '' : 'none';
+  pdcBar.innerHTML = pendRows.length ? `<strong style="color:#f5a623;">📋 ${pendRows.length} DC(s) ki invoice abhi nahi bani — Est. ${cur} ${fmt(pendRows.reduce((t,x)=>t+(x.amount||0),0))}</strong> <span style="color:var(--text3);">(sirf information — Balance / Outstanding mein shaamil nahi)</span><div style="color:var(--text2);margin-top:3px;">${pendRows.map(r=>`DC ${_lgEsc(r.dcNo)} <span style="color:var(--text3);">(${fmt(r.amount)})</span>`).join(' &nbsp;|&nbsp; ')}</div>` : '';
   filterWarnEl.textContent = filtersActive ? '⚠️ Search/Type/Payment Mode/Amount/Tick filter active — running Balance column reflects only the filtered rows, not the full account.' : '';
   window._lgLastView = {shown: entries, all: built.entries, q: searchRaw, field: searchField};
   lgUpdateSearchInfo(window._lgLastView);
@@ -10156,6 +10298,7 @@ function renderLedger(){
     <div class="ledger-sum-card lsc2"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(totalPaid)}</div><div style="font-size:11px;color:var(--text2);">Total Paid</div></div>
     <div class="ledger-sum-card lsc3"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(totalDed)}</div><div style="font-size:11px;color:var(--text2);">Deductions</div></div>
     ${totalGstHold>0.5?`<div class="ledger-sum-card lsc3" style="border-top-color:#e67e22;"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(totalGstHold)}</div><div style="font-size:11px;color:var(--text2);">🟠 GST Hold</div></div>`:''}
+    ${pendRows.length?`<div class="ledger-sum-card lsc3" style="border-top-color:#f5a623;"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(pendRows.reduce((t,x)=>t+(x.amount||0),0))}</div><div style="font-size:11px;color:var(--text2);">📋 Bina-invoice DCs (${pendRows.length}) — Est.</div></div>`:''}
     ${totalFreight>0.5?`<div class="ledger-sum-card lsc2" style="border-top-color:var(--neon2);"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(totalFreight)}</div><div style="font-size:11px;color:var(--text2);">🚚 Freight (cheques mein)</div></div>`:''}
     <div class="ledger-sum-card lsc4"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(outstanding)}</div><div style="font-size:11px;color:var(--text2);">Outstanding</div></div>
     ${modeCardsHtml}`;
@@ -10168,7 +10311,7 @@ function renderLedger(){
   if(detailPanel){
     if(detailMode){
       const billEntries = entries.filter(e=>e.type==='bill');
-      if(!billEntries.length){ detailPanel.innerHTML=''; }
+      if(!billEntries.length && !pendRows.length){ detailPanel.innerHTML=''; }
       else {
         let detailHtml = `<div style="margin-top:16px;"><div style="font-size:14px;font-weight:700;color:var(--neon2);margin-bottom:10px;">📦 Invoice Item Details (With All Details)</div>`;
         billEntries.forEach(e=>{
@@ -10176,14 +10319,16 @@ function renderLedger(){
           const items = liveRec?liveRec.items:(e.items||[]);
           const poNo = liveRec?liveRec.poNo:e.poNo;
           let iQty=0,iBasic=0,iTax=0,iTotal=0;
+          const _stx = lgInvStatus(e, paidAmountMap, payRefsByInv);
           detailHtml += `<div class="card" style="margin-bottom:10px;">
             <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
-              <div><strong class="neon-text">Invoice: ${e.invNo||'-'}</strong> | DC: ${e.dcNo||'-'} | Date: ${fmtDate(e.date)} | PO: ${poNo||'-'} | Party: ${e.partyName}</div>
+              <div><strong class="neon-text">Invoice: ${e.invNo||'-'}</strong> | DC: ${e.dcNo||'-'} | Date: ${fmtDate(e.date)} | PO: ${poNo||'-'} | Party: ${e.partyName} ${_stx.badge}</div>
               <div class="flex-gap">
                 <button class="btn btn-neon btn-xs" onclick="viewLedgerInvoice('${e.id}')">🔍 View</button>
                 ${getDigitalInvoiceForDC(liveRec?db.indexOf(liveRec):-1)?`<button class="btn btn-green btn-xs" onclick="openDigitalInvoice('${getDigitalInvoiceForDC(liveRec?db.indexOf(liveRec):-1)?.id}')">📄 D.Invoice</button>`:''}
               </div>
             </div>
+            ${_stx.lines}
             <div class="tbl-wrap"><table class="items-table"><thead><tr>
               <th>#</th><th>Description</th><th>HS Code</th><th>UOM</th><th>Qty</th><th>Rate</th><th>Tax%</th><th>Gross</th><th>Tax</th><th>Incl Tax</th>
             </tr></thead><tbody>`;
@@ -10204,6 +10349,7 @@ function renderLedger(){
             <td style="text-align:right;color:var(--neon);">${cur} ${fmt(iTotal)}</td>
           </tr></tfoot></table></div></div>`;
         });
+        pendRows.forEach(e=>{ detailHtml += lgPendingDetailCard(e, cur); });
         detailHtml += `</div>`;
         detailPanel.innerHTML = detailHtml;
       }
@@ -11522,14 +11668,15 @@ function generateLedgerPDF(partyVal, detailMode, from, to, unitVal){
   unitVal = an.hasUnits ? (unitVal||'') : '';
   const built = lgBuildEntries(sel, unitVal, an);
   let entries = built.entries.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.id||'').localeCompare(b.id||''));
-  if(!entries.length){toast('No ledger entries for this party','warning');return;}
+  const pendAll = (settings.ledgerShowPendingDC && settings.ledgerPdfPendingDC!==false) ? lgPendingDCEntries(sel, unitVal, from, to) : [];   // v88: bina-invoice DCs (display only)
+  if(!entries.length && !pendAll.length){toast('No ledger entries for this party','warning');return;}
   const unitObj = unitVal ? an.units.find(u=>u.key===(unitVal==='__none__'?'':unitVal)) : null;
   const unitLabelTxt = unitObj ? unitObj.label : '';
   const party = sel.label + (unitLabelTxt ? ' - '+unitLabelTxt : '');
   const dateFiltered = !!(from || to);
   if(from) entries = entries.filter(e=>(e.date||'')>=from);
   if(to) entries = entries.filter(e=>(e.date||'')<=to);
-  if(dateFiltered && !entries.length){toast('No ledger entries for this party in the selected date range','warning');return;}
+  if(dateFiltered && !entries.length && !pendAll.length){toast('No ledger entries for this party in the selected date range','warning');return;}
   const doc=new jspdf.jsPDF();
   let y=pdfHeader(doc,`Party Ledger - ${party}`);
   if(sel.isGroup || unitLabelTxt || dateFiltered){
@@ -11567,7 +11714,15 @@ function generateLedgerPDF(partyVal, detailMode, from, to, unitVal){
     }
   });
   const statusLabel={cleared:'Cleared',pending:'Pending',bounced:'BOUNCED'};
-  entries.forEach(e=>{
+  const _pdfRows = entries.concat(pendAll).sort((a,b)=>(a.date||'').localeCompare(b.date||'')||((a._pendingDC?1:0)-(b._pendingDC?1:0))||(a.id||'').localeCompare(b.id||''));
+  _pdfRows.forEach(e=>{
+    if(e._pendingDC){
+      let pd = `DC:${e.dcNo}${e.poNo?' PO:'+e.poNo:''} | Invoice not made yet (${e.ready?'Ready for invoice':'Pending'}) | Est. ${fmt(e.amount)} - NOT in balance`;
+      if(e.note) pd += ' | '+e.note;
+      pd += lgPdfTags(e, sel);
+      body.push([fmtDate(e.date),'DC - Invoice Pending',e.dcNo,'Not invoiced',pd,'','','','-']);
+      return;
+    }
     const isDebit=e.type==='bill'||e.type==='debit_note';
     const debit=isDebit?e.amount:0;
     const credit=!isDebit?e.amount:0;
@@ -11597,13 +11752,20 @@ function generateLedgerPDF(partyVal, detailMode, from, to, unitVal){
   });
   doc.autoTable({
     startY:y, head:[['Date','Type','Ref/Cheque','Invoice','Description','Debit','Credit','Deduction','Balance']],
-    body, styles:{fontSize:8}, headStyles:{fillColor:[20,20,40]}
+    body, styles:{fontSize:8}, headStyles:{fillColor:[20,20,40]},
+    didParseCell:(d)=>{ try{ if(d.section==='body' && d.row.raw && d.row.raw[1]==='DC - Invoice Pending'){ d.cell.styles.fillColor=[255,243,214]; d.cell.styles.textColor=[140,85,0]; } }catch(x){} }
   });
   let fy = doc.lastAutoTable.finalY+8;
   const outstanding = obTotal+totalBills-totalPaid-totalDed+totalFreight;
   doc.setFontSize(10); doc.setFont(undefined,'bold');
   doc.text(`Total Bills: ${cur} ${fmt(totalBills)}   Total Paid: ${cur} ${fmt(totalPaid)}   Deductions: ${cur} ${fmt(totalDed)}${totalFreight>0.5?`   Freight: ${cur} ${fmt(totalFreight)}`:''}   Outstanding: ${cur} ${fmt(outstanding)}`,14,fy);
   fy += 8;
+  if(pendAll.length){
+    if(fy>270){ doc.addPage(); fy=15; }
+    doc.setFontSize(9); doc.setTextColor(150,90,0);
+    doc.text(`DCs without invoice (NOT included in Outstanding): ${pendAll.length} DC(s), Est. ${cur} ${fmt(pendAll.reduce((t,x)=>t+(x.amount||0),0))}`,14,fy);
+    doc.setTextColor(0,0,0); doc.setFontSize(10); fy += 8;
+  }
   if(totalGstHold>0.5){
     doc.setTextColor(200,100,0); doc.text(`GST Hold Total: ${cur} ${fmt(totalGstHold)}  (included in Outstanding - party ne GST nahi di)`,14,fy); doc.setTextColor(0,0,0);
     doc.autoTable({startY:fy+3, head:[['Payment Date','Cheque/Ref','Bill / Invoice #','Bill Total','GST Hold Amount']], body:gstHoldRows.concat([['','','','TOTAL',fmt(totalGstHold)]]), styles:{fontSize:8}, headStyles:{fillColor:[200,100,0]}});
@@ -11619,7 +11781,9 @@ function generateLedgerPDF(partyVal, detailMode, from, to, unitVal){
     billEntries.forEach(e=>{
       if(fy>250){ doc.addPage(); fy=15; }
       doc.setFontSize(9); doc.setFont(undefined,'bold');
-      doc.text(`Invoice: ${e.invNo||'-'}   DC: ${e.dcNo||'-'}   Date: ${fmtDate(e.date)}   PO: ${e.poNo||'-'}`, 14, fy+5);
+      const _pp = paidAmountMap[String(e.invNo||'').trim()]||0;
+      const _stTxt = (!e.invNo || !((e.amount||0)>0.5)) ? '' : (_pp>=(e.amount||0)-0.5 ? '   [PAID]' : (_pp>0.5 ? `   [PARTIAL ${fmt(_pp)}/${fmt(e.amount)}]` : '   [UNPAID]'));
+      doc.text(`Invoice: ${e.invNo||'-'}   DC: ${e.dcNo||'-'}   Date: ${fmtDate(e.date)}   PO: ${e.poNo||'-'}${_stTxt}`, 14, fy+5);
       let qtySum=0, basicSum=0, taxSum=0, totalSum=0;
       const itemBody = (e.items||[]).map(it=>{
         const b=parseFloat(it.qty||0)*parseFloat(it.rate||0);
@@ -11634,6 +11798,31 @@ function generateLedgerPDF(partyVal, detailMode, from, to, unitVal){
         bodyStyles:{}, didParseCell:(data)=>{
           if(data.row.index===itemBody.length-1){ data.cell.styles.fontStyle='bold'; data.cell.styles.fillColor=[230,230,245]; }
         }
+      });
+      fy = doc.lastAutoTable.finalY+6;
+    });
+  }
+  const pendDetail = detailMode ? pendAll.filter(e=>(e.items||[]).length) : [];
+  if(pendDetail.length){
+    if(fy>250){ doc.addPage(); fy=15; }
+    doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
+    doc.text('DCs without Invoice (Item-wise, Estimated)', 14, fy); fy+=4;
+    pendDetail.forEach(e=>{
+      if(fy>250){ doc.addPage(); fy=15; }
+      doc.setFontSize(9); doc.setFont(undefined,'bold');
+      doc.text(`DC: ${e.dcNo||'-'}   Date: ${fmtDate(e.date)}   PO: ${e.poNo||'-'}   [Invoice not made yet]`, 14, fy+5);
+      let qtySum=0, basicSum=0, taxSum=0, totalSum=0;
+      const itemBody = (e.items||[]).map(it=>{
+        const b=parseFloat(it.qty||0)*parseFloat(it.rate||0);
+        const t=b*parseFloat(it.tax||0)/100;
+        qtySum+=parseFloat(it.qty||0); basicSum+=b; taxSum+=t; totalSum+=b+t;
+        return [it.desc, it.hscode||'-', it.uom, it.qty, fmt(it.rate), it.tax+'%', fmt(b), fmt(t), fmt(b+t)];
+      });
+      itemBody.push(['TOTAL (Est.)','','',fmt(qtySum),'','',fmt(basicSum),fmt(taxSum),fmt(totalSum)]);
+      doc.autoTable({
+        startY:fy+8, head:[['Description','HS Code','UOM','Qty','Rate','Tax%','Basic Amt','Tax Amt','Total (Incl Tax)']],
+        body:itemBody, styles:{fontSize:7}, headStyles:{fillColor:[160,100,0]},
+        didParseCell:(data)=>{ if(data.row.index===itemBody.length-1){ data.cell.styles.fontStyle='bold'; data.cell.styles.fillColor=[255,243,214]; } }
       });
       fy = doc.lastAutoTable.finalY+6;
     });
@@ -18668,7 +18857,11 @@ function openQuickInvoice(id){
   const sel=document.getElementById('qi-party');
   const base=document.getElementById('led-party');
   sel.innerHTML=base.innerHTML;
-  ['qi-edit-id','qi-inv','qi-dc','qi-po','qi-amt','qi-note','qi-sum'].forEach(k=>{const el=document.getElementById(k); if(el){ if(k==='qi-sum') el.textContent=''; else el.value=''; }});
+  ['qi-edit-id','qi-inv','qi-dc','qi-po','qi-amt','qi-note','qi-sum','qi-unit','qi-invmonth'].forEach(k=>{const el=document.getElementById(k); if(el){ if(k==='qi-sum') el.textContent=''; else el.value=''; }});
+  // v88: proper-DC mode always starts OFF
+  const pc=document.getElementById('qi-proper'); if(pc) pc.checked=false;
+  const ib=document.getElementById('qi-items-body'); if(ib) ib.innerHTML='';
+  qiToggleProper();
   document.getElementById('qi-date').value=new Date().toISOString().slice(0,10);
   document.getElementById('qi-title').textContent='⚡ Quick Invoice (sirf Ledger ke liye)';
   const e = id ? ledgerData.find(l=>l.id===id) : null;
@@ -18683,11 +18876,112 @@ function openQuickInvoice(id){
   }
   openModal('quickInvModal');
 }
+// ---- v88: optional "proper DC" mode inside Quick Invoice ----
+function qiToggleProper(){
+  const on = !!(document.getElementById('qi-proper') && document.getElementById('qi-proper').checked);
+  const box = document.getElementById('qi-proper-box'); if(box) box.style.display = on ? '' : 'none';
+  const amt = document.getElementById('qi-amt');
+  if(amt){ amt.readOnly = on; amt.style.opacity = on ? '.65' : ''; }
+  const o = document.getElementById('qi-dc-opt'); if(o){ o.textContent = on ? '* (zaroori)' : '(optional)'; o.style.color = on ? 'var(--neon3)' : 'var(--text3)'; }
+  const h = document.getElementById('qi-amt-hint'); if(h) h.textContent = on ? '(items se khud calculate hoti hai)' : '(total likhein, ya jama kar ke jaise 50000+66112)';
+  if(on){
+    if(!document.querySelectorAll('#qi-items-body tr').length) qiAddItemRow();
+    qiCalc();
+  } else {
+    const sm=document.getElementById('qi-sum'); if(sm) sm.textContent='';
+  }
+}
+function qiAddItemRow(it){
+  it = it || {};
+  const tb = document.getElementById('qi-items-body'); if(!tb) return;
+  const defTax = (settings.defaultTax!==undefined && settings.defaultTax!=='') ? settings.defaultTax : 18;
+  const uoms = ['Pcs','Nos','Sets','Kg','Mtr','Box','Rolls','Lot','Units','Ltr','Bags','Sheets'];
+  const uom = it.uom || settings.defaultUom || 'Pcs';
+  if(!uoms.includes(uom)) uoms.push(uom);
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" class="qi-desc" list="desc-master-list" value="${_lgEsc(it.desc||'')}" placeholder="Description" oninput="qiCalc()" onchange="qiAutoHs(this)" style="min-width:170px;"></td>
+    <td><input type="text" class="qi-hs" value="${_lgEsc(it.hscode||'')}" placeholder="HS Code" oninput="formatHsCodeInput(this)" style="width:100px;"></td>
+    <td><select class="qi-uom" style="width:70px;">${uoms.map(u=>`<option ${u===uom?'selected':''}>${u}</option>`).join('')}</select></td>
+    <td><input type="number" class="qi-qty" step="any" value="${it.qty||''}" placeholder="0" oninput="qiCalc()" style="width:65px;"></td>
+    <td><input type="number" class="qi-rate" step="any" value="${it.rate||''}" placeholder="0.00" oninput="qiCalc()" style="width:90px;"></td>
+    <td><input type="number" class="qi-tax" step="any" value="${it.tax!==undefined?it.tax:defTax}" oninput="qiCalc()" style="width:55px;"></td>
+    <td class="qi-rowtot" style="font-size:11px;font-weight:700;color:var(--neon);text-align:right;white-space:nowrap;">0.00</td>
+    <td><button type="button" class="btn btn-red btn-xs" onclick="this.closest('tr').remove();qiCalc()">✕</button></td>`;
+  tb.appendChild(tr);
+}
+function qiAutoHs(el){
+  const tr = el.closest('tr'); const hs = tr && tr.querySelector('.qi-hs'); if(!hs) return;
+  const d = el.value.trim(); if(!d) return;
+  const found = findHsCodeForDesc(d, (document.getElementById('qi-party')||{}).value||'');
+  if(found) hs.value = found;
+}
+function qiCollectItems(){
+  const items = [];
+  document.querySelectorAll('#qi-items-body tr').forEach(tr=>{
+    const desc = (tr.querySelector('.qi-desc').value||'').trim();
+    if(!desc) return;
+    const q = tr.querySelector('.qi-qty').value, r = tr.querySelector('.qi-rate').value, t = tr.querySelector('.qi-tax').value;
+    items.push({iid:uid(), desc, hscode:(tr.querySelector('.qi-hs').value||'').trim(), uom:tr.querySelector('.qi-uom').value,
+      qty:q, origQty:q, rejQty:0, rejNote:'', rate:r, tax:(t===''?'0':t)});
+  });
+  return items;
+}
+function qiCalc(){
+  let total = 0;
+  document.querySelectorAll('#qi-items-body tr').forEach(tr=>{
+    const q=parseFloat(tr.querySelector('.qi-qty').value)||0, r=parseFloat(tr.querySelector('.qi-rate').value)||0, t=parseFloat(tr.querySelector('.qi-tax').value)||0;
+    const b=q*r, rowTot=b+b*t/100; total+=rowTot;
+    const c=tr.querySelector('.qi-rowtot'); if(c) c.textContent=fmt(rowTot);
+  });
+  const tEl=document.getElementById('qi-items-total'); if(tEl) tEl.textContent = 'Grand Total: '+(settings.currency||'PKR')+' '+fmt(total);
+  const on = !!(document.getElementById('qi-proper') && document.getElementById('qi-proper').checked);
+  if(on){ const a=document.getElementById('qi-amt'); if(a) a.value = total>0 ? String(Math.round(total*100)/100) : ''; }
+}
+function qiSaveProperDC(p){
+  if(!p.party||!p.date||!p.inv||!p.dc){ toast('Proper DC mode mein Party, Date, Invoice # aur DC # zaroori hain','warning'); return; }
+  const items = qiCollectItems();
+  if(!items.length){ toast('Kam az kam ek item dalein (Description, Qty, Rate)','warning'); return; }
+  const bad = items.find(it=>!(parseFloat(it.qty)>0) || String(it.rate)==='');
+  if(bad){ toast(`"${bad.desc}": Qty aur Rate dalna zaroori hai`,'warning'); return; }
+  const dcDup = db.find(r=>String(r.dcNo||'').trim()===p.dc);
+  if(dcDup && !confirm(`DC #${p.dc} pehle se maujood hai (${dcDup.partyName}). Phir bhi nayi DC banayein?`)) return;
+  const invDup = ledgerData.find(l=>l.type==='bill' && l.id!==p.editId && l.partyName===p.party && String(l.invNo||'').trim()===p.inv);
+  if(invDup && !confirm(`Is party ke liye Invoice #${p.inv} pehle se ledger mein hai (${fmt(invDup.amount)}). Phir bhi save karein?`)) return;
+  if(p.editId && !confirm('Ye Quick Invoice (sirf ledger) ab proper DC + Invoice mein convert hogi. Purani quick entry hat jayegi aur us ki jagah normal DC wali entry banegi. Continue?')) return;
+  if(!fbrParties.some(x=>x.partyName===p.party)){ fbrParties.push({partyName:p.party, ntn:'', address:''}); }
+  items.forEach(it=>ensureDescInMaster(it.desc, it.hscode, it.uom));
+  const rec = {
+    date:p.date, dcNo:p.dc, invNo:p.inv, invDate:(document.getElementById('qi-invmonth').value||''),
+    partyName:p.party, unitName:(document.getElementById('qi-unit').value||'').trim(), poNo:p.po,
+    items, cancelled:false, voidOnly:false, readyForInv:true, note:p.note,
+    freightCharges:'', freightBy:'', freightNote:'', dispatch:null, viaQuickInvoice:true
+  };
+  const oldQ = p.editId ? ledgerData.find(l=>l.id===p.editId) : null;
+  if(oldQ){
+    ledgerData = ledgerData.filter(l=>l.id!==p.editId);   // addAutoLedger skips if a same inv+dc bill already exists, so remove the quick entry first
+    logAudit('edit','Ledger',`Quick invoice ${p.inv} converted to proper DC ${p.dc}`, oldQ, undefined);
+  }
+  db.push(rec);
+  logAudit('create','DC/Invoice',`DC #${rec.dcNo} (${rec.partyName}) created from Quick Invoice with full details`, undefined, rec);
+  addAutoLedger(rec, db.length-1);
+  syncPartiesFromDB();
+  try{ if(typeof cbSyncFbrNumbers==='function') cbSyncFbrNumbers({silent:true, noSave:true}); }catch(x){}
+  saveData(); closeModal('quickInvModal');
+  try{ renderRecords(); }catch(x){}
+  try{ renderLedger(); }catch(x){}
+  try{ refreshDashboardIfActive(); }catch(x){}
+  try{ if(typeof renderStockTab==='function') renderStockTab(); }catch(x){}
+  try{ if(rec.poNo && typeof renderPOTab==='function') renderPOTab(); }catch(x){}
+  toast('📋 Proper DC + Invoice ban gayi — Records, Stock aur Ledger mein add ho gayi','success');
+}
 function saveQuickInvoice(){
   const editId=document.getElementById('qi-edit-id').value;
   const party=document.getElementById('qi-party').value, date=document.getElementById('qi-date').value;
   const inv=document.getElementById('qi-inv').value.trim(), dc=document.getElementById('qi-dc').value.trim(), po=document.getElementById('qi-po').value.trim();
   const note=document.getElementById('qi-note').value.trim(), amount=qiParseAmt(document.getElementById('qi-amt').value);
+  // v88: "Proper DC wali sab details" ON => normal DC record banta hai (db + auto ledger bill)
+  if(document.getElementById('qi-proper') && document.getElementById('qi-proper').checked){ qiSaveProperDC({editId,party,date,inv,dc,po,note}); return; }
   if(!party||!date||!inv||!(amount>0)){toast('Party, date, invoice # aur amount zaroori hain','warning');return;}
   const dup = ledgerData.find(l=>l.type==='bill' && l.id!==editId && l.partyName===party && String(l.invNo||'').trim()===inv);
   if(dup && !confirm(`Is party ke liye Invoice #${inv} pehle se ledger mein hai (${fmt(dup.amount)}). Phir bhi save karein?`)) return;
