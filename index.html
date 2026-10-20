@@ -692,6 +692,7 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
         <option value="with_details">With All Details</option>
       </select>
       <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:4px 8px;border:1px dashed #f5a623;border-radius:8px;" title="Jin DCs ki invoice abhi nahi bani unhein ledger (aur PDF) mein bhi dikhayein — balance par koi asar nahi"><input type="checkbox" id="ledgerPendingDcQuick" onchange="lgSetPendingOpt('ledgerShowPendingDC',this.checked)"> 📋 Bina-invoice DCs</label>
+      <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:4px 8px;border:1px dashed var(--neon3);border-radius:8px;" title="Full Ledger: cancel / reject hui DCs bhi dikhayein. Har ek ke next row mein auto rejection entry (minus) aati hai — balance par koi asar nahi (PDF mein bhi)"><input type="checkbox" id="ledgerCancelledQuick" onchange="lgSetPendingOpt('ledgerShowCancelledDC',this.checked)"> ❌ Full Ledger (Cancelled / Rejected DCs)</label>
       <button class="btn btn-neon btn-sm" onclick="clearLedgerFilters()">✕ Clear</button>
       <button class="btn btn-yellow btn-sm" onclick="lgClearTicks()" title="Is ledger ke SAB tick/highlight ek click mein hata dein — ledger apni purani halat mein">🧹 Untick All</button>
       <button class="btn btn-purple btn-sm" onclick="exportLedgerPDF()">📄 PDF</button>
@@ -9935,8 +9936,8 @@ function lgsUncombine(gi){
 // ==================== LEDGER ====================
 // ==================== LEDGER v88: DCs WITHOUT INVOICE + PAID STATUS IN DETAILS ====================
 // DCs that exist but have no invoice yet. Display-only: they never touch ledgerData, balance, outstanding or totals.
-function lgPendingDCEntries(sel, unitVal, from, to){
-  if(!sel || !settings.ledgerShowPendingDC) return [];
+function lgPendingDCEntries(sel, unitVal, from, to, force){
+  if(!sel || (!settings.ledgerShowPendingDC && !force)) return [];
   const parties = sel.parties || [];
   const want = unitVal==='__none__' ? '' : (unitVal||'');
   const out = [];
@@ -9956,6 +9957,86 @@ function lgPendingDCEntries(sel, unitVal, from, to){
       items:r.items||[], desc:'DC '+r.dcNo, narration:'', _unitTag: lgCleanUnit(r.unitName)});
   });
   return out;
+}
+
+// ==================== LEDGER v89: CANCELLED / REJECTED DCs (display only) ====================
+// Cancelled DC = poora maal reject. Partial reject = DC ki kuch qty reject (it.rejQty).
+// Har ek ki 2 rows: (1) DC ki amount, (2) us ke bilkul next row mein AUTO rejection entry (amount minus).
+// Dono ka net 0 hai, is liye Balance / Outstanding / Total Bills par koi asar nahi.
+function dcGrossTotal(rec){
+  return (rec.items||[]).reduce((s,it)=>{
+    const q = itemOrigQty(it);
+    const basic = q*(parseFloat(it.rate)||0);
+    return s + basic + basic*(parseFloat(it.tax)||0)/100;
+  },0);
+}
+function dcRejectedValue(rec){
+  return (rec.items||[]).reduce((s,it)=>{
+    const q = itemRejQty(it);
+    if(q<=0) return s;
+    const basic = q*(parseFloat(it.rate)||0);
+    return s + basic + basic*(parseFloat(it.tax)||0)/100;
+  },0);
+}
+function lgCancelledDCEntries(sel, unitVal, from, to){
+  if(!sel || !settings.ledgerShowCancelledDC) return [];
+  const parties = sel.parties || [];
+  const want = unitVal==='__none__' ? '' : (unitVal||'');
+  const out = [];
+  (db||[]).forEach((r,idx)=>{
+    if(!r || !r.dcNo || !parties.includes(r.partyName)) return;
+    if(r.voidOnly) return;
+    const isCancel = !!r.cancelled;
+    const partialVal = (!isCancel) ? dcRejectedValue(r) : 0;
+    if(!isCancel && !(partialVal>0.5)) return;
+    if(from && (r.date||'')<from) return;
+    if(to && (r.date||'')>to) return;
+    if(unitVal){
+      const k = lgUnitKey(r.unitName);
+      const key = k ? (sel.isGroup ? r.partyName+'\u0002'+k : k) : '';
+      if(key!==want) return;
+    }
+    const rejItems = (r.items||[]).filter(it=>itemRejQty(it)>0);
+    out.push({id:'CXL#'+idx, _cancelDC:true, _partialRej:!isCancel, _dbIdx:idx, type:'cancelled_dc', date:r.date||'', dcNo:r.dcNo, poNo:r.poNo||'',
+      partyName:r.partyName, refNo:r.dcNo, invNo:String(r.invNo||'').trim(), amount: isCancel ? dcGrossTotal(r) : partialVal,
+      note:r.note||'', items:r.items||[], rejItems, desc:'DC '+r.dcNo, narration:'', _unitTag: lgCleanUnit(r.unitName)});
+  });
+  return out;
+}
+function lgCancelDescText(e){
+  let t = `DC:${e.dcNo}${e.poNo?' PO:'+e.poNo:''}`;
+  if(e._partialRej){
+    t += ' | Partial reject: ' + (e.rejItems||[]).map(it=>`${(it.desc||'').slice(0,28)} (${_qn(itemRejQty(it))} of ${_qn(itemOrigQty(it))})`).join(', ');
+  } else {
+    t += ' | CANCELLED - maal reject / wapas';
+  }
+  if(e.note) t += ' | '+e.note;
+  return t;
+}
+function lgCancelRowsHtml(e, sel, balance){
+  const cur = settings.currency||'PKR';
+  const lbl = e._partialRej ? '↩️ Partial Reject' : '❌ DC Cancelled';
+  const balCell = `<td style="text-align:right;font-weight:700;color:${balance<0?'var(--neon4)':'var(--neon3)'};">${fmt(Math.abs(balance))} ${balance<0?'CR':'DR'}</td>`;
+  const stl = 'background:rgba(255,45,120,.07);border-left:3px solid var(--neon3);';
+  const desc1 = `<strong>${_lgEsc(lgCancelDescText(e))}</strong><div style="font-size:10px;color:var(--text3);">Sirf record — balance mein shaamil nahi</div>${lgRowTags(e, sel)}`;
+  const desc2 = `<span style="color:var(--neon3);font-weight:700;">Auto rejection entry</span> — DC ${_lgEsc(e.dcNo)} ka ${_lgEsc(fmt(e.amount))} minus (net 0)`;
+  return `<tr style="${stl}">
+    <td>${fmtDate(e.date)}</td>
+    <td><span class="badge badge-cancelled">${lbl}</span></td>
+    <td>${_lgEsc(e.dcNo)}</td>
+    <td>${e._partialRej ? (e.invNo?_lgEsc(e.invNo):'-') : '<span style="color:var(--neon3);font-weight:800;">Cancelled</span>'}</td>
+    <td style="max-width:220px;">${desc1}</td>
+    <td style="text-align:right;">${fmt(e.amount)}</td><td></td>${balCell}
+    <td style="white-space:nowrap;"><button class="btn btn-neon btn-xs" onclick="quickView(${e._dbIdx})" title="DC dekhein">🔍</button></td>
+  </tr>
+  <tr style="${stl}">
+    <td>${fmtDate(e.date)}</td>
+    <td><span class="badge badge-cancelled">↩️ Rejection</span></td>
+    <td>${_lgEsc(e.dcNo)}</td><td>-</td>
+    <td style="max-width:220px;">${desc2}</td>
+    <td style="text-align:right;color:var(--neon3);font-weight:700;">-${fmt(e.amount)}</td><td></td>${balCell}
+    <td></td>
+  </tr>`;
 }
 function lgPendingRowHtml(e, sel){
   const cur = settings.currency||'PKR';
@@ -10018,6 +10099,7 @@ function lgInvStatus(e, paidMap, payRefs){
 }
 function lgsSyncPendingOpts(){
   const a=document.getElementById('lgs-show-pdc'), b=document.getElementById('lgs-pdf-pdc'), c=document.getElementById('ledgerPendingDcQuick');
+  const cx=document.getElementById('ledgerCancelledQuick'); if(cx) cx.checked = !!settings.ledgerShowCancelledDC;
   if(a) a.checked = !!settings.ledgerShowPendingDC;
   if(b){ b.checked = settings.ledgerPdfPendingDC!==false; b.disabled = !settings.ledgerShowPendingDC; }
   if(c) c.checked = !!settings.ledgerShowPendingDC;
@@ -10033,6 +10115,7 @@ function renderLedgerPartyList(){
 }
 function renderLedger(){
   const _pdcQuick = document.getElementById('ledgerPendingDcQuick'); if(_pdcQuick) _pdcQuick.checked = !!settings.ledgerShowPendingDC;
+  const _cxQuick = document.getElementById('ledgerCancelledQuick'); if(_cxQuick) _cxQuick.checked = !!settings.ledgerShowCancelledDC;
   const selVal = document.getElementById('ledgerPartySelect').value;
   const sel = lgResolveSelection(selVal);              // a single party OR a combined ledger
   const party = sel ? sel.label : '';
@@ -10172,9 +10255,19 @@ function renderLedger(){
       if(!isNaN(amtMax)) pendRows = pendRows.filter(e=>e.amount<=amtMax);
     }
   }
-  const displayEntries = entries.concat(pendRows).sort((a,b)=> (a.date||'').localeCompare(b.date||'') || ((a._pendingDC?1:0)-(b._pendingDC?1:0)) || (a.id||'').localeCompare(b.id||''));
+  let cxlRows = lgCancelledDCEntries(sel, unitVal, from, to);
+  if(cxlRows.length){
+    if(typeFilter || paymodeFilter || tickFilter==='ticked') cxlRows = [];
+    else {
+      if(searchRaw) cxlRows = cxlRows.filter(e=>lgEntryMatchesSearch(e, searchField, searchRaw));
+      if(!isNaN(amtMin)) cxlRows = cxlRows.filter(e=>e.amount>=amtMin);
+      if(!isNaN(amtMax)) cxlRows = cxlRows.filter(e=>e.amount<=amtMax);
+    }
+  }
+  const displayEntries = entries.concat(pendRows).concat(cxlRows).sort((a,b)=> (a.date||'').localeCompare(b.date||'') || ((a._pendingDC?1:0)-(b._pendingDC?1:0)) || (a.id||'').localeCompare(b.id||''));
   const rows = displayEntries.map(e=>{
     if(e._pendingDC) return lgPendingRowHtml(e, sel);
+    if(e._cancelDC) return lgCancelRowsHtml(e, sel, balance);
     const isDebit = e.type==='bill';
     const isManualBill = e.type==='bill' && !e.quickInvoice && e.narration!=='Auto from DC record';
     const debit = isDebit?e.amount:0;
@@ -10286,6 +10379,14 @@ function renderLedger(){
   }
   pdcBar.style.display = pendRows.length ? '' : 'none';
   pdcBar.innerHTML = pendRows.length ? `<strong style="color:#f5a623;">📋 ${pendRows.length} DC(s) ki invoice abhi nahi bani — Est. ${cur} ${fmt(pendRows.reduce((t,x)=>t+(x.amount||0),0))}</strong> <span style="color:var(--text3);">(sirf information — Balance / Outstanding mein shaamil nahi)</span><div style="color:var(--text2);margin-top:3px;">${pendRows.map(r=>`DC ${_lgEsc(r.dcNo)} <span style="color:var(--text3);">(${fmt(r.amount)})</span>`).join(' &nbsp;|&nbsp; ')}</div>` : '';
+  let cxlBar = document.getElementById('ledgerCancelBar');
+  if(!cxlBar){
+    cxlBar = document.createElement('div'); cxlBar.id='ledgerCancelBar';
+    cxlBar.style.cssText='font-size:12px;background:rgba(255,45,120,.08);border:1px solid var(--neon3);border-radius:8px;padding:8px 10px;margin:0 0 8px;';
+    const _t3=document.getElementById('ledgerTbody').closest('table'); _t3.parentElement.insertBefore(cxlBar,_t3);
+  }
+  cxlBar.style.display = cxlRows.length ? '' : 'none';
+  cxlBar.innerHTML = cxlRows.length ? `<strong style="color:var(--neon3);">❌ ${cxlRows.length} DC(s) cancel / reject — Total ${cur} ${fmt(cxlRows.reduce((t,x)=>t+(x.amount||0),0))}</strong> <span style="color:var(--text3);">(har ek ke next row mein auto rejection minus — Balance mein koi asar nahi)</span><div style="color:var(--text2);margin-top:3px;">${cxlRows.map(r=>`DC ${_lgEsc(r.dcNo)} ${r._partialRej?'(partial)':'(cancelled)'} <span style="color:var(--text3);">(${fmt(r.amount)})</span>`).join(' &nbsp;|&nbsp; ')}</div>` : '';
   filterWarnEl.textContent = filtersActive ? '⚠️ Search/Type/Payment Mode/Amount/Tick filter active — running Balance column reflects only the filtered rows, not the full account.' : '';
   window._lgLastView = {shown: entries, all: built.entries, q: searchRaw, field: searchField};
   lgUpdateSearchInfo(window._lgLastView);
@@ -10312,7 +10413,8 @@ function renderLedger(){
     ${totalDN>0.5?`<div class="ledger-sum-card lsc2" style="border-top-color:#1fbf75;"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(totalDN)}</div><div style="font-size:11px;color:var(--text2);">📝 Debit Notes (Credit side)</div></div>`:''}
     ${pendRows.length?`<div class="ledger-sum-card lsc3" style="border-top-color:#f5a623;"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(pendRows.reduce((t,x)=>t+(x.amount||0),0))}</div><div style="font-size:11px;color:var(--text2);">📋 Bina-invoice DCs (${pendRows.length}) — Est.</div></div>`:''}
     ${totalFreight>0.5?`<div class="ledger-sum-card lsc2" style="border-top-color:var(--neon2);"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(totalFreight)}</div><div style="font-size:11px;color:var(--text2);">🚚 Freight (cheques mein)</div></div>`:''}
-    <div class="ledger-sum-card lsc4"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(outstanding)}</div><div style="font-size:11px;color:var(--text2);">Outstanding</div></div>
+    <div class="ledger-sum-card lsc4"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(outstanding)}</div><div style="font-size:11px;color:var(--text2);">Outstanding (sirf bani hui invoices)</div></div>
+    ${pendRows.length?`<div class="ledger-sum-card lsc4" style="border-top-color:#f5a623;"><div style="font-size:18px;font-weight:800;">${cur} ${fmt(outstanding+pendRows.reduce((t,x)=>t+(x.amount||0),0))}</div><div style="font-size:11px;color:var(--text2);">Outstanding + bina-invoice DCs</div></div>`:''}
     ${modeCardsHtml}`;
   } else {
     document.getElementById('ledger-summary').innerHTML = '';
@@ -11683,15 +11785,17 @@ function generateLedgerPDF(partyVal, detailMode, from, to, unitVal){
   unitVal = an.hasUnits ? (unitVal||'') : '';
   const built = lgBuildEntries(sel, unitVal, an);
   let entries = built.entries.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.id||'').localeCompare(b.id||''));
-  const pendAll = (settings.ledgerShowPendingDC && settings.ledgerPdfPendingDC!==false) ? lgPendingDCEntries(sel, unitVal, from, to) : [];   // v88: bina-invoice DCs (display only)
-  if(!entries.length && !pendAll.length){toast('No ledger entries for this party','warning');return;}
+  const pendAll = (settings.ledgerShowPendingDC && settings.ledgerPdfPendingDC!==false) ? lgPendingDCEntries(sel, unitVal, from, to) : [];
+  const pendForSum = lgPendingDCEntries(sel, unitVal, from, to, true);   // v89: summary mein hamesha (setting ke bagair)
+  const cxlAll = lgCancelledDCEntries(sel, unitVal, from, to);           // v89: Full Ledger option   // v88: bina-invoice DCs (display only)
+  if(!entries.length && !pendAll.length && !cxlAll.length){toast('No ledger entries for this party','warning');return;}
   const unitObj = unitVal ? an.units.find(u=>u.key===(unitVal==='__none__'?'':unitVal)) : null;
   const unitLabelTxt = unitObj ? unitObj.label : '';
   const party = sel.label + (unitLabelTxt ? ' - '+unitLabelTxt : '');
   const dateFiltered = !!(from || to);
   if(from) entries = entries.filter(e=>(e.date||'')>=from);
   if(to) entries = entries.filter(e=>(e.date||'')<=to);
-  if(dateFiltered && !entries.length && !pendAll.length){toast('No ledger entries for this party in the selected date range','warning');return;}
+  if(dateFiltered && !entries.length && !pendAll.length && !cxlAll.length){toast('No ledger entries for this party in the selected date range','warning');return;}
   const doc=new jspdf.jsPDF();
   let y=pdfHeader(doc,`Party Ledger - ${party}`);
   if(sel.isGroup || unitLabelTxt || dateFiltered){
@@ -11729,8 +11833,14 @@ function generateLedgerPDF(partyVal, detailMode, from, to, unitVal){
     }
   });
   const statusLabel={cleared:'Cleared',pending:'Pending',bounced:'BOUNCED'};
-  const _pdfRows = entries.concat(pendAll).sort((a,b)=>(a.date||'').localeCompare(b.date||'')||((a._pendingDC?1:0)-(b._pendingDC?1:0))||(a.id||'').localeCompare(b.id||''));
+  const _pdfRows = entries.concat(pendAll).concat(cxlAll).sort((a,b)=>(a.date||'').localeCompare(b.date||'')||((a._pendingDC?1:0)-(b._pendingDC?1:0))||(a.id||'').localeCompare(b.id||''));
   _pdfRows.forEach(e=>{
+    if(e._cancelDC){
+      const balTxt = fmt(Math.abs(balance))+(balance<0?' CR':' DR');
+      body.push([fmtDate(e.date), e._partialRej?'Partial Reject':'DC - Cancelled', e.dcNo, e._partialRej?(e.invNo||'-'):'Cancelled', lgCancelDescText(e)+lgPdfTags(e, sel)+' | NOT in balance', fmt(e.amount),'','',balTxt]);
+      body.push([fmtDate(e.date), 'Rejection (Auto)', e.dcNo, '-', `Auto rejection entry - DC ${e.dcNo} ka ${fmt(e.amount)} minus (net 0)`, '-'+fmt(e.amount),'','',balTxt]);
+      return;
+    }
     if(e._pendingDC){
       let pd = `DC:${e.dcNo}${e.poNo?' PO:'+e.poNo:''} | Invoice not made yet (${e.ready?'Ready for invoice':'Pending'}) | Est. ${fmt(e.amount)} - NOT in balance`;
       if(e.note) pd += ' | '+e.note;
@@ -11769,19 +11879,41 @@ function generateLedgerPDF(partyVal, detailMode, from, to, unitVal){
   doc.autoTable({
     startY:y, head:[['Date','Type','Ref/Cheque','Invoice','Description','Debit','Credit','Deduction','Balance']],
     body, styles:{fontSize:8}, headStyles:{fillColor:[20,20,40]},
-    didParseCell:(d)=>{ try{ if(d.section==='body' && d.row.raw && d.row.raw[1]==='DC - Invoice Pending'){ d.cell.styles.fillColor=[255,243,214]; d.cell.styles.textColor=[140,85,0]; } }catch(x){} }
+    // v89: har total apne column ke theek neeche (Debit / Credit / Deduction / Balance)
+    foot:[['','','','','TOTAL', fmt(totalBills), fmt(totalPaid), fmt(totalDed), fmt(Math.abs(balance))+(balance<0?' CR':' DR')]],
+    showFoot:'lastPage', footStyles:{fillColor:[230,230,245], textColor:[0,0,0], fontStyle:'bold', fontSize:8},
+    columnStyles:{5:{halign:'right'},6:{halign:'right'},7:{halign:'right'},8:{halign:'right'}},
+    didParseCell:(d)=>{ try{
+      if(d.section==='body' && d.row.raw){
+        const t=d.row.raw[1];
+        if(t==='DC - Invoice Pending'){ d.cell.styles.fillColor=[255,243,214]; d.cell.styles.textColor=[140,85,0]; }
+        else if(t==='DC - Cancelled' || t==='Partial Reject' || t==='Rejection (Auto)'){ d.cell.styles.fillColor=[253,228,228]; d.cell.styles.textColor=[150,30,30]; }
+      }
+    }catch(x){} }
   });
   let fy = doc.lastAutoTable.finalY+8;
   const outstanding = obTotal+totalBills-totalPaid-totalDed+totalFreight;
+  // v89: alag-alag summary — Debit / Credit / Deduction / Freight / GST pending / DC pending, phir 2 totals
+  const pendSum = pendForSum.reduce((t,x)=>t+(x.amount||0),0);
+  const sumRows = [];
+  if(Math.abs(obTotal)>0.5) sumRows.push(['Previous Balance (Opening)', fmt(Math.abs(obTotal))+(obTotal<0?' CR':' DR')]);
+  sumRows.push(['Total Debit (Bills: '+entries.filter(e=>e.type==='bill').length+')', fmt(totalBills)]);
+  sumRows.push(['Total Credit (Paid)', fmt(totalPaid)]);
+  sumRows.push(['Total Deduction (Tax / other)', fmt(totalDed)]);
+  sumRows.push(['Carriage / Freight (in cheques)', fmt(totalFreight)]);
+  sumRows.push(['GST Pending (GST Hold)', fmt(totalGstHold)]);
+  sumRows.push(['DC Pending ('+pendForSum.length+' DC bina invoice)', fmt(pendSum)]);
+  if(cxlAll.length) sumRows.push(['Cancelled / Rejected DCs ('+cxlAll.length+') - net 0', fmt(cxlAll.reduce((t,x)=>t+(x.amount||0),0))+' - '+fmt(cxlAll.reduce((t,x)=>t+(x.amount||0),0))+' = 0.00']);
+  sumRows.push(['OUTSTANDING (sirf bani hui invoices, bina pending DCs)', cur+' '+fmt(outstanding)]);
+  sumRows.push(['OUTSTANDING + pending DCs (jin ki invoice nahi bani)', cur+' '+fmt(outstanding+pendSum)]);
+  doc.autoTable({
+    startY:fy, head:[['Summary','Amount']], body:sumRows,
+    styles:{fontSize:9}, headStyles:{fillColor:[20,20,40]},
+    columnStyles:{0:{cellWidth:110},1:{halign:'right',cellWidth:60}}, margin:{left:14},
+    didParseCell:(d)=>{ if(d.section==='body' && String(d.row.raw[0]).startsWith('OUTSTANDING')){ d.cell.styles.fontStyle='bold'; d.cell.styles.fillColor=[230,230,245]; } }
+  });
+  fy = doc.lastAutoTable.finalY+8;
   doc.setFontSize(10); doc.setFont(undefined,'bold');
-  doc.text(`Total Bills: ${cur} ${fmt(totalBills)}   Total Paid: ${cur} ${fmt(totalPaid)}   Deductions: ${cur} ${fmt(totalDed)}${totalFreight>0.5?`   Freight: ${cur} ${fmt(totalFreight)}`:''}   Outstanding: ${cur} ${fmt(outstanding)}`,14,fy);
-  fy += 8;
-  if(pendAll.length){
-    if(fy>270){ doc.addPage(); fy=15; }
-    doc.setFontSize(9); doc.setTextColor(150,90,0);
-    doc.text(`DCs without invoice (NOT included in Outstanding): ${pendAll.length} DC(s), Est. ${cur} ${fmt(pendAll.reduce((t,x)=>t+(x.amount||0),0))}`,14,fy);
-    doc.setTextColor(0,0,0); doc.setFontSize(10); fy += 8;
-  }
   if(totalGstHold>0.5){
     doc.setTextColor(200,100,0); doc.text(`GST Hold Total: ${cur} ${fmt(totalGstHold)}  (included in Outstanding - party ne GST nahi di)`,14,fy); doc.setTextColor(0,0,0);
     doc.autoTable({startY:fy+3, head:[['Payment Date','Cheque/Ref','Bill / Invoice #','Bill Total','GST Hold Amount']], body:gstHoldRows.concat([['','','','TOTAL',fmt(totalGstHold)]]), styles:{fontSize:8}, headStyles:{fillColor:[200,100,0]}});
