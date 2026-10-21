@@ -2961,6 +2961,7 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
     <div style="font-size:11px;color:var(--text3);margin-top:8px;">Date range aur "With Details / Summary" wahi lagti hai jo Ledger screen par select hai. Unit-wise ledger mein party ka previous balance shamil nahi hota.</div>
   </div>
   <div class="modal-footer" style="flex-wrap:wrap;">
+    <button class="btn btn-neon" onclick="lgUnitsCombinedPDF()" title="Tick kiye hue sab units ka EK hi table (debit / credit / cheque details sab), neeche har unit ka alag total">📄 Selected Units — Combined Ledger (1 table)</button>
     <button class="btn btn-purple" onclick="lgUnitsPDF('one')" title="Selected units ek hi PDF mein, har unit nayi page se shuru">📄 Selected Units — 1 PDF (har unit alag page)</button>
     <button class="btn btn-green" onclick="lgUnitsPDF('many')" title="Har selected unit ki apni alag PDF file">📄 Selected Units — alag alag PDF files</button>
     <button class="btn" onclick="closeModal('lgUnitModal')">Close</button>
@@ -20949,6 +20950,249 @@ function lgUnitsPDF(mode){
   const sel = lgCurSel();
   ctx.doc.save(`Ledger_${String(sel?sel.label:'Party').replace(/[^a-zA-Z0-9]/g,'_')}_Units_${localDateStr()}.pdf`);
   toast('PDF ban gayi — '+ctx.count+' unit(s)','success');
+}
+
+// ==================== LEDGER v94: SELECTED UNITS — ONE COMBINED LEDGER PDF ====================
+// Tick kiye hue units ki entries ek hi table mein (date wise), Unit column ke saath, running balance ke saath.
+// Neeche: har unit ka alag total, phir har unit ke cheque / payment details + mode-wise totals.
+function lgUnitsCombinedPDF(){
+  const picked = Array.from(document.querySelectorAll('.lg-unit-chk')).filter(c=>c.checked).map(c=>lgUnitList[parseInt(c.dataset.i)]).filter(Boolean);
+  if(!picked.length){ toast('Kam az kam ek unit tick karein','warning'); return; }
+  const sel = lgCurSel(); if(!sel){ toast('Pehle party select karein','warning'); return; }
+  const a = lgPdfArgs(), from = a.from, to = a.to, detailMode = a.detail;
+  const an = lgAnalyzeScope(sel);
+  const cur = settings.currency||'PKR';
+  const inRange = e=>(!from || (e.date||'')>=from) && (!to || (e.date||'')<=to);
+  const showPend = !!(settings.ledgerShowPendingDC && settings.ledgerPdfPendingDC!==false);
+  const tag = (x,u)=>Object.assign({}, x, {_uLabel:u.label, _uVal:u.val});
+
+  let entries = [], pendAll = [], cxlAll = [];
+  const U = {};   // per-unit stats
+  picked.forEach(u=>{
+    const es = lgBuildEntries(sel, u.val, an).entries.filter(inRange).map(e=>tag(e,u));
+    const pf = lgPendingDCEntries(sel, u.val, from, to, true).map(e=>tag(e,u));
+    entries = entries.concat(es);
+    if(showPend) pendAll = pendAll.concat(pf);
+    cxlAll = cxlAll.concat(lgCancelledDCEntries(sel, u.val, from, to).map(e=>tag(e,u)));
+    U[u.val] = {label:u.label, entries:es, bills:0, billCount:0, paid:0, ded:0, freight:0, gstHold:0, pend:pf.reduce((t,x)=>t+(x.amount||0),0), pendCount:pf.length};
+  });
+  if(!entries.length && !pendAll.length && !cxlAll.length){ toast('Selected units mein is range ki koi entry nahi','warning'); return; }
+
+  const doc = new jspdf.jsPDF({orientation:'landscape'});
+  const pageH = doc.internal.pageSize.getHeight();
+  const partyTxt = sel.label+' - '+picked.length+' Unit(s)';
+  let y = pdfHeader(doc, `Unit-wise Combined Ledger - ${partyTxt}`);
+  doc.setFontSize(9); doc.setFont(undefined,'normal'); doc.setTextColor(90,90,90);
+  if(sel.isGroup){ doc.text(`Combined ledger: ${sel.parties.join(' + ')}`, 14, y); y+=5; }
+  doc.text(`Units: ${picked.map(u=>u.label).join(' | ')}`, 14, y, {maxWidth:265}); y += (picked.length>6?10:5);
+  doc.text(`Unit-wise ledger - party previous balance not included`+((from||to)?`   |   Date range: ${from?fmtDate(from):'Start'} to ${to?fmtDate(to):'Today'}`:''), 14, y); y+=6;
+  doc.setTextColor(0,0,0);
+
+  // invoice paid status map (each original payment counted once, even if split over several units)
+  const paidAmountMap = {}, seenPay = new Set();
+  entries.filter(l=>l.type==='payment').forEach(c=>{
+    const l = c._orig||c; if(seenPay.has(l)) return; seenPay.add(l);
+    const invs = (l.invNo||'').split(',').map(x=>x.trim()).filter(Boolean);
+    if(!invs.length) return;
+    if(l.allocations && l.allocations.length){
+      l.allocations.forEach(x=>{ paidAmountMap[x.invNo]=(paidAmountMap[x.invNo]||0)+(x.amount||0); });
+    } else {
+      const net=(l.amount||0)+(l.deduction||0)-(l.freight||0), share=net/invs.length;
+      invs.forEach(no=>{ paidAmountMap[no]=(paidAmountMap[no]||0)+share; });
+    }
+  });
+  const statusLabel={cleared:'Cleared',pending:'Pending',bounced:'BOUNCED'};
+  const rows = entries.concat(pendAll).concat(cxlAll).sort((x,z)=>(x.date||'').localeCompare(z.date||'')||((x._pendingDC?1:0)-(z._pendingDC?1:0))||(x.id||'').localeCompare(z.id||''));
+
+  let balance=0, totBills=0, totPaid=0, totDed=0, totFrt=0, totGst=0;
+  const body=[];
+  rows.forEach(e=>{
+    const ul = e._uLabel;
+    if(e._cancelDC){
+      const bt = fmt(Math.abs(balance))+(balance<0?' CR':' DR');
+      body.push([fmtDate(e.date), ul, e._partialRej?'Partial Reject':'DC - Cancelled', e.dcNo, e._partialRej?(e.invNo||'-'):'Cancelled', lgCancelDescText(e)+' | NOT in balance', fmt(e.amount),'','',bt]);
+      body.push([fmtDate(e.date), ul, 'Rejection (Auto)', e.dcNo, '-', `Auto rejection entry - DC ${e.dcNo}`, '-'+fmt(e.amount),'','',bt]);
+      return;
+    }
+    if(e._pendingDC){
+      let pd = `DC:${e.dcNo}${e.poNo?' PO:'+e.poNo:''} | Invoice not made yet (${e.ready?'Ready for invoice':'Pending'}) | Est. ${fmt(e.amount)} - NOT in balance`;
+      if(e.note) pd += ' | '+e.note;
+      body.push([fmtDate(e.date), ul, 'DC - Invoice Pending', e.dcNo, 'Not invoiced', pd, '','','','-']);
+      return;
+    }
+    const st = U[e._uVal];
+    const isDebit = e.type==='bill';
+    const debit = isDebit?e.amount:0, credit = !isDebit?e.amount:0;
+    const frt = (!isDebit && e.freight) ? e.freight : 0;
+    balance += debit-credit-(e.deduction||0)+frt;
+    if(isDebit){ totBills+=e.amount; st.bills+=e.amount; st.billCount++; }
+    else {
+      totPaid+=e.amount; totDed+=(e.deduction||0); totFrt+=frt;
+      st.paid+=e.amount; st.ded+=(e.deduction||0); st.freight+=frt;
+      if(e.gstHold>0){ totGst+=e.gstHold; st.gstHold+=e.gstHold; }
+    }
+    let desc = e.desc||e.narration||'';
+    if(e.type==='bill' && e.dcNo) desc = `DC:${e.dcNo}${e.poNo?' PO:'+e.poNo:''}`;
+    if(e.quickInvoice) desc = `Quick Invoice (ledger only)${e.dcNo?' DC:'+e.dcNo:''}${e.poNo?' PO:'+e.poNo:''}${e.qiNote?' | '+e.qiNote:''}`;
+    if(e.type==='payment'){
+      if(e.bankName) desc += (desc?' | ':'')+'Bank: '+e.bankName;
+      if(e.status) desc += (desc?' | ':'')+'Status: '+(statusLabel[e.status]||e.status);
+      if(frt>0.5) desc += (desc?' | ':'')+'Freight in cheque: '+fmt(frt)+(e.freightNote?' ('+e.freightNote+')':'');
+      if(e.debitNoteAmt>0.5) desc += (desc?' | ':'')+'Debit Note adjusted: '+fmt(e.debitNoteAmt);
+      if(e.gstHold>0.5) desc += (desc?' | ':'')+'GST Hold: '+fmt(e.gstHold);
+    }
+    if(isDebit && e.dcFreight>0.5) desc += (desc?' | ':'')+'DC Freight: '+fmt(e.dcFreight)+' (not in bill)';
+    if(e._share!==undefined && e._share<0.9999) desc += ` | Unit share: ${fmt(e.amount)} of ${fmt(e._fullAmount)}`;
+    if(sel.isGroup) desc += ' | Party: '+e.partyName;
+    let invCell = e.invNo||'-';
+    if(isDebit && e.invNo){
+      const pa = paidAmountMap[String(e.invNo).trim()]||0;
+      if(pa >= e.amount-0.5) invCell += ' (Paid)';
+      else if(pa>0.5) invCell += ` (Partial ${fmt(pa)}/${fmt(e.amount)})`;
+    }
+    const typeLabel = {bill:'Bill',payment:'Payment',debit_note:'Debit Note'}[e.type]||e.type;
+    body.push([fmtDate(e.date), ul, typeLabel, e.refNo||'-', invCell, desc, debit?fmt(debit):'', credit?fmt(credit):'', (e.deduction&&!isDebit)?fmt(e.deduction):'', fmt(Math.abs(balance))+(balance<0?' CR':' DR')]);
+  });
+
+  doc.autoTable({
+    startY:y, head:[['Date','Unit','Type','Ref/Cheque','Invoice','Description','Debit','Credit','Deduction','Balance']],
+    body, styles:{fontSize:7.5}, headStyles:{fillColor:[20,20,40]},
+    foot:[['','','','','','TOTAL (selected units)', fmt(totBills), fmt(totPaid), fmt(totDed), fmt(Math.abs(balance))+(balance<0?' CR':' DR')]],
+    showFoot:'lastPage', footStyles:{fillColor:[230,230,245], textColor:[0,0,0], fontStyle:'bold', fontSize:8},
+    columnStyles:{1:{cellWidth:28},5:{cellWidth:78},6:{halign:'right'},7:{halign:'right'},8:{halign:'right'},9:{halign:'right'}},
+    didParseCell:(d)=>{ try{
+      if(d.section==='body' && d.row.raw){
+        const t=d.row.raw[2];
+        if(t==='DC - Invoice Pending'){ d.cell.styles.fillColor=[255,243,214]; d.cell.styles.textColor=[140,85,0]; }
+        else if(t==='DC - Cancelled'||t==='Partial Reject'||t==='Rejection (Auto)'){ d.cell.styles.fillColor=[253,228,228]; d.cell.styles.textColor=[150,30,30]; }
+      }
+    }catch(x){} }
+  });
+  let fy = doc.lastAutoTable.finalY+8;
+  const need = n=>{ if(fy>pageH-n){ doc.addPage(); fy=15; } };
+
+  // ---- Unit-wise totals (har unit ka alag) ----
+  const ulist = picked.map(u=>U[u.val]);
+  const showGst = totGst>0.5, showFrt = totFrt>0.5;
+  need(50);
+  doc.setFontSize(11); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
+  doc.text('Unit-wise Totals (har unit ka alag total)', 14, fy); fy+=3;
+  const head2 = ['Unit','Bills','Total Debit (Bills)','Total Credit (Paid)','Deduction'].concat(showFrt?['Freight']:[]).concat(showGst?['GST Hold']:[]).concat(['DC Pending (bina invoice)','OUTSTANDING']);
+  const outOf = x=>x.bills-x.paid-x.ded+x.freight;
+  const mkRow = x=>[x.label, String(x.billCount), fmt(x.bills), fmt(x.paid), fmt(x.ded)].concat(showFrt?[fmt(x.freight)]:[]).concat(showGst?[fmt(x.gstHold)]:[]).concat([fmt(x.pend)+(x.pendCount?` (${x.pendCount} DC)`:''), fmt(outOf(x))]);
+  const gt = {label:'GRAND TOTAL', billCount:ulist.reduce((t,x)=>t+x.billCount,0), bills:totBills, paid:totPaid, ded:totDed, freight:totFrt, gstHold:totGst, pend:ulist.reduce((t,x)=>t+x.pend,0), pendCount:ulist.reduce((t,x)=>t+x.pendCount,0)};
+  const body2 = ulist.map(mkRow).concat([mkRow(gt)]);
+  const nCols = head2.length, colStyles = {}; for(let i=1;i<nCols;i++) colStyles[i]={halign:'right'};
+  doc.autoTable({
+    startY:fy, head:[head2], body:body2, styles:{fontSize:8}, headStyles:{fillColor:[20,20,40]}, columnStyles:colStyles,
+    didParseCell:(d)=>{ if(d.section==='body' && d.row.index===body2.length-1){ d.cell.styles.fontStyle='bold'; d.cell.styles.fillColor=[230,230,245]; }
+      if(d.section==='body' && d.column.index===nCols-1){ d.cell.styles.fontStyle='bold'; } }
+  });
+  fy = doc.lastAutoTable.finalY+8;
+
+  // ---- Cheque / payment details (unit wise, har unit ka subtotal) ----
+  need(40);
+  doc.setFontSize(11); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
+  doc.text('Cheque / Payment Details (unit-wise)', 14, fy); fy+=3;
+  const payBody = [], subIdx = [], grandIdx = [];
+  const byMode = {}, byStatus = {}, modeMat = {};
+  let gPaid=0, gDed=0, anyPay=false;
+  ulist.forEach(x=>{
+    const pd = lgPayDetail(x.entries);
+    modeMat[x.label] = pd.byMode;
+    pd.rows.forEach(r=>{
+      anyPay = true;
+      payBody.push([x.label, fmtDate(r.date), r.mode, r.ref, r.bank, r.inv, r.status, fmt(r.amount)+(r.share?' (of '+fmt(r.share)+')':''), r.ded?fmt(r.ded):'']);
+    });
+    Object.keys(pd.byMode).forEach(k=>{ byMode[k]=(byMode[k]||0)+pd.byMode[k]; });
+    Object.keys(pd.byStatus).forEach(k=>{ byStatus[k]=(byStatus[k]||0)+pd.byStatus[k]; });
+    gPaid += pd.total; gDed += pd.ded;
+    subIdx.push(payBody.length);
+    payBody.push([x.label,'','','','','','TOTAL PAID', cur+' '+fmt(pd.total), pd.ded?fmt(pd.ded):'']);
+  });
+  grandIdx.push(payBody.length);
+  payBody.push(['ALL SELECTED UNITS','','','','','','GRAND TOTAL PAID', cur+' '+fmt(gPaid), gDed?fmt(gDed):'']);
+  if(anyPay){
+    doc.autoTable({
+      startY:fy, head:[['Unit','Date','Mode','Cheque / Ref No','Bank','Invoice(s)','Status','Amount (unit share)','Deduction']],
+      body:payBody, styles:{fontSize:7.5}, headStyles:{fillColor:[20,20,40]}, columnStyles:{7:{halign:'right'},8:{halign:'right'}},
+      didParseCell:(d)=>{ if(d.section!=='body') return;
+        if(subIdx.includes(d.row.index)){ d.cell.styles.fontStyle='bold'; d.cell.styles.fillColor=[238,238,248]; }
+        if(grandIdx.includes(d.row.index)){ d.cell.styles.fontStyle='bold'; d.cell.styles.fillColor=[215,215,235]; } }
+    });
+    fy = doc.lastAutoTable.finalY+6;
+    // unit x mode matrix + status-wise
+    const modes = Object.keys(byMode);
+    need(40);
+    const matBody = ulist.map(x=>[x.label].concat(modes.map(m=>fmt((modeMat[x.label]||{})[m]||0))).concat([fmt(Object.values(modeMat[x.label]||{}).reduce((t,v)=>t+v,0))]));
+    matBody.push(['TOTAL'].concat(modes.map(m=>fmt(byMode[m]))).concat([fmt(gPaid)]));
+    const mc = {}; for(let i=1;i<=modes.length+1;i++) mc[i]={halign:'right'};
+    doc.autoTable({
+      startY:fy, head:[['Mode-wise Paid (unit x mode)'].concat(modes).concat(['Total'])], body:matBody, styles:{fontSize:8}, headStyles:{fillColor:[60,60,90]}, columnStyles:mc,
+      didParseCell:(d)=>{ if(d.section==='body' && d.row.index===matBody.length-1){ d.cell.styles.fontStyle='bold'; d.cell.styles.fillColor=[230,230,245]; } }
+    });
+    fy = doc.lastAutoTable.finalY+5;
+    need(30);
+    doc.autoTable({ startY:fy, head:[['Status-wise Paid','Amount']], body:Object.keys(byStatus).map(k=>[k, fmt(byStatus[k])]), styles:{fontSize:8}, headStyles:{fillColor:[60,60,90]}, margin:{left:14,right:190}, columnStyles:{1:{halign:'right'}} });
+    fy = doc.lastAutoTable.finalY+8;
+  } else {
+    doc.setFontSize(9); doc.setFont(undefined,'normal');
+    doc.text('Selected units ki is range mein koi payment / cheque nahi.', 14, fy+5); fy += 12;
+  }
+
+  // ---- Summary box ----
+  need(45);
+  const pendTotal = gt.pend;
+  const sumRows = [
+    ['Selected Units', String(picked.length)],
+    ['Total Debit (Bills: '+gt.billCount+')', fmt(totBills)],
+    ['Total Credit (Paid)', fmt(totPaid)],
+    ['Total Deduction (Tax / other)', fmt(totDed)],
+    ['Carriage / Freight (in cheques)', fmt(totFrt)]
+  ];
+  if(showGst) sumRows.push(['GST Pending (GST Hold)', fmt(totGst)]);
+  sumRows.push(['DC Pending ('+gt.pendCount+' DC bina invoice)', fmt(pendTotal)]);
+  const outstanding = totBills-totPaid-totDed+totFrt;
+  sumRows.push(['OUTSTANDING (sirf bani hui invoices)', cur+' '+fmt(outstanding)]);
+  sumRows.push(['OUTSTANDING + pending DCs', cur+' '+fmt(outstanding+pendTotal)]);
+  doc.autoTable({
+    startY:fy, head:[['Combined Summary','Amount']], body:sumRows, styles:{fontSize:9}, headStyles:{fillColor:[20,20,40]},
+    columnStyles:{0:{cellWidth:110},1:{halign:'right',cellWidth:60}}, margin:{left:14},
+    didParseCell:(d)=>{ if(d.section==='body' && String(d.row.raw[0]).startsWith('OUTSTANDING')){ d.cell.styles.fontStyle='bold'; d.cell.styles.fillColor=[230,230,245]; } }
+  });
+  fy = doc.lastAutoTable.finalY+8;
+
+  // ---- Item-wise invoice details (With All Details mode) ----
+  const billEntries = detailMode ? entries.filter(e=>e.type==='bill' && e.items && e.items.length).sort((x,z)=>(x._uLabel||'').localeCompare(z._uLabel||'')||(x.date||'').localeCompare(z.date||'')) : [];
+  if(billEntries.length){
+    need(30);
+    doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
+    doc.text('Invoice Details (Item-wise)', 14, fy); fy+=4;
+    billEntries.forEach(e=>{
+      need(45);
+      doc.setFontSize(9); doc.setFont(undefined,'bold');
+      const pp = paidAmountMap[String(e.invNo||'').trim()]||0;
+      const stTxt = (!e.invNo || !((e.amount||0)>0.5)) ? '' : (pp>=(e.amount||0)-0.5 ? '   [PAID]' : (pp>0.5 ? `   [PARTIAL ${fmt(pp)}/${fmt(e.amount)}]` : '   [UNPAID]'));
+      doc.text(`Unit: ${e._uLabel}   Invoice: ${e.invNo||'-'}   DC: ${e.dcNo||'-'}   Date: ${fmtDate(e.date)}   PO: ${e.poNo||'-'}${stTxt}`, 14, fy+5);
+      let q=0,b=0,t=0,tt=0;
+      const ib = (e.items||[]).map(it=>{
+        const bb=parseFloat(it.qty||0)*parseFloat(it.rate||0), tx=bb*parseFloat(it.tax||0)/100;
+        q+=parseFloat(it.qty||0); b+=bb; t+=tx; tt+=bb+tx;
+        return [it.desc, it.hscode||'-', it.uom, it.qty, fmt(it.rate), it.tax+'%', fmt(bb), fmt(tx), fmt(bb+tx)];
+      });
+      ib.push(['TOTAL','','',fmt(q),'','',fmt(b),fmt(t),fmt(tt)]);
+      doc.autoTable({
+        startY:fy+8, head:[['Description','HS Code','UOM','Qty','Rate','Tax%','Basic Amt','Tax Amt','Total (Incl Tax)']],
+        body:ib, styles:{fontSize:7}, headStyles:{fillColor:[40,40,70]},
+        didParseCell:(d)=>{ if(d.row.index===ib.length-1){ d.cell.styles.fontStyle='bold'; d.cell.styles.fillColor=[230,230,245]; } }
+      });
+      fy = doc.lastAutoTable.finalY+6;
+    });
+  }
+
+  stampBrandLogoOnAllPages(doc);
+  doc.save(`Ledger_${String(sel.label).replace(/[^a-zA-Z0-9]/g,'_')}_SelectedUnits_Combined_${localDateStr()}.pdf`);
+  toast('Combined PDF ban gayi — '+picked.length+' unit(s), ek hi table','success');
 }
 
 // ==================== MODULE 11: BARCODE / QR SYSTEM ====================
