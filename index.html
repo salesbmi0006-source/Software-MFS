@@ -494,6 +494,7 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
     <div class="tab" onclick="showTab('cheques')" id="tab-cheques" style="display:none;">🏦 Cheques</div>
     <div class="tab" onclick="showTab('salesreturns')" id="tab-salesreturns">🔄 Sales Returns</div>
     <div class="tab" onclick="showTab('returnreceipts')" id="tab-returnreceipts">🧾 Return Receipts</div>
+    <div class="tab" onclick="showTab('rejections')" id="tab-rejections">❌ Rejections</div>
     <div class="tab" onclick="showTab('bank')" id="tab-bank">🏛️ Bank</div>
     <div class="tab" onclick="showTab('expenses')" id="tab-expenses">💸 Expenses</div>
     <div class="tab" onclick="showTab('pantry')" id="tab-pantry">🍵 Pantry</div>
@@ -650,7 +651,7 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
       <select id="ledgerPartySelect" onchange="renderLedger()" style="width:260px;">
         <option value="">-- Select Party --</option>
       </select>
-      <span id="ledgerUnitWrap" style="display:none;"><select id="ledgerUnitSelect" onchange="renderLedger()" style="width:220px;" title="🏭 Unit-wise ledger — sirf is unit ka ledger dikhayein"></select></span>
+      <span id="ledgerUnitWrap" style="display:none;"><select id="ledgerUnitSelect" onchange="renderLedger()" style="width:220px;" title="🏭 Unit-wise ledger — sirf is unit ka ledger dikhayein"></select> <button class="btn btn-sm" style="background:var(--bg3);border:1px solid var(--neon);color:var(--neon);" onclick="lgOpenUnitModal()" title="Kai units select karein — har unit ka ledger alag dekhein / PDF lein">🏭 Unit-wise Ledger / PDF</button></span>
       <input type="date" id="ledgerFrom" onchange="renderLedger()" style="width:145px;">
       <span style="color:var(--text2)">to</span>
       <input type="date" id="ledgerTo" onchange="renderLedger()" style="width:145px;">
@@ -992,6 +993,77 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
   <div class="modal-footer">
     <button class="btn btn-green" onclick="saveRRSettings()">💾 Save Settings</button>
     <button class="btn btn-neon" onclick="closeModal('rrSettingsModal')">Cancel</button>
+  </div>
+</div>
+</div>
+
+<!-- ====== REJECTIONS TAB (auto from Edit DC -> Reject Qty) ====== -->
+<div class="tab-panel" id="panel-rejections">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">❌ Rejections — sab rejected qty ek jagah</div>
+      <div class="flex-gap">
+        <button class="btn btn-neon btn-sm" onclick="openRRSettingsModal()">⚙️ Print Settings</button>
+        <button class="btn btn-purple btn-sm" onclick="rejListPDF()">📄 Download PDF (current list)</button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Edit DC → ❌ Reject Qty mein jo bhi rejection save hoti hai wo yahan khud aa jati hai (apne Rejection Code ke saath). Naya entry yahan se nahi, DC se hota hai.</div>
+    <div class="form-row">
+      <div class="form-group"><label>Search (code, party, DC, invoice, item, note, kis ne)</label><input type="text" id="rej-search" oninput="renderRejectionsTab()" placeholder="Search..."></div>
+      <div class="form-group"><label>Party</label><select id="rej-party" onchange="renderRejectionsTab()"></select></div>
+      <div class="form-group"><label>PO No</label><input type="text" id="rej-po" oninput="renderRejectionsTab()" placeholder="PO number likhein"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>From</label><input type="date" id="rej-from" onchange="renderRejectionsTab()"></div>
+      <div class="form-group"><label>To</label><input type="date" id="rej-to" onchange="renderRejectionsTab()"></div>
+      <div class="form-group" style="align-self:flex-end;"><button class="btn btn-sm" onclick="rejClearFilters()">✖ Clear Filters</button></div>
+    </div>
+    <div id="rej-summary" style="font-size:12px;margin:6px 0;"></div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>Code</th><th>Date</th><th>Party</th><th>DC / Inv</th><th>PO No</th><th>Item</th><th>Rej Qty</th><th>Value</th><th>Rejected By</th><th>Note</th><th>Actions</th></tr></thead>
+      <tbody id="rejTbody"></tbody></table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">👥 Party-wise Rejections</div></div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>Party</th><th>Rejections</th><th>Net Rej Qty</th><th>Value</th><th>Last</th><th></th></tr></thead>
+      <tbody id="rejPartyTbody"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="rejViewModal">
+<div class="modal modal-lg">
+  <div class="modal-header"><h3 id="rej-view-title">❌ Rejection</h3><button class="close-btn" onclick="closeModal('rejViewModal')">✕</button></div>
+  <div class="modal-body">
+    <div id="rej-view-printbtns" class="flex-gap mb-8" style="flex-wrap:wrap;align-items:center;">
+      <button class="btn btn-green btn-sm" onclick="rejViewPrint('a4')">🖨️ Print (A4)</button>
+      <button class="btn btn-purple btn-sm" onclick="rejViewPrint('thermal')">🖨️ Print (Thermal)</button>
+      <button class="btn btn-neon btn-sm" onclick="rejViewPdf()">📄 PDF</button>
+      <label style="font-size:11px;"><input type="checkbox" id="rej-view-dcall"> Is DC ki sab rejections ek note mein</label>
+    </div>
+    <div id="rej-view-body"></div>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="rejEditModal">
+<div class="modal">
+  <div class="modal-header"><h3 id="rej-edit-title">✏️ Edit Rejection</h3><button class="close-btn" onclick="closeModal('rejEditModal')">✕</button></div>
+  <div class="modal-body">
+    <div id="rej-edit-info" class="accent-box" style="font-size:12px;margin-bottom:8px;"></div>
+    <div class="form-group"><label>Rejection Date</label><input type="date" id="rej-edit-date"></div>
+    <div class="form-group"><label>Note / Reason * (lazmi)</label><textarea id="rej-edit-note" rows="3" placeholder="Kya reject hua, kyun, kya masla tha..."></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><label>Kis ne reject ki</label><input type="text" id="rej-edit-by" placeholder="Name / department"></div>
+      <div class="form-group"><label>Kahan se aai / Source</label><input type="text" id="rej-edit-from" placeholder="e.g. Site, Store, QC"></div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-green" onclick="rejSaveEdit()">💾 Save</button>
+    <button class="btn btn-neon" onclick="rejOpenDcFromEdit()">📂 Open DC (qty badalne ke liye)</button>
+    <button class="btn" onclick="closeModal('rejEditModal')">Cancel</button>
   </div>
 </div>
 </div>
@@ -2165,7 +2237,24 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
           <label class="toggle"><input type="checkbox" id="att-set-inout"><span class="toggle-slider"></span></label>
           <span style="font-size:12px;">Enable In/Out Scan Mode (Check-In + Check-Out, auto Overtime)</span>
         </label>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">ON: "Present" click karne par time-popup khulta hai (kaun, kitne baje aya, duty start se kitne minute late/early). Time badal bhi sakte hain. OFF: "Present" direct lag jata hai.</div>
       </div>
+    </div>
+    <div style="margin-top:6px;font-weight:700;font-size:12px;">💸 Fine Settings <span style="font-weight:400;color:var(--text3);">(sirf record/report ke liye — salary se koi link nahi)</span></div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="toggle-wrap" style="cursor:pointer;">
+          <label class="toggle"><input type="checkbox" id="att-set-fine-on"><span class="toggle-slider"></span></label>
+          <span style="font-size:12px;">Enable Fine</span>
+        </label>
+      </div>
+      <div class="form-group"><label>Late Fine Type</label>
+        <select id="att-set-fine-type"><option value="fixed">Fixed — per late day</option><option value="permin">Per late minute</option></select></div>
+      <div class="form-group"><label>Late Fine Amount</label><input type="number" step="1" min="0" id="att-set-fine-amt" placeholder="e.g. 100"></div>
+      <div class="form-group"><label>Grace Minutes (is tak fine nahi)</label><input type="number" step="1" min="0" id="att-set-grace" placeholder="0"></div>
+      <div class="form-group"><label>Absent Fine (optional)</label><input type="number" step="1" min="0" id="att-set-fine-abs" placeholder="0"></div>
+    </div>
+    <div class="form-row">
       <div class="form-group" style="align-self:flex-end;"><button class="btn btn-neon btn-sm" onclick="saveAttendanceSettings()">💾 Save Attendance Settings</button></div>
     </div>
   </div>
@@ -2182,6 +2271,32 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
       <div class="form-group" style="align-self:flex-end;"><button class="btn btn-green btn-sm" onclick="markAllPresent()">✅ Mark All Present</button></div>
     </div>
     <div id="att-dashboard-list"></div>
+  </div>
+  <div class="card" id="time-report-card">
+    <div class="card-header">
+      <div class="card-title">🕒 Time Record &amp; Fine Reports</div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Har employee ka kab aya / kab gaya / kitne minute late — date-wise ya monthly/weekly. Fine report alag hai. Dono ka salary se koi link nahi (sirf record). PDF ya Thermal printer (58/80mm) dono mein nikal sakte hain.</div>
+    <div class="form-row">
+      <div class="form-group"><label>Employee</label><select id="tr-emp"></select></div>
+      <div class="form-group"><label>From</label><input type="date" id="tr-from"></div>
+      <div class="form-group"><label>To</label><input type="date" id="tr-to"></div>
+      <div class="form-group"><label>Report</label><select id="tr-mode"><option value="time">🕒 Time Record (aya/gaya/late)</option><option value="fine">💸 Fine Report</option></select></div>
+      <div class="form-group"><label>Thermal Width</label><select id="tr-width"><option value="80">80 mm</option><option value="58">58 mm</option></select></div>
+    </div>
+    <div class="flex-gap" style="flex-wrap:wrap;margin-bottom:8px;">
+      <button class="btn btn-sm" onclick="setTrRange('today')">Today</button>
+      <button class="btn btn-sm" onclick="setTrRange('week')">This Week</button>
+      <button class="btn btn-sm" onclick="setTrRange('lastweek')">Last Week</button>
+      <button class="btn btn-sm" onclick="setTrRange('month')">This Month</button>
+      <button class="btn btn-sm" onclick="setTrRange('lastmonth')">Last Month</button>
+    </div>
+    <div class="flex-gap" style="flex-wrap:wrap;">
+      <button class="btn btn-neon btn-sm" onclick="showTimeReport()">👁️ Show Report</button>
+      <button class="btn btn-purple btn-sm" onclick="downloadTimeReportPDF()">📄 Download PDF</button>
+      <button class="btn btn-green btn-sm" onclick="printTimeReportThermal()">🖨️ Thermal Print</button>
+    </div>
+    <div id="tr-output" style="margin-top:12px;overflow-x:auto;"></div>
   </div>
   <div class="card">
     <div class="card-header">
@@ -2808,6 +2923,47 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
     <div style="font-size:11px;color:var(--text3);margin-top:4px;">Keep this box focused (blue border) and plug in your USB scanner — every scan is captured automatically the instant the scanner sends its Enter key. No need to click any button between scans.</div>
     <div id="hw-scan-result" style="margin-top:10px;font-size:13px;font-weight:700;color:var(--neon);"></div>
     <div id="hw-scan-log" style="font-size:12px;color:var(--text2);max-height:160px;overflow-y:auto;margin-top:8px;"></div>
+  </div>
+</div>
+</div>
+
+<!-- ====== ATTENDANCE TIME POPUP (In/Out mode) ====== -->
+<div class="modal-overlay" id="attTimeModal">
+<div class="modal" style="max-width:420px;">
+  <div class="modal-header"><h3>🕒 Attendance Time</h3><button class="close-btn" onclick="closeModal('attTimeModal')">✕</button></div>
+  <div class="modal-body">
+    <div id="att-tm-name" style="font-size:15px;font-weight:700;"></div>
+    <div id="att-tm-date" style="font-size:12px;color:var(--text3);margin-bottom:10px;"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Check-In Time (aya)</label><input type="time" id="att-tm-in" oninput="updateAttTimeInfo()"></div>
+      <div class="form-group"><label>Check-Out Time (gaya, optional)</label><input type="time" id="att-tm-out" oninput="updateAttTimeInfo()"></div>
+    </div>
+    <div id="att-tm-info" class="accent-box" style="font-size:13px;margin-top:6px;"></div>
+    <div class="flex-gap" style="margin-top:12px;justify-content:flex-end;">
+      <button class="btn btn-sm" onclick="closeModal('attTimeModal')">Cancel</button>
+      <button class="btn btn-green btn-sm" onclick="saveAttTimeModal()">✅ OK — Mark Present</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ====== UNIT-WISE LEDGER PICKER ====== -->
+<div class="modal-overlay" id="lgUnitModal">
+<div class="modal modal-lg">
+  <div class="modal-header"><h3 id="lgUnitTitle">🏭 Unit-wise Ledger</h3><button class="close-btn" onclick="closeModal('lgUnitModal')">✕</button></div>
+  <div class="modal-body">
+    <div id="lgUnitInfo" style="font-size:11px;color:var(--text3);margin-bottom:8px;"></div>
+    <div class="flex-gap mb-8" style="flex-wrap:wrap;">
+      <button class="btn btn-sm" onclick="lgUnitTickAll(true)">☑ Select All</button>
+      <button class="btn btn-sm" onclick="lgUnitTickAll(false)">☐ Clear</button>
+    </div>
+    <div class="tbl-wrap"><table><thead><tr><th style="width:36px;"></th><th>Unit</th><th>Entries</th><th>Is unit ka ledger</th></tr></thead><tbody id="lgUnitTbody"></tbody></table></div>
+    <div style="font-size:11px;color:var(--text3);margin-top:8px;">Date range aur "With Details / Summary" wahi lagti hai jo Ledger screen par select hai. Unit-wise ledger mein party ka previous balance shamil nahi hota.</div>
+  </div>
+  <div class="modal-footer" style="flex-wrap:wrap;">
+    <button class="btn btn-purple" onclick="lgUnitsPDF('one')" title="Selected units ek hi PDF mein, har unit nayi page se shuru">📄 Selected Units — 1 PDF (har unit alag page)</button>
+    <button class="btn btn-green" onclick="lgUnitsPDF('many')" title="Har selected unit ki apni alag PDF file">📄 Selected Units — alag alag PDF files</button>
+    <button class="btn" onclick="closeModal('lgUnitModal')">Close</button>
   </div>
 </div>
 </div>
@@ -5379,7 +5535,9 @@ const DEFAULT_SETTINGS = {
   headerButtons:{notif:true,newdc:true,dashboard:true,backup:true,po:true,fastbilling:true,settings:true,mode:true,emplogin:true},
   // ---- Attendance / Hardware-Scanner / Overtime settings ----
   dutyStartTime:'09:00', dutyEndTime:'18:00', dutyHoursPerDay:8,
-  attendanceInOutMode:false, overtimeRateMultiplier:1.5
+  attendanceInOutMode:false, overtimeRateMultiplier:1.5,
+  // ---- Late / Absent Fine (record only, NOT linked to salary) ----
+  fineEnabled:false, fineLateType:'fixed', fineLateAmount:0, lateGraceMin:0, fineAbsentAmount:0
 };
 // Definitions for every optional header button. id must match a key in settings.headerButtons.
 const HEADER_BTN_DEFS = [
@@ -7104,22 +7262,47 @@ function qtyHistoryHTML(rec){
 }
 function _curUserName(){ try{ return (typeof securityData!=='undefined'&&securityData.currentUser)?securityData.currentUser.username:(settings.operatorName||'Operator'); }catch(e){ return 'Operator'; } }
 // Compares freshly-saved items with the previous version of the same DC (matched by item iid) and
-// appends a history entry whenever the challan qty or the rejected qty changed.
+// appends a history entry whenever the challan qty or the rejected qty changed. Each NEW rejection
+// (reject qty increased) gets its own Rejection Code + note / rejected-by / source / date, which the
+// Rejections tab then lists automatically.
+function nextRejCode(){
+  const n=(parseInt(settings.rejCounter)||0)+1; settings.rejCounter=n;
+  safeSetItem('sau_settings', JSON.stringify(settings));
+  return 'REJ-'+String(n).padStart(4,'0');
+}
 function applyQtyLogs(items, oldItems){
-  const user=_curUserName(), ts=new Date().toISOString(), changes=[];
+  const user=_curUserName(), ts=new Date().toISOString(), changes=[], today=localDateStr();
   (items||[]).forEach(it=>{
     const old=(oldItems||[]).find(o=>o&&o.iid&&o.iid===it.iid);
     const log=(old&&Array.isArray(old.qtyLog))?old.qtyLog.slice():[];
     const orig=parseFloat(it.origQty)||0, rej=parseFloat(it.rejQty)||0, net=parseFloat(it.qty)||0;
+    const ext=()=>({by:it.rejBy||'', from:it.rejFrom||'', rejDate:it.rejDate||today});
     let entry=null;
     if(old){
       const pO=itemOrigQty(old), pR=itemRejQty(old), pN=parseFloat(old.qty)||0;
-      if(Math.abs(pO-orig)>1e-9||Math.abs(pR-rej)>1e-9)
-        entry={ts,user,kind:(Math.abs(pR-rej)>1e-9)?'reject':'qty-edit',prevOrig:pO,prevRej:pR,prevNet:pN,orig,rej,net,delta:rej-pR,note:it.rejNote||''};
+      if(Math.abs(pO-orig)>1e-9||Math.abs(pR-rej)>1e-9){
+        entry=Object.assign({ts,user,kind:(Math.abs(pR-rej)>1e-9)?'reject':'qty-edit',prevOrig:pO,prevRej:pR,prevNet:pN,orig,rej,net,delta:rej-pR,note:it.rejNote||''}, ext());
+        // A NEW rejection on an item that already had one: if the date box still shows the old
+        // rejection's date, treat it as today's rejection.
+        if(entry.delta>0){
+          const le=[...log].reverse().find(x=>x.kind==='reject'&&(parseFloat(x.delta)||0)>0);
+          const prevDate = le ? (le.rejDate||String(le.ts||'').slice(0,10)) : (old.rejDate||'');
+          if(!it.rejDate || it.rejDate===prevDate) entry.rejDate = today;
+        }
+      }
+      else if(rej>0){
+        // Only the note / rejected-by / source / date was edited -> refresh the latest rejection record.
+        for(let i=log.length-1;i>=0;i--){
+          if(log[i].kind==='reject' && (parseFloat(log[i].delta)||0)>0){ log[i]=Object.assign({},log[i],{note:it.rejNote||''},ext()); break; }
+        }
+      }
     } else if(rej>0){
-      entry={ts,user,kind:'reject',prevOrig:orig,prevRej:0,prevNet:orig,orig,rej,net,delta:rej,note:it.rejNote||''};
+      entry=Object.assign({ts,user,kind:'reject',prevOrig:orig,prevRej:0,prevNet:orig,orig,rej,net,delta:rej,note:it.rejNote||''}, ext());
     }
-    if(entry){ log.push(entry); changes.push(`${it.desc}: ${_qn(entry.prevNet)}→${_qn(net)} (rej ${_qn(rej)} of ${_qn(orig)})`); }
+    if(entry){
+      if(entry.kind==='reject' && entry.delta>0) entry.code=nextRejCode();
+      log.push(entry); changes.push(`${it.desc}: ${_qn(entry.prevNet)}→${_qn(net)} (rej ${_qn(rej)} of ${_qn(orig)})${entry.code?' ['+entry.code+']':''}`);
+    }
     if(log.length) it.qtyLog=log;
   });
   return changes;
@@ -7403,6 +7586,7 @@ function renderTabContent(id){
   if(id==='stock') renderStockTab();
   if(id==='salesreturns') renderSalesReturnsTab();
   if(id==='returnreceipts') renderReturnReceiptsTab();
+  if(id==='rejections') renderRejectionsTab();
   if(id==='purchaseorders') renderPOTab();
   if(id==='warehouses') renderWarehousesTab();
   if(id==='expenses') renderExpensesTab();
@@ -7467,7 +7651,7 @@ const MOBILE_MORE_GROUPS = [
   ]},
   {label:'Finance', tabs:[
     {id:'cheques',label:'Cheques',icon:'🏦'},{id:'salesreturns',label:'Sales Returns',icon:'🔄'},
-    {id:'returnreceipts',label:'Return Receipts',icon:'🧾'},
+    {id:'returnreceipts',label:'Return Receipts',icon:'🧾'},{id:'rejections',label:'Rejections',icon:'❌'},
     {id:'bank',label:'Bank',icon:'🏛️'},{id:'expenses',label:'Expenses',icon:'💸'},
     {id:'pantry',label:'Pantry',icon:'🍵'},{id:'receipts',label:'Receipts',icon:'🧾'}
   ]},
@@ -7963,6 +8147,14 @@ function addItemRow(it=null){
   const origQ = it ? ((it.origQty!==undefined && it.origQty!=='') ? it.origQty : it.qty) : '';
   const rej = it ? itemRejQty(it) : 0;
   const rejNote = it && it.rejNote ? it.rejNote : '';
+  const rejBy = it && it.rejBy ? it.rejBy : '';
+  const rejFrom = it && it.rejFrom ? it.rejFrom : '';
+  let rejDate = it && it.rejDate ? it.rejDate : '';
+  if(!rejDate && it && rej>0){
+    const le=[...(it.qtyLog||[])].reverse().find(x=>x.kind==='reject'&&(parseFloat(x.delta)||0)>0);
+    rejDate = le ? (le.rejDate||String(le.ts||'').slice(0,10)) : '';
+  }
+  if(!rejDate) rejDate = localDateStr();
   const rate = it?it.rate:'';
   const tax = it?(it.tax||defTax):defTax;
   const net = Math.max(0,(parseFloat(origQ)||0)-rej);
@@ -7981,9 +8173,14 @@ function addItemRow(it=null){
       ${['Pcs','Nos','Sets','Kg','Mtr','Box','Rolls','Lot','Units','Ltr','Bags','Sheets'].map(u=>`<option ${u===uom?'selected':''}>${u}</option>`).join('')}
     </select></td>
     <td><input type="number" class="it-qty" value="${origQ}" placeholder="0" oninput="calcRow(this);updateGrandTotal()" style="width:70px;"></td>
-    <td style="min-width:130px;">
+    <td style="min-width:175px;">
       <input type="number" class="it-rej" min="0" step="any" value="${rej||''}" placeholder="0" title="Is challan mein se kitni qty reject hui (total)" oninput="calcRow(this);updateGrandTotal()" style="width:70px;border-color:var(--danger);">
-      <input type="text" class="it-rejnote" value="${_lgEsc(rejNote)}" placeholder="reject note / wajah" style="width:125px;font-size:10px;margin-top:3px;">
+      <div class="rej-extra" style="display:${rej>0?'block':'none'};">
+        <input type="text" class="it-rejnote" value="${_lgEsc(rejNote)}" placeholder="reject note * (lazmi)" title="Lazmi: kya reject hua / wajah" style="width:165px;font-size:10px;margin-top:3px;border-color:var(--danger);">
+        <input type="text" class="it-rejby" value="${_lgEsc(rejBy)}" placeholder="kis ne reject ki" style="width:165px;font-size:10px;margin-top:3px;">
+        <input type="text" class="it-rejfrom" value="${_lgEsc(rejFrom)}" placeholder="kahan se aai / source" style="width:165px;font-size:10px;margin-top:3px;">
+        <input type="date" class="it-rejdate" value="${_lgEsc(rejDate)}" title="Rejection date" style="width:165px;font-size:10px;margin-top:3px;">
+      </div>
       ${it?qtyItemHistHTML(it):''}
     </td>
     <td class="item-net" style="font-weight:800;color:var(--neon4);font-size:12px;">${_qn(net)}${rej>0?`<div style="font-size:9px;font-weight:600;color:var(--danger);">${_qn(origQ)} − ${_qn(rej)}</div>`:''}</td>
@@ -8058,6 +8255,7 @@ function _rowCalc(tr){
   const basic=net*rate, taxAmt=basic*tax/100;
   const rejEl=tr.querySelector('.it-rej');
   if(rejEl) rejEl.style.background = rej>q ? 'rgba(255,45,120,.3)' : '';
+  const rejEx=tr.querySelector('.rej-extra'); if(rejEx) rejEx.style.display = rej>0?'block':'none';
   const netEl=tr.querySelector('.item-net');
   if(netEl) netEl.innerHTML = _qn(net)+(rej>0?`<div style="font-size:9px;font-weight:600;color:var(--danger);">${_qn(q)} − ${_qn(rej)}</div>`:'');
   tr.querySelector('.item-basic').textContent = fmt(basic);
@@ -8146,6 +8344,9 @@ function getItemsFromTable(){
       origQty: qRaw,
       rejQty: rejN,
       rejNote: rejN>0 ? (tr.querySelector('.it-rejnote')?.value.trim()||'') : '',
+      rejBy: rejN>0 ? (tr.querySelector('.it-rejby')?.value.trim()||'') : '',
+      rejFrom: rejN>0 ? (tr.querySelector('.it-rejfrom')?.value.trim()||'') : '',
+      rejDate: rejN>0 ? (tr.querySelector('.it-rejdate')?.value||localDateStr()) : '',
       rate: tr.querySelector('.it-rate').value,
       tax: tr.querySelector('.it-tax').value,
       itemInvNo: itemInvNo||undefined
@@ -8305,6 +8506,10 @@ async function saveDC(){
   {
     const badRej = items.find(it=>(parseFloat(it.rejQty)||0) > (parseFloat(it.origQty)||0));
     if(badRej){ toast(`"${badRej.desc}": reject qty (${badRej.rejQty}) DC qty (${badRej.origQty}) se zyada nahi ho sakti`,'warning'); return; }
+  }
+  {
+    const noNote = items.find(it=>(parseFloat(it.rejQty)||0)>0 && !String(it.rejNote||'').trim());
+    if(noNote){ toast(`"${noNote.desc}": reject note likhna lazmi hai (kya reject hua / wajah)`,'warning'); return; }
   }
   // Qty history (pehle total itna tha -> ab itna hai) — compared against the saved version of this DC
   const _qtyChanges = applyQtyLogs(items, (editingDcIdx!==null && db[editingDcIdx]) ? (db[editingDcIdx].items||[]) : []);
@@ -10128,6 +10333,7 @@ function renderLedger(){
   if(!sel){
     document.getElementById('ledgerTbody').innerHTML='<tr><td colspan="9" class="text-center" style="padding:20px;color:var(--text3);">Select a party to view ledger</td></tr>';
     document.getElementById('ledger-summary').innerHTML='';
+    { const _p=document.getElementById('ledger-unit-panel'); if(_p){ _p.style.display='none'; _p.innerHTML=''; } }
     lgRenderScopeNote(null, '', null);
     lgUpdateSearchInfo(null);
     if(obInput) obInput.value='';
@@ -10393,6 +10599,10 @@ function renderLedger(){
   // Freight recovered through payments was never billed, so it is added back on
   // the charge side — otherwise Outstanding would understate what the party owes.
   const outstanding = obTotal+totalBills-totalPaid-totalDed+totalFreight;
+  {
+    const _uo = unitVal ? an.units.find(u=>u.key===(unitVal==='__none__'?'':unitVal)) : null;
+    lgRenderUnitPanel(!!unitVal, _uo?_uo.label:unitVal, {bills:totalBills, paid:totalPaid, ded:totalDed, freight:totalFreight, dn:totalDN, outstanding}, entries, cur);
+  }
   const detailMode = (document.getElementById('ledger-mode')||{}).value==='with_details';
   // "Without Details" = pure table only, NO summary cards. "With All Details" = summary cards + item breakdown.
   if(detailMode){
@@ -11778,7 +11988,7 @@ function generateHSCodePDF(){
   closeModal('hsReportPdfModal');
   toast('HS Code Report PDF generated','success');
 }
-function generateLedgerPDF(partyVal, detailMode, from, to, unitVal){
+function generateLedgerPDF(partyVal, detailMode, from, to, unitVal, ctx){
   // partyVal is either a plain party name or a combined-ledger key ("grp:<id>"); unitVal narrows to one unit.
   const sel = lgResolveSelection(partyVal) || {isGroup:false, group:null, key:partyVal, label:partyVal, parties:[partyVal]};
   const an = lgAnalyzeScope(sel);
@@ -11788,15 +11998,17 @@ function generateLedgerPDF(partyVal, detailMode, from, to, unitVal){
   const pendAll = (settings.ledgerShowPendingDC && settings.ledgerPdfPendingDC!==false) ? lgPendingDCEntries(sel, unitVal, from, to) : [];
   const pendForSum = lgPendingDCEntries(sel, unitVal, from, to, true);   // v89: summary mein hamesha (setting ke bagair)
   const cxlAll = lgCancelledDCEntries(sel, unitVal, from, to);           // v89: Full Ledger option   // v88: bina-invoice DCs (display only)
-  if(!entries.length && !pendAll.length && !cxlAll.length){toast('No ledger entries for this party','warning');return;}
+  if(!entries.length && !pendAll.length && !cxlAll.length){ if(!(ctx&&ctx.quiet)) toast('No ledger entries for this party','warning'); return;}
   const unitObj = unitVal ? an.units.find(u=>u.key===(unitVal==='__none__'?'':unitVal)) : null;
   const unitLabelTxt = unitObj ? unitObj.label : '';
   const party = sel.label + (unitLabelTxt ? ' - '+unitLabelTxt : '');
   const dateFiltered = !!(from || to);
   if(from) entries = entries.filter(e=>(e.date||'')>=from);
   if(to) entries = entries.filter(e=>(e.date||'')<=to);
-  if(dateFiltered && !entries.length && !pendAll.length && !cxlAll.length){toast('No ledger entries for this party in the selected date range','warning');return;}
-  const doc=new jspdf.jsPDF();
+  if(dateFiltered && !entries.length && !pendAll.length && !cxlAll.length){ if(!(ctx&&ctx.quiet)) toast('No ledger entries for this party in the selected date range','warning'); return;}
+  // ctx (optional): several units go into ONE pdf, each starting on a fresh page; the caller saves it.
+  const doc=(ctx&&ctx.doc)?ctx.doc:new jspdf.jsPDF();
+  if(ctx&&ctx.doc){ if(ctx.started) doc.addPage(); ctx.started=true; ctx.count=(ctx.count||0)+1; }
   let y=pdfHeader(doc,`Party Ledger - ${party}`);
   if(sel.isGroup || unitLabelTxt || dateFiltered){
     doc.setFontSize(9); doc.setFont(undefined,'normal'); doc.setTextColor(90,90,90);
@@ -11920,6 +12132,34 @@ function generateLedgerPDF(partyVal, detailMode, from, to, unitVal){
     fy = doc.lastAutoTable.finalY+8;
   } else fy += 2;
 
+  // Unit view: unit-wise cheque / payment details (list + mode-wise totals)
+  if(unitLabelTxt){
+    const pd = lgPayDetail(entries);
+    if(fy>230){ doc.addPage(); fy=15; }
+    doc.setFontSize(11); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
+    doc.text(`Cheque / Payment Details - Unit: ${unitLabelTxt}`, 14, fy); fy+=3;
+    if(pd.rows.length){
+      doc.autoTable({
+        startY:fy, head:[['Date','Mode','Cheque / Ref No','Bank','Invoice(s)','Status','Amount (unit share)','Deduction']],
+        body:pd.rows.map(r=>[fmtDate(r.date), r.mode, r.ref, r.bank, r.inv, r.status, fmt(r.amount)+(r.share?' (of '+fmt(r.share)+')':''), r.ded?fmt(r.ded):'']).concat([['','','','','','TOTAL PAID', cur+' '+fmt(pd.total), pd.ded?fmt(pd.ded):'']]),
+        styles:{fontSize:8}, headStyles:{fillColor:[20,20,40]},
+        columnStyles:{6:{halign:'right'},7:{halign:'right'}},
+        didParseCell:(d)=>{ if(d.section==='body' && d.row.index===pd.rows.length){ d.cell.styles.fontStyle='bold'; d.cell.styles.fillColor=[230,230,245]; } }
+      });
+      fy = doc.lastAutoTable.finalY+5;
+      const modeBody = Object.keys(pd.byMode).map(k=>[k, fmt(pd.byMode[k])]);
+      const statBody = Object.keys(pd.byStatus).map(k=>[k, fmt(pd.byStatus[k])]);
+      if(fy>245){ doc.addPage(); fy=15; }
+      doc.autoTable({ startY:fy, head:[['Mode-wise Paid','Amount']], body:modeBody, styles:{fontSize:8}, headStyles:{fillColor:[60,60,90]}, margin:{left:14,right:110}, columnStyles:{1:{halign:'right'}} });
+      const y1 = doc.lastAutoTable.finalY;
+      doc.autoTable({ startY:fy, head:[['Status-wise Paid','Amount']], body:statBody, styles:{fontSize:8}, headStyles:{fillColor:[60,60,90]}, margin:{left:110,right:14}, columnStyles:{1:{halign:'right'}} });
+      fy = Math.max(y1, doc.lastAutoTable.finalY)+8;
+    } else {
+      doc.setFontSize(9); doc.setFont(undefined,'normal');
+      doc.text('Is unit ki is range mein koi payment / cheque nahi.', 14, fy+5); fy += 12;
+    }
+  }
+
   // Detailed Invoice Breakdown (per bill entry with item-level details) — only for "With All Details" mode
   const billEntries = detailMode ? entries.filter(e=>e.type==='bill' && e.items && e.items.length) : [];
   if(billEntries.length){
@@ -11975,6 +12215,7 @@ function generateLedgerPDF(partyVal, detailMode, from, to, unitVal){
       fy = doc.lastAutoTable.finalY+6;
     });
   }
+  if(ctx&&ctx.doc) return true;   // caller adds logo + saves once all units are in
   stampBrandLogoOnAllPages(doc);
   doc.save(`Ledger_${party.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
   toast(detailMode ? 'Ledger PDF generated with full invoice details' : 'Ledger summary PDF generated','success');
@@ -17285,6 +17526,12 @@ function populateAttendanceSettingsUI(){
   document.getElementById('att-set-hours').value = settings.dutyHoursPerDay || 8;
   document.getElementById('att-set-otrate').value = settings.overtimeRateMultiplier || 1.5;
   document.getElementById('att-set-inout').checked = !!settings.attendanceInOutMode;
+  document.getElementById('att-set-fine-on').checked = !!settings.fineEnabled;
+  document.getElementById('att-set-fine-type').value = settings.fineLateType || 'fixed';
+  document.getElementById('att-set-fine-amt').value = settings.fineLateAmount || '';
+  document.getElementById('att-set-grace').value = settings.lateGraceMin || '';
+  document.getElementById('att-set-fine-abs').value = settings.fineAbsentAmount || '';
+  if(typeof populateTimeReportUI==='function') populateTimeReportUI();
 }
 function saveAttendanceSettings(){
   settings.dutyStartTime = document.getElementById('att-set-start').value || '09:00';
@@ -17292,6 +17539,11 @@ function saveAttendanceSettings(){
   settings.dutyHoursPerDay = parseFloat(document.getElementById('att-set-hours').value) || 8;
   settings.overtimeRateMultiplier = parseFloat(document.getElementById('att-set-otrate').value) || 1;
   settings.attendanceInOutMode = document.getElementById('att-set-inout').checked;
+  settings.fineEnabled = document.getElementById('att-set-fine-on').checked;
+  settings.fineLateType = document.getElementById('att-set-fine-type').value || 'fixed';
+  settings.fineLateAmount = parseFloat(document.getElementById('att-set-fine-amt').value) || 0;
+  settings.lateGraceMin = parseFloat(document.getElementById('att-set-grace').value) || 0;
+  settings.fineAbsentAmount = parseFloat(document.getElementById('att-set-fine-abs').value) || 0;
   safeSetItem('sau_settings', JSON.stringify(settings));
   toast('Attendance & Overtime settings saved','success');
 }
@@ -17367,9 +17619,9 @@ function handleHardwareScan(rawText){
     if(!entry || !entry.checkIn){
       if(!entry){ entry = {date, type:'present'}; emp.attendance.push(entry); }
       entry.type = 'present';
-      entry.checkIn = nowTimeStr;
+      applyCheckInInfo(entry, nowTimeStr);
       saveEmployees();
-      resultEl.textContent = `✅ ${emp.name} — Checked IN at ${nowTimeStr}`;
+      resultEl.textContent = `✅ ${emp.name} — Checked IN at ${fmtT12(nowTimeStr)} (${attStatusText(entry)})`;
       logEl.innerHTML = `<div>✅ ${emp.name} — Check-IN at ${nowTimeStr} (${date})</div>` + logEl.innerHTML;
       toast(emp.name+' checked IN at '+nowTimeStr,'success');
     } else if(!entry.checkOut){
@@ -17420,6 +17672,277 @@ function handleHardwareScan(rawText){
   renderAttendanceDashboard();
 }
 
+// ==================== ATTENDANCE TIME RECORD + FINE REPORTS ====================
+// In/Out mode ON  -> "Present" opens a popup (who / what time / minutes late vs Duty Start).
+// Everything here is a RECORD only: late minutes & fines are NOT linked to salary.
+function localDateStr(d){ d = d || new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function fmtT12(t){
+  if(!t) return '-';
+  const [h,m] = t.split(':').map(Number);
+  return String(((h+11)%12)+1).padStart(2,'0')+':'+String(m||0).padStart(2,'0')+' '+(h>=12?'PM':'AM');
+}
+function escH(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmtDur(m){ m = Math.round(m); return m<60 ? m+' min' : Math.floor(m/60)+'h '+(m%60)+'m'; }
+function calcLateFine(lateMin){
+  if(!settings.fineEnabled) return 0;
+  const grace = parseFloat(settings.lateGraceMin)||0;
+  if(lateMin <= grace) return 0;
+  const amt = parseFloat(settings.fineLateAmount)||0;
+  return settings.fineLateType==='permin' ? Math.round(amt*lateMin*100)/100 : amt;
+}
+// Stamp Check-In on an attendance entry: late/early minutes vs Duty Start + fine snapshot.
+function applyCheckInInfo(entry, timeStr){
+  const lm = timeStrToMinutes(timeStr) - timeStrToMinutes(settings.dutyStartTime||'09:00');
+  const grace = parseFloat(settings.lateGraceMin)||0;
+  entry.checkIn = timeStr;
+  entry.lateMin = lm>0 ? lm : 0;
+  entry.earlyMin = lm<0 ? -lm : 0;
+  entry.isLate = lm > grace;
+  entry.fine = calcLateFine(lm);
+}
+function attStatusText(e){
+  if(!e || !e.checkIn) return '';
+  if(e.isLate) return 'Late '+fmtDur(e.lateMin||0);
+  if(e.lateMin>0) return 'On time (+'+fmtDur(e.lateMin)+' grace)';
+  if(e.earlyMin>0) return 'Early '+fmtDur(e.earlyMin);
+  return 'On time';
+}
+function applyAutoOvertime(emp, entry, date, outStr){
+  if(!emp.money) emp.money = [];
+  emp.money = emp.money.filter(mo=>!(mo.date===date && mo.autoOvertime));
+  const otMinutes = timeStrToMinutes(outStr) - timeStrToMinutes(settings.dutyEndTime||'18:00');
+  if(otMinutes > 0){
+    const otHours = +(otMinutes/60).toFixed(2);
+    const perDay = (parseFloat(emp.salary)||0)/30;
+    const dutyHours = parseFloat(settings.dutyHoursPerDay)||8;
+    const hourly = dutyHours>0 ? perDay/dutyHours : 0;
+    const otAmount = +(otHours*hourly*(parseFloat(settings.overtimeRateMultiplier)||1)).toFixed(2);
+    entry.overtimeHours = otHours; entry.overtimeAmount = otAmount;
+    emp.money.push({date, type:'overtime', amount:otAmount, note:'Auto overtime ('+otHours+' hrs after duty end)', autoOvertime:true});
+  } else { delete entry.overtimeHours; delete entry.overtimeAmount; }
+}
+
+// ---- Popup ----
+let attTimeCtx = null;
+function openAttTimeModal(idx, dateArg){
+  const emp = employees[idx]; if(!emp) return;
+  const date = dateArg || document.getElementById('att-dash-date').value;
+  if(!date){ toast('Select a date first','warning'); return; }
+  const entry = (emp.attendance||[]).find(a=>a.date===date);
+  attTimeCtx = {idx, date};
+  document.getElementById('att-tm-name').textContent = emp.name + (emp.designation?' ('+emp.designation+')':'');
+  document.getElementById('att-tm-date').textContent = '📅 '+date+'  •  Duty Start: '+fmtT12(settings.dutyStartTime||'09:00')+'  •  Duty End: '+fmtT12(settings.dutyEndTime||'18:00');
+  let defIn = entry && entry.checkIn;
+  if(!defIn) defIn = (date===localDateStr()) ? new Date().toTimeString().slice(0,5) : (settings.dutyStartTime||'09:00');
+  document.getElementById('att-tm-in').value = defIn;
+  document.getElementById('att-tm-out').value = (entry && entry.checkOut) || '';
+  updateAttTimeInfo();
+  openModal('attTimeModal');
+}
+function updateAttTimeInfo(){
+  const t = document.getElementById('att-tm-in').value;
+  const box = document.getElementById('att-tm-info');
+  if(!t){ box.innerHTML = '<span style="color:var(--text3);">Check-In time select karein</span>'; return; }
+  const lm = timeStrToMinutes(t) - timeStrToMinutes(settings.dutyStartTime||'09:00');
+  const grace = parseFloat(settings.lateGraceMin)||0;
+  const cur = settings.currency||'PKR';
+  let html;
+  if(lm > grace) html = `<b style="color:#ff5c5c;">⏰ ${fmtDur(lm)} LATE</b>`;
+  else if(lm > 0) html = `<b style="color:var(--neon);">✅ On time</b> (${fmtDur(lm)} — grace ke andar)`;
+  else if(lm < 0) html = `<b style="color:var(--neon);">✅ ${fmtDur(-lm)} EARLY</b>`;
+  else html = `<b style="color:var(--neon);">✅ Bilkul on time</b>`;
+  const fine = calcLateFine(lm);
+  if(settings.fineEnabled) html += fine>0 ? `<br>💸 Fine: <b>${cur} ${fmt(fine)}</b>` : `<br>💸 Fine: koi nahi`;
+  const o = document.getElementById('att-tm-out').value;
+  if(o){
+    const ot = timeStrToMinutes(o) - timeStrToMinutes(settings.dutyEndTime||'18:00');
+    if(ot>0) html += `<br>⏱️ Duty end ke baad: ${fmtDur(ot)} (overtime)`;
+  }
+  box.innerHTML = html;
+}
+function saveAttTimeModal(){
+  if(!attTimeCtx) return;
+  const {idx, date} = attTimeCtx;
+  const emp = employees[idx]; if(!emp) return;
+  const tin = document.getElementById('att-tm-in').value;
+  const tout = document.getElementById('att-tm-out').value;
+  if(!tin){ toast('Check-In time select karein','warning'); return; }
+  if(tout && timeStrToMinutes(tout) <= timeStrToMinutes(tin)){ toast('Check-Out time Check-In ke baad hona chahiye','warning'); return; }
+  if(!emp.attendance) emp.attendance = [];
+  let entry = emp.attendance.find(a=>a.date===date);
+  if(!entry){ entry = {date, type:'present'}; emp.attendance.push(entry); }
+  entry.type = 'present';
+  applyCheckInInfo(entry, tin);
+  if(tout){ entry.checkOut = tout; applyAutoOvertime(emp, entry, date, tout); }
+  else { delete entry.checkOut; applyAutoOvertime(emp, entry, date, '00:00'); }
+  saveEmployees();
+  closeModal('attTimeModal');
+  renderAttendanceDashboard();
+  toast(emp.name+' Present — '+fmtT12(tin)+' ('+attStatusText(entry)+')','success');
+}
+
+// ---- Report UI ----
+function populateTimeReportUI(){
+  const sel = document.getElementById('tr-emp'); if(!sel) return;
+  const keep = sel.value;
+  sel.innerHTML = '<option value="all">— All Employees —</option>' + employees.map(e=>`<option value="${escH(e.id)}">${escH(e.name)}</option>`).join('');
+  if(keep) sel.value = keep;
+  if(!document.getElementById('tr-from').value) setTrRange('month');
+}
+function setTrRange(k){
+  const now = new Date(); let a, b;
+  if(k==='today'){ a = b = now; }
+  else if(k==='week' || k==='lastweek'){
+    const dow = (now.getDay()+6)%7; // Monday = 0
+    a = new Date(now.getFullYear(), now.getMonth(), now.getDate()-dow-(k==='lastweek'?7:0));
+    b = new Date(a.getFullYear(), a.getMonth(), a.getDate()+6);
+  }
+  else if(k==='month'){ a = new Date(now.getFullYear(), now.getMonth(), 1); b = new Date(now.getFullYear(), now.getMonth()+1, 0); }
+  else { a = new Date(now.getFullYear(), now.getMonth()-1, 1); b = new Date(now.getFullYear(), now.getMonth(), 0); }
+  document.getElementById('tr-from').value = localDateStr(a);
+  document.getElementById('tr-to').value = localDateStr(b);
+}
+function buildTimeReport(mode){
+  const empId = document.getElementById('tr-emp').value;
+  const from = document.getElementById('tr-from').value;
+  const to = document.getElementById('tr-to').value;
+  if(!from || !to){ toast('From aur To date select karein','warning'); return null; }
+  if(from > to){ toast('From date To date se pehle honi chahiye','warning'); return null; }
+  const absFine = settings.fineEnabled ? (parseFloat(settings.fineAbsentAmount)||0) : 0;
+  const data = [];
+  employees.forEach(emp=>{
+    if(empId!=='all' && emp.id!==empId) return;
+    const rows = (emp.attendance||[]).filter(a=>a.date && a.date>=from && a.date<=to).sort((x,y)=>x.date<y.date?-1:1);
+    const t = {came:0, late:0, absent:0, leave:0, lateMin:0, fine:0};
+    let list = rows.map(a=>{
+      const isLate = !!a.isLate || a.type==='late';
+      let fine = 0;
+      if(a.type==='absent') fine = absFine;
+      else if(a.fine!==undefined) fine = a.fine||0;
+      else if(a.type==='late' && settings.fineEnabled && settings.fineLateType==='fixed') fine = parseFloat(settings.fineLateAmount)||0;
+      if(a.type==='absent') t.absent++; else if(a.type==='leave') t.leave++; else t.came++;
+      if(isLate && a.type!=='absent'){ t.late++; t.lateMin += a.lateMin||0; }
+      t.fine += fine;
+      return {date:a.date, type:a.type, checkIn:a.checkIn||'', checkOut:a.checkOut||'', lateMin:a.lateMin||0, isLate, status:attStatusText(a), fine};
+    });
+    if(mode==='fine') list = list.filter(r=>r.fine>0);
+    if(!list.length) return;
+    data.push({emp, list, t});
+  });
+  if(!data.length){ toast(mode==='fine'?'Is period mein koi fine nahi':'Is period mein koi attendance record nahi','warning'); return null; }
+  return {data, from, to, mode, cur: settings.currency||'PKR'};
+}
+function trDayName(d){ return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(d+'T00:00:00').getDay()]; }
+function trTypeLabel(r){
+  const m = {present:'Present', late:'Late', halfday:'Half Day', leave:'Leave', absent:'Absent'};
+  return m[r.type] || r.type;
+}
+function trRowCells(r, mode){
+  if(mode==='fine') return [r.date, trDayName(r.date), r.type==='absent'?'Absent':(r.checkIn?fmtT12(r.checkIn):'Late'), r.type==='absent'?'-':(r.lateMin?fmtDur(r.lateMin):'-'), fmt(r.fine)];
+  return [r.date, trDayName(r.date), trTypeLabel(r), r.checkIn?fmtT12(r.checkIn):'-', r.checkOut?fmtT12(r.checkOut):'-', r.checkIn?r.status:'-'];
+}
+function trHead(mode, cur){
+  return mode==='fine' ? ['Date','Day','Check-In','Late By','Fine ('+cur+')'] : ['Date','Day','Status','Check-In','Check-Out','Arrival'];
+}
+function trSummaryLine(t, mode, cur){
+  if(mode==='fine') return `Late days: ${t.late}  |  Absent: ${t.absent}  |  Total Fine: ${cur} ${fmt(t.fine)}`;
+  return `Came: ${t.came}  |  Late: ${t.late}${t.lateMin?' ('+fmtDur(t.lateMin)+' total)':''}  |  Absent: ${t.absent}  |  Leave: ${t.leave}`;
+}
+function trTitle(rep){ return (rep.mode==='fine'?'Fine Report':'Time Record')+' — '+rep.from+' to '+rep.to; }
+
+function showTimeReport(){
+  const mode = document.getElementById('tr-mode').value;
+  const rep = buildTimeReport(mode); if(!rep) return;
+  let grand = 0;
+  const head = trHead(mode, rep.cur);
+  const html = rep.data.map(({emp,list,t})=>{
+    grand += t.fine;
+    return `<div class="accent-box" style="margin-bottom:10px;">
+      <div style="font-weight:700;margin-bottom:4px;">${escH(emp.name)}${emp.designation?' <span style="font-weight:400;color:var(--text3);font-size:11px;">('+escH(emp.designation)+')</span>':''}</div>
+      <table class="items-table"><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+      <tbody>${list.map(r=>`<tr>${trRowCells(r,mode).map(c=>`<td>${escH(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>
+      <div style="font-size:12px;margin-top:4px;font-weight:600;">${escH(trSummaryLine(t,mode,rep.cur))}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('tr-output').innerHTML =
+    `<div style="font-weight:700;margin-bottom:6px;">${escH(trTitle(rep))}</div>` + html +
+    (mode==='fine' && rep.data.length>1 ? `<div style="font-weight:700;">Grand Total Fine: ${rep.cur} ${fmt(grand)}</div>` : '');
+}
+
+function downloadTimeReportPDF(){
+  const mode = document.getElementById('tr-mode').value;
+  const rep = buildTimeReport(mode); if(!rep) return;
+  const doc = new jspdf.jsPDF();
+  let y = pdfHeader(doc, trTitle(rep));
+  let grand = 0;
+  rep.data.forEach(({emp,list,t})=>{
+    grand += t.fine;
+    if(y > 250){ doc.addPage(); y = pdfHeader(doc, trTitle(rep)); }
+    doc.setFontSize(11); doc.setFont(undefined,'bold');
+    doc.text(emp.name+(emp.designation?' ('+emp.designation+')':''), 14, y); y += 4;
+    doc.autoTable({
+      startY:y,
+      head:[trHead(mode, rep.cur)],
+      body:list.map(r=>trRowCells(r,mode)),
+      styles:{fontSize:9}, headStyles:{fillColor:[20,20,40]}
+    });
+    y = doc.lastAutoTable.finalY + 5;
+    doc.setFontSize(9); doc.setFont(undefined,'bold');
+    doc.text(trSummaryLine(t,mode,rep.cur), 14, y); y += 10;
+  });
+  if(mode==='fine' && rep.data.length>1){
+    if(y > 270){ doc.addPage(); y = 20; }
+    doc.setFontSize(11); doc.setFont(undefined,'bold');
+    doc.text(`Grand Total Fine: ${rep.cur} ${fmt(grand)}`, 14, y);
+  }
+  stampBrandLogoOnAllPages(doc);
+  doc.save(`${mode==='fine'?'Fine_Report':'Time_Record'}_${rep.from}_to_${rep.to}.pdf`);
+  toast('PDF generated','success');
+}
+
+function printTimeReportThermal(){
+  const mode = document.getElementById('tr-mode').value;
+  const rep = buildTimeReport(mode); if(!rep) return;
+  const w = parseInt(document.getElementById('tr-width').value)||80;
+  const fs = w<=58 ? 10 : 11;
+  const short = d => { const x = new Date(d+'T00:00:00'); return String(x.getDate()).padStart(2,'0')+'-'+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][x.getMonth()]; };
+  let grand = 0;
+  const blocks = rep.data.map(({emp,list,t})=>{
+    grand += t.fine;
+    const rows = list.map(r=>{
+      if(mode==='fine') return `<tr><td>${short(r.date)}</td><td>${r.type==='absent'?'Absent':(r.lateMin?fmtDur(r.lateMin):'Late')}</td><td style="text-align:right;">${fmt(r.fine)}</td></tr>`;
+      const arr = r.type==='absent' ? 'ABSENT' : r.type==='leave' ? 'Leave' : (r.checkIn ? (r.isLate?'Late '+r.lateMin+'m':(r.earlyMin?'OK':'OK')) : trTypeLabel(r));
+      return `<tr><td>${short(r.date)}</td><td>${r.checkIn?fmtT12(r.checkIn).replace(' ',''):'-'}</td><td>${r.checkOut?fmtT12(r.checkOut).replace(' ',''):'-'}</td><td style="text-align:right;">${arr}</td></tr>`;
+    }).join('');
+    const head = mode==='fine' ? '<tr><th>Date</th><th>Late</th><th style="text-align:right;">Fine</th></tr>' : '<tr><th>Date</th><th>In</th><th>Out</th><th style="text-align:right;">Status</th></tr>';
+    return `<div style="border-top:1px dashed #000;padding-top:4px;margin-top:6px;">
+      <div style="font-weight:bold;font-size:${fs+1}px;">${escH(emp.name)}</div>
+      <table>${head}${rows}</table>
+      <div style="font-weight:bold;margin-top:3px;">${mode==='fine'
+        ? `Late: ${t.late} | Absent: ${t.absent}<br>TOTAL FINE: ${rep.cur} ${fmt(t.fine)}`
+        : `Came: ${t.came} | Late: ${t.late} | Absent: ${t.absent}${t.lateMin?'<br>Total late: '+fmtDur(t.lateMin):''}`}</div>
+    </div>`;
+  }).join('');
+  const html = `<div style="width:${w}mm;font-family:Arial,sans-serif;font-size:${fs}px;font-weight:bold;padding:2mm;box-sizing:border-box;">
+    <div style="text-align:center;font-size:${fs+3}px;">${escH(settings.companyName||'SAU CORPORATION')}</div>
+    <div style="text-align:center;margin:3px 0;">${mode==='fine'?'FINE REPORT':'TIME RECORD'}</div>
+    <div style="text-align:center;font-size:${fs-1}px;">${rep.from} to ${rep.to}</div>
+    ${blocks}
+    ${mode==='fine' && rep.data.length>1 ? `<div style="border-top:2px solid #000;margin-top:6px;padding-top:4px;">GRAND TOTAL FINE: ${rep.cur} ${fmt(grand)}</div>` : ''}
+    <div style="text-align:center;font-size:${fs-2}px;margin-top:8px;">Printed: ${new Date().toLocaleString('en-PK')}</div>
+  </div>`;
+  const win = window.open('','_blank');
+  if(!win){ toast('Popup blocked — browser mein popups allow karein','warning'); return; }
+  win.document.write(`<!DOCTYPE html><html><head><title>${mode==='fine'?'Fine Report':'Time Record'}</title><style>
+    @page{size:${w}mm auto;margin:0;}
+    html,body{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    table{width:100%;border-collapse:collapse;table-layout:auto;}
+    td,th{padding:1px 2px;text-align:left;font-size:${fs}px;}
+  </style></head><body>${html}</body></html>`);
+  win.document.close();
+  setTimeout(()=>win.print(),300);
+}
+
 // ==================== QUICK ATTENDANCE DASHBOARD ====================
 // One screen to mark every employee's attendance for a given day in one or
 // two clicks each, instead of opening each employee's edit modal separately.
@@ -17445,9 +17968,10 @@ function renderAttendanceDashboard(){
     let scanInfo = '';
     if(entry && (entry.checkIn || entry.checkOut)){
       scanInfo = `<div style="width:100%;font-size:11px;color:var(--text3);">`+
-        (entry.checkIn ? `🟢 In: ${entry.checkIn}` : '') +
-        (entry.checkOut ? ` &nbsp; 🔴 Out: ${entry.checkOut}` : (settings.attendanceInOutMode && entry.checkIn ? ` &nbsp; <span style="color:var(--neon2);">(awaiting check-out)</span>` : '')) +
+        (entry.checkIn ? `🟢 In: ${fmtT12(entry.checkIn)} <b style="color:${entry.isLate?'#ff5c5c':'var(--neon)'};">(${attStatusText(entry)})</b>` : '') +
+        (entry.checkOut ? ` &nbsp; 🔴 Out: ${fmtT12(entry.checkOut)}` : (settings.attendanceInOutMode && entry.checkIn ? ` &nbsp; <span style="color:var(--neon2);">(awaiting check-out)</span>` : '')) +
         (entry.overtimeHours ? ` &nbsp; ⏱️ OT: ${entry.overtimeHours} hrs (${cur2} ${fmt(entry.overtimeAmount||0)})` : '') +
+        (entry.fine>0 ? ` &nbsp; 💸 Fine: ${cur2} ${fmt(entry.fine)}` : '') +
         `</div>`;
     }
     return `<div class="accent-box" style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
@@ -17457,6 +17981,7 @@ function renderAttendanceDashboard(){
       <button class="btn btn-xs ${cur==='late'?'btn-purple':''}" onclick="quickMarkAttendance(${idx},'late')">⏰ Late</button>
       <button class="btn btn-xs ${cur==='leave'?'btn-neon':''}" onclick="quickMarkAttendance(${idx},'leave')">🏖️ Leave</button>
       <button class="btn btn-xs ${cur==='absent'?'btn-red':''}" onclick="quickMarkAttendance(${idx},'absent')">❌ Absent</button>
+      ${(settings.attendanceInOutMode && cur==='present') ? `<button class="btn btn-xs btn-neon" onclick="openAttTimeModal(${idx})" title="Check-In / Check-Out time badlein">🕒 Time</button>` : ''}
       ${scanInfo}
     </div>`;
   }).join('');
@@ -17468,6 +17993,12 @@ function quickMarkAttendance(idx, type){
   if(!emp) return;
   if(!emp.attendance) emp.attendance=[];
   const existingIdx = emp.attendance.findIndex(a=>a.date===date);
+  // In/Out mode ON: "Present" opens the time popup (who / what time / late minutes).
+  // Mode OFF: falls through below and marks Present directly, as before.
+  if(type==='present' && settings.attendanceInOutMode && !(existingIdx>=0 && emp.attendance[existingIdx].type==='present')){
+    openAttTimeModal(idx, date);
+    return;
+  }
   if(existingIdx>=0 && emp.attendance[existingIdx].type===type){
     // Clicking the already-active status again clears it for that day.
     emp.attendance.splice(existingIdx,1);
@@ -17476,7 +18007,10 @@ function quickMarkAttendance(idx, type){
     toast(emp.name+' — '+type+' removed for '+date,'success');
     return;
   }
-  if(existingIdx>=0) emp.attendance[existingIdx].type = type; else emp.attendance.push({date, type});
+  if(existingIdx>=0){
+    emp.attendance[existingIdx].type = type;
+    if(type!=='present'){ const e0=emp.attendance[existingIdx]; delete e0.lateMin; delete e0.earlyMin; delete e0.isLate; delete e0.fine; }
+  } else emp.attendance.push({date, type});
   saveEmployees();
   renderAttendanceDashboard();
   toast(emp.name+' marked '+type+' for '+date,'success');
@@ -19965,6 +20499,456 @@ function printReturnReceipt(size){
   </style></head><body>${html}</body></html>`);
   win.document.close();
   setTimeout(()=>win.print(),300);
+}
+
+// ==================== REJECTIONS TAB (auto-built from Edit DC -> Reject Qty) ====================
+// Every time Reject Qty is saved on a DC item, applyQtyLogs() stores a rejection event on that item
+// (code, note, rejected-by, source, date). This tab simply READS those events, so it is always in sync
+// with the DCs — nothing is entered twice.
+// Old rejections (made before this feature) get a code + a log entry once, in date order.
+function rejMigrate(){
+  let changed = false; const pending = [];
+  (db||[]).forEach(rec=>(rec.items||[]).forEach(it=>{
+    const rej = itemRejQty(it);
+    let log = Array.isArray(it.qtyLog) ? it.qtyLog : null;
+    const hasPos = log && log.some(e=>e.kind==='reject' && (parseFloat(e.delta)||0)>0);
+    if(rej>0 && !hasPos){
+      log = log || [];
+      const o = itemOrigQty(it);
+      log.unshift({ts:(rec.date||localDateStr())+'T00:00:00.000Z', user:'', kind:'reject', prevOrig:o, prevRej:0, prevNet:o, orig:o, rej, net:parseFloat(it.qty)||0, delta:rej, note:it.rejNote||'', by:it.rejBy||'', from:it.rejFrom||'', rejDate:rec.date||'', legacy:true});
+      it.qtyLog = log; changed = true;
+    }
+    (it.qtyLog||[]).forEach(e=>{ if(e.kind==='reject' && (parseFloat(e.delta)||0)>0 && !e.code) pending.push(e); });
+  }));
+  pending.sort((a,b)=>String(a.ts).localeCompare(String(b.ts)));
+  pending.forEach(e=>{ e.code = nextRejCode(); changed = true; });
+  if(changed){ try{ saveData(); }catch(err){ console.error('rejMigrate save failed', err); } }
+}
+function rejAllRows(){
+  const rows = [];
+  (db||[]).forEach((rec,ri)=>(rec.items||[]).forEach((it,ii)=>{
+    (it.qtyLog||[]).forEach((e,ei)=>{
+      if(e.kind!=='reject') return;
+      const d = parseFloat(e.delta)||0; if(!d) return;
+      const rate = parseFloat(it.rate)||0, tax = parseFloat(it.tax)||0;
+      rows.push({ri,ii,ei,rec,it,e, isRev:d<0, code:e.code||'',
+        date: e.rejDate || String(e.ts||'').slice(0,10) || rec.date || '',
+        party: rec.partyName||'', dcNo: rec.dcNo||'', invNo: rec.invNo||'', poNo: rec.poNo||'',
+        desc: it.desc||'', uom: it.uom||'', hs: it.hscode||'',
+        qty: d, orig: parseFloat(e.orig)||0, net: parseFloat(e.net)||0, rate,
+        value: d*rate*(1+tax/100), tax,
+        note: e.note||'', by: e.by||'', from: e.from||'', user: e.user||'', ts: e.ts||''});
+    });
+  }));
+  rows.sort((a,b)=> String(b.date).localeCompare(String(a.date)) || String(b.code).localeCompare(String(a.code)));
+  return rows;
+}
+function rejFiltered(){
+  const g = id => (document.getElementById(id)||{}).value || '';
+  const q = g('rej-search').trim().toLowerCase(), party = g('rej-party'), po = g('rej-po').trim().toLowerCase();
+  const from = g('rej-from'), to = g('rej-to');
+  return rejAllRows().filter(r=>{
+    if(party && r.party!==party) return false;
+    if(po && !String(r.poNo).toLowerCase().includes(po)) return false;
+    if(from && r.date < from) return false;
+    if(to && r.date > to) return false;
+    if(q){
+      const hay = [r.code,r.party,r.dcNo,r.invNo,r.poNo,r.desc,r.note,r.by,r.from].join(' ').toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+function renderRejectionsTab(){
+  rejMigrate();
+  const all = rejAllRows();
+  const psel = document.getElementById('rej-party');
+  if(psel){
+    const keep = psel.value;
+    const parties = [...new Set(all.map(r=>r.party).filter(Boolean))].sort();
+    psel.innerHTML = '<option value="">— All Parties —</option>' + parties.map(p=>`<option value="${_lgEsc(p)}">${_lgEsc(p)}</option>`).join('');
+    psel.value = parties.includes(keep) ? keep : '';
+  }
+  const rows = rejFiltered();
+  const cur = settings.currency||'PKR';
+  const totQty = rows.reduce((s,r)=>s+r.qty,0), totVal = rows.reduce((s,r)=>s+r.value,0);
+  document.getElementById('rej-summary').innerHTML =
+    `<span>📋 Rejections: <b>${rows.filter(r=>!r.isRev).length}</b></span> &nbsp;|&nbsp; <span>❌ Net rejected qty: <b style="color:var(--danger);">${_qn(totQty)}</b></span> &nbsp;|&nbsp; <span>💰 Value: <b style="color:var(--danger);">${cur} ${fmt(totVal)}</b></span>`;
+  document.getElementById('rejTbody').innerHTML = rows.length ? rows.map(r=>`<tr${r.isRev?' style="opacity:.75;"':''}>
+    <td style="font-weight:700;color:var(--neon);white-space:nowrap;">${r.isRev?'↩️ Wapas':_lgEsc(r.code||'-')}</td>
+    <td style="white-space:nowrap;">${fmtDate(r.date)}</td>
+    <td>${_lgEsc(r.party)}</td>
+    <td>${_lgEsc(r.dcNo)}${r.invNo?`<div style="font-size:10px;color:var(--text3);">Inv ${_lgEsc(r.invNo)}</div>`:''}</td>
+    <td>${_lgEsc(r.poNo||'-')}</td>
+    <td>${_lgEsc(r.desc)}<div style="font-size:10px;color:var(--text3);">Challan ${_qn(r.orig)} ${_lgEsc(r.uom)}</div></td>
+    <td style="font-weight:700;color:${r.isRev?'var(--neon4)':'var(--danger)'};">${r.isRev?'':'−'}${_qn(Math.abs(r.qty))}</td>
+    <td style="white-space:nowrap;">${fmt(Math.abs(r.value))}</td>
+    <td>${_lgEsc(r.by||'-')}</td>
+    <td style="max-width:200px;font-size:11px;">${_lgEsc(r.note||'-')}</td>
+    <td style="white-space:nowrap;">
+      <button class="btn btn-neon btn-xs" onclick="rejOpenView(${r.ri},${r.ii},${r.ei})" title="Full details">👁️</button>
+      ${r.isRev?'':`<button class="btn btn-xs" onclick="rejOpenEdit(${r.ri},${r.ii},${r.ei})" title="Edit details">✏️</button>
+      <button class="btn btn-purple btn-xs" onclick="rejPrint(${r.ri},${r.ii},${r.ei},'a4',false)" title="Print A4">🖨️</button>
+      <button class="btn btn-green btn-xs" onclick="rejPrint(${r.ri},${r.ii},${r.ei},'thermal',false)" title="Print Thermal">🧾</button>`}
+      <button class="btn btn-xs" onclick="editDC(${r.ri})" title="Open this DC (change qty)">📂 DC</button>
+    </td></tr>`).join('') : '<tr><td colspan="11" style="text-align:center;color:var(--text3);">Koi rejection nahi mili. Edit DC → ❌ Reject Qty mein qty likhein to yahan khud aa jayegi.</td></tr>';
+  // Party-wise summary
+  const map = {};
+  all.forEach(r=>{ const m = map[r.party] = map[r.party] || {n:0,qty:0,val:0,last:''}; if(!r.isRev) m.n++; m.qty += r.qty; m.val += r.value; if(r.date>m.last) m.last = r.date; });
+  const plist = Object.keys(map).sort();
+  document.getElementById('rejPartyTbody').innerHTML = plist.length ? plist.map(p=>`<tr>
+    <td>${_lgEsc(p)}</td><td>${map[p].n}</td><td>${_qn(map[p].qty)}</td><td>${cur} ${fmt(map[p].val)}</td><td>${fmtDate(map[p].last)}</td>
+    <td style="white-space:nowrap;"><button class="btn btn-neon btn-xs" onclick="rejViewParty(this.dataset.p)" data-p="${_lgEsc(p)}">👁️ View</button>
+    <button class="btn btn-purple btn-xs" onclick="rejPartyPDF(this.dataset.p)" data-p="${_lgEsc(p)}">📄 PDF</button></td></tr>`).join('')
+    : '<tr><td colspan="6" style="text-align:center;color:var(--text3);">—</td></tr>';
+}
+function rejViewParty(p){ document.getElementById('rej-party').value = p; renderRejectionsTab(); }
+function rejClearFilters(){ ['rej-search','rej-party','rej-po','rej-from','rej-to'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; }); renderRejectionsTab(); }
+function rejGet(ri,ii,ei){ return rejAllRows().find(r=>r.ri===ri && r.ii===ii && r.ei===ei); }
+
+// ---- View (full details) ----
+let rejCur = null;
+function rejOpenView(ri,ii,ei){
+  const r = rejGet(ri,ii,ei); if(!r) return;
+  rejCur = {ri,ii,ei};
+  const cur = settings.currency||'PKR';
+  const party = (fbrParties||[]).find(p=>p.partyName===r.party)||{};
+  const row = (k,v)=>`<tr><td style="color:var(--text3);width:38%;padding:4px 6px;">${k}</td><td style="padding:4px 6px;font-weight:600;">${v||'-'}</td></tr>`;
+  const hist = (r.it.qtyLog||[]).map(_qtyLogLine).reverse().join('<br>');
+  document.getElementById('rej-view-title').textContent = '❌ Rejection ' + (r.isRev ? '(Wapas)' : r.code);
+  document.getElementById('rej-view-body').innerHTML = `<table style="width:100%;font-size:12px;">
+    ${row('Rejection Code', `<span style="color:var(--neon);">${_lgEsc(r.isRev?'—':r.code)}</span>`)}
+    ${row('Rejection Date', fmtDate(r.date))}
+    ${row('Party / Company', _lgEsc(r.party))}
+    ${row('Party NTN', _lgEsc(party.ntn||''))}
+    ${row('Party Address', _lgEsc(party.address||''))}
+    ${row('Unit', _lgEsc(r.rec.unitName||''))}
+    ${row('DC No / Date', _lgEsc(r.dcNo)+' &nbsp;•&nbsp; '+fmtDate(r.rec.date))}
+    ${row('Invoice No / Date', r.invNo?_lgEsc(r.invNo)+(r.rec.invDate?' &nbsp;•&nbsp; '+_lgEsc(r.rec.invDate):''):'')}
+    ${row('PO No', _lgEsc(r.poNo))}
+    ${row('Item', _lgEsc(r.desc)+(r.hs?' <span style="color:var(--text3);">(HS '+_lgEsc(r.hs)+')</span>':''))}
+    ${row('Challan Qty', _qn(r.orig)+' '+_lgEsc(r.uom))}
+    ${row(r.isRev?'Reject Wapas Qty':'Rejected Qty', `<span style="color:${r.isRev?'var(--neon4)':'var(--danger)'};">${_qn(Math.abs(r.qty))} ${_lgEsc(r.uom)}</span>`)}
+    ${row('Net (baqi) Qty after this', _qn(r.net)+' '+_lgEsc(r.uom))}
+    ${row('Rate / Tax', fmt(r.rate)+' / '+_qn(r.tax)+'%')}
+    ${row('Rejected Value (incl. tax)', cur+' '+fmt(Math.abs(r.value)))}
+    ${row('📝 Note / Reason', _lgEsc(r.note))}
+    ${row('Kis ne reject ki', _lgEsc(r.by))}
+    ${row('Kahan se aai / Source', _lgEsc(r.from))}
+    ${row('Entry by / time', _lgEsc(r.user||'-')+' &nbsp;•&nbsp; '+(r.ts?new Date(r.ts).toLocaleString():''))}
+  </table>
+  <div style="font-size:11px;margin-top:8px;"><strong>📜 Is item ki poori qty history:</strong><div style="margin-top:3px;line-height:1.5;">${hist||'-'}</div></div>`;
+  document.getElementById('rej-view-printbtns').style.display = r.isRev ? 'none' : 'flex';
+  document.getElementById('rej-view-dcall').checked = false;
+  openModal('rejViewModal');
+}
+function rejViewPrint(size){
+  if(!rejCur) return;
+  rejPrint(rejCur.ri, rejCur.ii, rejCur.ei, size, document.getElementById('rej-view-dcall').checked);
+}
+function rejViewPdf(){
+  if(!rejCur) return;
+  const r = rejGet(rejCur.ri, rejCur.ii, rejCur.ei); if(!r) return;
+  const all = document.getElementById('rej-view-dcall').checked;
+  const rows = rejAllRows().filter(x=> all ? x.ri===r.ri : (x.ri===r.ri && x.ii===r.ii && x.ei===r.ei));
+  rejDownloadPDF(rows, r.party, 'Rejection Note — '+(all?'DC '+r.dcNo:r.code), (all?'Rejection_DC_'+r.dcNo:r.code));
+}
+
+// ---- Edit details (note / by / source / date) ----
+function rejOpenEdit(ri,ii,ei){
+  const r = rejGet(ri,ii,ei); if(!r) return;
+  rejCur = {ri,ii,ei};
+  document.getElementById('rej-edit-title').textContent = '✏️ Edit Rejection '+r.code;
+  document.getElementById('rej-edit-info').innerHTML = `${_lgEsc(r.party)} — DC ${_lgEsc(r.dcNo)} — ${_lgEsc(r.desc)}<br>Rejected qty: <b>${_qn(r.qty)}</b> (qty badalni ho to "Open DC" dabayein)`;
+  document.getElementById('rej-edit-date').value = r.date || localDateStr();
+  document.getElementById('rej-edit-note').value = r.note;
+  document.getElementById('rej-edit-by').value = r.by;
+  document.getElementById('rej-edit-from').value = r.from;
+  openModal('rejEditModal');
+}
+function rejOpenDcFromEdit(){ if(!rejCur) return; closeModal('rejEditModal'); editDC(rejCur.ri); }
+function rejSaveEdit(){
+  if(!rejCur) return;
+  const r = rejGet(rejCur.ri, rejCur.ii, rejCur.ei); if(!r) return;
+  const note = document.getElementById('rej-edit-note').value.trim();
+  if(!note){ toast('Note likhna lazmi hai','warning'); return; }
+  const e = r.it.qtyLog[r.ei];
+  e.note = note;
+  e.by = document.getElementById('rej-edit-by').value.trim();
+  e.from = document.getElementById('rej-edit-from').value.trim();
+  e.rejDate = document.getElementById('rej-edit-date').value || r.date;
+  // keep the item's "latest" fields in sync when this is the most recent rejection of the item
+  let lastIdx = -1; r.it.qtyLog.forEach((x,i)=>{ if(x.kind==='reject' && (parseFloat(x.delta)||0)>0) lastIdx = i; });
+  if(lastIdx===r.ei){ r.it.rejNote = e.note; r.it.rejBy = e.by; r.it.rejFrom = e.from; r.it.rejDate = e.rejDate; }
+  saveData();
+  try{ logAudit('edit','Rejections',`${e.code} (DC ${r.dcNo}) details edited`, undefined, undefined); }catch(x){}
+  closeModal('rejEditModal');
+  renderRejectionsTab();
+  toast('Rejection updated','success');
+}
+
+// ---- Print note (A4 + Thermal; same look & settings as Return Receipts) ----
+function buildRejectionNoteHTML(rows, size){
+  const isThermal = size==='thermal';
+  const fs = isThermal ? parseInt(rrSettings.fontSize||12) : parseInt(quotSettings.fontSize||11);
+  const fw = (isThermal && rrSettings.bold!==false) ? 'bold' : 'normal';
+  const width = isThermal ? `${rrSettings.thermalWidth||80}mm` : '190mm';
+  const margin = isThermal ? (rrSettings.margin||10) : (quotSettings.margin||10);
+  const pad = isThermal ? '2px 3px' : '4px 5px';
+  const cur = settings.currency||'PKR';
+  const rec = rows[0].rec;
+  const party = (fbrParties||[]).find(p=>p.partyName===rec.partyName)||{};
+  const E = _lgEsc;
+  const infoLines = [];
+  if(settings.phone) infoLines.push(settings.phone);
+  const addr = settings.address ? `<div style="font-size:${fs-1}px;line-height:1.3;font-weight:${fw};">${E((settings.address||'').replace(/\n/g,' '))}</div>` : '';
+  const showHeader = isThermal ? rrSettings.showHeader!==false : true;
+  const headerBlock = showHeader ? `<div style="text-align:center;margin-bottom:8px;">
+      ${settings.logoBase64?`<img src="${settings.logoBase64}" style="max-height:${isThermal?'36px':'55px'};max-width:${isThermal?'120px':'160px'};margin-bottom:4px;">`:''}
+      <div style="font-size:${fs+3}px;font-weight:bold;line-height:1.3;">${E(settings.companyName||'SAU CORPORATION')}</div>
+      ${infoLines.length?`<div style="font-size:${fs-1}px;font-weight:${fw};">${E(infoLines.join(' | '))}</div>`:''}${addr}
+    </div>` : '';
+  const codes = rows.map(r=>r.code).join(', ');
+  const totQty = rows.reduce((s,r)=>s+r.qty,0), totVal = rows.reduce((s,r)=>s+r.value,0);
+  const dates = [...new Set(rows.map(r=>r.date))].map(fmtDate).join(', ');
+  const meta = [
+    ['Rejection Code', codes], ['Rejection Date', dates],
+    ['Party / Company', rec.partyName||''], ['Party NTN', party.ntn||''], ['Party Address', (party.address||'').replace(/\n/g,' ')],
+    ['Unit', rec.unitName||''], ['DC No / Date', (rec.dcNo||'')+(rec.date?' / '+fmtDate(rec.date):'')],
+    ['Invoice No', rec.invNo?(rec.invNo+(rec.invDate?' / '+rec.invDate:'')):''], ['PO No', rec.poNo||'']
+  ].filter(m=>m[1]);
+  const metaBlock = isThermal
+    ? `<div style="font-size:${fs}px;margin-bottom:6px;line-height:1.4;font-weight:${fw};">${meta.map(m=>`<div><strong>${m[0]}:</strong> ${E(m[1])}</div>`).join('')}</div>`
+    : `<table style="width:100%;border-collapse:collapse;font-size:${fs}px;margin-bottom:8px;">${meta.map(m=>`<tr><td style="padding:3px 5px;width:26%;font-weight:bold;border:1px solid #ccc;background:#f7f7f7;">${m[0]}</td><td style="padding:3px 5px;border:1px solid #ccc;">${E(m[1])}</td></tr>`).join('')}</table>`;
+  let itemsBlock, detailBlock;
+  if(isThermal){
+    itemsBlock = rows.map((r,i)=>`<div style="border-top:1px dashed #000;padding:3px 0;font-size:${fs}px;font-weight:${fw};line-height:1.35;">
+      <div><strong>${i+1}. ${E(r.desc)}</strong> <span style="font-size:${fs-1}px;">[${E(r.code)}]</span></div>
+      <div>Challan: ${_qn(r.orig)} ${E(r.uom)} | <strong>Rejected: ${_qn(r.qty)}</strong> | Net: ${_qn(r.net)}</div>
+      <div>Rate ${fmt(r.rate)} | Value ${cur} ${fmt(r.value)}</div>
+      <div><strong>Note:</strong> ${E(r.note||'-')}</div>
+      ${r.by?`<div><strong>Rejected By:</strong> ${E(r.by)}</div>`:''}${r.from?`<div><strong>Source:</strong> ${E(r.from)}</div>`:''}
+    </div>`).join('');
+    detailBlock = '';
+  } else {
+    itemsBlock = `<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:${fs}px;">
+      <colgroup><col style="width:5%;"><col style="width:12%;"><col style="width:31%;"><col style="width:7%;"><col style="width:9%;"><col style="width:9%;"><col style="width:9%;"><col style="width:18%;"></colgroup>
+      <thead><tr style="background:#f0f0f0;">${['#','Code','Item','UOM','Challan Qty','Rejected','Net Qty','Rejected Value'].map(h=>`<th style="border:1px solid #999;padding:${pad};">${h}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map((r,i)=>`<tr>
+        <td style="border:1px solid #999;padding:${pad};text-align:center;">${i+1}</td>
+        <td style="border:1px solid #999;padding:${pad};font-weight:bold;word-break:break-word;">${E(r.code)}</td>
+        <td style="border:1px solid #999;padding:${pad};word-break:break-word;">${E(r.desc)}</td>
+        <td style="border:1px solid #999;padding:${pad};text-align:center;">${E(r.uom)}</td>
+        <td style="border:1px solid #999;padding:${pad};text-align:right;">${_qn(r.orig)}</td>
+        <td style="border:1px solid #999;padding:${pad};text-align:right;font-weight:bold;">${_qn(r.qty)}</td>
+        <td style="border:1px solid #999;padding:${pad};text-align:right;">${_qn(r.net)}</td>
+        <td style="border:1px solid #999;padding:${pad};text-align:right;">${cur} ${fmt(r.value)}</td></tr>`).join('')}
+        <tr style="font-weight:bold;background:#fafafa;"><td colspan="5" style="border:1px solid #999;padding:${pad};text-align:right;">TOTAL</td><td style="border:1px solid #999;padding:${pad};text-align:right;">${_qn(totQty)}</td><td style="border:1px solid #999;padding:${pad};"></td><td style="border:1px solid #999;padding:${pad};text-align:right;">${cur} ${fmt(totVal)}</td></tr>
+      </tbody></table>`;
+    detailBlock = `<div style="font-weight:bold;font-size:${fs+1}px;margin:10px 0 4px;">Rejection Details</div>
+      <table style="width:100%;border-collapse:collapse;font-size:${fs}px;">
+      <thead><tr style="background:#f0f0f0;">${['Code','Note / Reason','Rejected By','Source (kahan se aai)','Date'].map(h=>`<th style="border:1px solid #999;padding:${pad};text-align:left;">${h}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map(r=>`<tr><td style="border:1px solid #999;padding:${pad};font-weight:bold;">${E(r.code)}</td><td style="border:1px solid #999;padding:${pad};word-break:break-word;">${E(r.note||'-')}</td><td style="border:1px solid #999;padding:${pad};">${E(r.by||'-')}</td><td style="border:1px solid #999;padding:${pad};">${E(r.from||'-')}</td><td style="border:1px solid #999;padding:${pad};white-space:nowrap;">${fmtDate(r.date)}</td></tr>`).join('')}</tbody></table>`;
+  }
+  const totalThermal = isThermal ? `<div style="border-top:2px solid #000;margin-top:4px;padding-top:3px;font-size:${fs}px;font-weight:bold;">TOTAL Rejected: ${_qn(totQty)} | ${cur} ${fmt(totVal)}</div>` : '';
+  const recBy = [...new Set(rows.map(r=>r.user).filter(Boolean))].join(', ');
+  const footer = `<div style="margin-top:6px;font-size:${fs-1}px;font-weight:${fw};">Entry by: ${E(recBy||'-')} | Printed: ${new Date().toLocaleString()}</div>
+    <div style="display:flex;justify-content:space-between;margin-top:${isThermal?'24px':'40px'};font-size:${fs}px;gap:8px;font-weight:${fw};">
+      <div>Prepared By: _____________</div><div>Party Rep: _____________</div></div>`;
+  const stamp = `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-18deg);z-index:0;pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"><div style="border:${isThermal?'3px':'5px'} solid #c0392b;border-radius:10px;padding:${isThermal?'4px 14px':'10px 28px'};font-size:${isThermal?20:52}px;font-weight:800;color:#c0392b;opacity:0.25;white-space:nowrap;letter-spacing:2px;">REJECTED</div></div>`;
+  return `<div style="position:relative;overflow:hidden;font-family:Arial,sans-serif;font-size:${fs}px;width:${width};max-width:${width};margin:0 auto;padding:${margin}mm;box-sizing:border-box;font-weight:${fw};">
+    ${stamp}
+    <div style="position:relative;z-index:1;">
+    ${headerBlock}
+    <div style="text-align:center;font-size:${fs+1}px;font-weight:bold;border-top:2px solid #000;border-bottom:2px solid #000;padding:4px;margin:6px 0;">GOODS REJECTION NOTE</div>
+    ${metaBlock}
+    ${itemsBlock}
+    ${totalThermal}
+    ${detailBlock}
+    ${footer}
+    </div></div>`;
+}
+function rejPrint(ri,ii,ei,size,wholeDc){
+  const r = rejGet(ri,ii,ei); if(!r) return;
+  const rows = rejAllRows().filter(x=>!x.isRev && (wholeDc ? x.ri===ri : (x.ri===ri && x.ii===ii && x.ei===ei)))
+                           .sort((a,b)=>a.ii-b.ii || a.ei-b.ei);
+  if(!rows.length){ toast('Print ke liye rejection nahi mili','warning'); return; }
+  const html = buildRejectionNoteHTML(rows, size);
+  const isThermal = size==='thermal';
+  const margin = isThermal ? (rrSettings.margin||10) : (quotSettings.margin||10);
+  const win = window.open('','_blank');
+  if(!win){ toast('Popup blocked — browser mein popups allow karein','warning'); return; }
+  win.document.write(`<!DOCTYPE html><html><head><title>Rejection ${rows[0].code}</title><style>
+    @page{size:${isThermal?(rrSettings.thermalWidth||80)+'mm auto':'A4 portrait'};margin:${margin}mm;}
+    html,body{margin:0;font-family:Arial,sans-serif;font-size:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    div{max-width:100%;}
+    @media print{ *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;} }
+  </style></head><body>${html}</body></html>`);
+  win.document.close();
+  setTimeout(()=>win.print(),300);
+}
+
+// ---- PDF (current filtered list, one party, or one note) ----
+function rejDownloadPDF(rows, party, title, fileBase){
+  if(!rows.length){ toast('PDF ke liye koi rejection nahi','warning'); return; }
+  const cur = settings.currency||'PKR';
+  const doc = new jspdf.jsPDF({orientation:'landscape'});
+  let y = pdfHeader(doc, title);
+  if(party){
+    const p = (fbrParties||[]).find(x=>x.partyName===party)||{};
+    doc.setFontSize(11); doc.setFont(undefined,'bold'); doc.text('Party: '+party, 14, y); y += 5;
+    doc.setFontSize(9); doc.setFont(undefined,'normal');
+    if(p.ntn){ doc.text('NTN: '+p.ntn, 14, y); y += 4.5; }
+    if(p.address){ doc.text('Address: '+String(p.address).replace(/\n/g,' '), 14, y); y += 4.5; }
+    y += 2;
+  }
+  const head = ['Code','Date'].concat(party?[]:['Party']).concat(['DC / Inv','PO No','Item','Challan Qty','Rej Qty','Value ('+cur+')','Rejected By','Source','Note']);
+  const body = rows.map(r=>[r.isRev?'(Wapas)':r.code, fmtDate(r.date)].concat(party?[]:[r.party]).concat([
+    'DC '+r.dcNo+(r.invNo?'\nInv '+r.invNo:''), r.poNo||'-', r.desc+(r.uom?' ('+r.uom+')':''), _qn(r.orig), (r.isRev?'+':'-')+_qn(Math.abs(r.qty)), fmt(Math.abs(r.value)),
+    r.by||'-', r.from||'-', r.note||'-']));
+  const totQty = rows.reduce((s,r)=>s+r.qty,0), totVal = rows.reduce((s,r)=>s+r.value,0);
+  const nCols = head.length;
+  const foot = new Array(nCols).fill(''); foot[nCols-7] = 'TOTAL'; foot[nCols-5] = '-'+_qn(totQty); foot[nCols-4] = fmt(totVal);
+  doc.autoTable({
+    startY:y, head:[head], body, foot:[foot],
+    styles:{fontSize:8, cellPadding:1.5, overflow:'linebreak'},
+    headStyles:{fillColor:[20,20,40]}, footStyles:{fillColor:[40,40,70], fontStyle:'bold'},
+    columnStyles:{[nCols-1]:{cellWidth:50}}
+  });
+  y = doc.lastAutoTable.finalY + 8;
+  if(!party){
+    const map = {};
+    rows.forEach(r=>{ const m = map[r.party] = map[r.party]||{n:0,q:0,v:0}; if(!r.isRev) m.n++; m.q += r.qty; m.v += r.value; });
+    if(y > 170){ doc.addPage(); y = 20; }
+    doc.setFontSize(11); doc.setFont(undefined,'bold'); doc.text('Party-wise Summary', 14, y); y += 3;
+    doc.autoTable({ startY:y, head:[['Party','Rejections','Net Rej Qty','Value ('+cur+')']],
+      body:Object.keys(map).sort().map(p=>[p, map[p].n, _qn(map[p].q), fmt(map[p].v)]),
+      styles:{fontSize:9}, headStyles:{fillColor:[20,20,40]} });
+  }
+  stampBrandLogoOnAllPages(doc);
+  doc.save(`${(fileBase||'Rejections').replace(/[^\w\-]+/g,'_')}_${localDateStr()}.pdf`);
+  toast('PDF generated','success');
+}
+function rejListPDF(){
+  const rows = rejFiltered();
+  const party = document.getElementById('rej-party').value;
+  rejDownloadPDF(rows, party, 'Rejection Report'+(party?' — '+party:''), 'Rejections'+(party?'_'+party:''));
+}
+function rejPartyPDF(p){
+  rejDownloadPDF(rejAllRows().filter(r=>r.party===p), p, 'Party Rejection Report — '+p, 'Rejections_'+p);
+}
+
+// ==================== LEDGER: UNIT-WISE CHEQUE / PAYMENT DETAILS ====================
+// Used on screen (unit view) and in the PDF: every payment/cheque of the selected unit, with mode-wise and
+// status-wise totals. Amounts are already this unit's SHARE when one cheque paid invoices of several units.
+function lgPayDetail(entries){
+  const pays = entries.filter(e=>e.type==='payment').slice()
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.id||'').localeCompare(b.id||''));
+  const modeLbl = {cash:'Cash',cheque:'Cheque',bank_transfer:'Bank Transfer',online:'Online',other:'Other'};
+  const statLbl = {cleared:'Cleared',pending:'Pending',bounced:'Bounced'};
+  const rows = pays.map(e=>({
+    date:e.date||'', mode:modeLbl[e.paymode]||'Cash', ref:e.refNo||'-', bank:e.bankName||'-',
+    inv:e.invNo||'-', status:statLbl[e.status]||(e.status||'-'), amount:e.amount||0, ded:e.deduction||0,
+    freight:e.freight||0,
+    share:(e._share!==undefined && e._share<0.9999) ? (e._fullAmount||0) : 0
+  }));
+  const byMode = {}, byStatus = {};
+  rows.forEach(r=>{ byMode[r.mode]=(byMode[r.mode]||0)+r.amount; byStatus[r.status]=(byStatus[r.status]||0)+r.amount; });
+  return {rows, byMode, byStatus, total:rows.reduce((t,r)=>t+r.amount,0), ded:rows.reduce((t,r)=>t+r.ded,0)};
+}
+function lgRenderUnitPanel(show, label, cards, entries, cur){
+  let el = document.getElementById('ledger-unit-panel');
+  if(!el){
+    el = document.createElement('div'); el.id = 'ledger-unit-panel'; el.className = 'card';
+    el.style.cssText = 'margin:0 0 10px;border:1px solid var(--neon);';
+    const t = document.getElementById('ledgerTbody').closest('table');
+    t.parentElement.insertBefore(el, t);
+  }
+  if(!show){ el.style.display='none'; el.innerHTML=''; return; }
+  const d = lgPayDetail(entries);
+  const card = (v,l)=>`<div class="ledger-sum-card lsc1" style="min-width:130px;"><div style="font-size:15px;font-weight:800;">${cur} ${fmt(v)}</div><div style="font-size:11px;color:var(--text2);">${l}</div></div>`;
+  const chips = o => Object.keys(o).map(k=>`<span style="margin-right:12px;white-space:nowrap;">${_lgEsc(k)}: <b>${cur} ${fmt(o[k])}</b></span>`).join('') || '-';
+  el.style.display = '';
+  el.innerHTML = `<div style="font-weight:700;color:var(--neon);margin-bottom:6px;">🏭 Unit: ${_lgEsc(label)} — Total &amp; Cheque / Payment Details</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+      ${card(cards.bills,'Total Bills')}${card(cards.paid,'Total Paid')}${card(cards.ded,'Deductions')}
+      ${cards.freight>0.5?card(cards.freight,'Freight (cheques mein)'):''}${cards.dn>0.5?card(cards.dn,'Debit Notes'):''}
+      ${card(cards.outstanding,'Outstanding (is unit ka)')}
+    </div>
+    <div style="font-size:12px;margin-bottom:4px;"><b>Mode-wise:</b> ${chips(d.byMode)}</div>
+    <div style="font-size:12px;margin-bottom:8px;"><b>Status-wise:</b> ${chips(d.byStatus)}</div>
+    ${d.rows.length ? `<div class="tbl-wrap"><table class="items-table"><thead><tr><th>Date</th><th>Mode</th><th>Cheque / Ref No</th><th>Bank</th><th>Invoice(s)</th><th>Status</th><th style="text-align:right;">Amount (is unit ka)</th><th style="text-align:right;">Deduction</th></tr></thead>
+      <tbody>${d.rows.map(r=>`<tr><td>${fmtDate(r.date)}</td><td>${_lgEsc(r.mode)}</td><td>${_lgEsc(r.ref)}</td><td>${_lgEsc(r.bank)}</td><td>${_lgEsc(r.inv)}</td><td>${_lgEsc(r.status)}</td>
+        <td style="text-align:right;font-weight:700;">${fmt(r.amount)}${r.share?`<div style="font-size:10px;font-weight:400;color:var(--neon2);">poori cheque ${fmt(r.share)} mein se</div>`:''}</td><td style="text-align:right;">${r.ded?fmt(r.ded):''}</td></tr>`).join('')}</tbody>
+      <tfoot><tr style="background:var(--bg3);font-weight:800;"><td colspan="6" style="text-align:right;">TOTAL PAID</td><td style="text-align:right;">${cur} ${fmt(d.total)}</td><td style="text-align:right;">${d.ded?fmt(d.ded):''}</td></tr></tfoot></table></div>`
+      : '<div style="color:var(--text3);font-size:12px;">Is unit ki is range mein koi payment / cheque nahi.</div>'}`;
+}
+
+// ==================== LEDGER: MULTI-UNIT PICKER (view + PDF per unit) ====================
+let lgUnitList = [];
+function lgCurSel(){
+  const val = document.getElementById('ledgerPartySelect').value;
+  if(!val) return null;
+  return lgResolveSelection(val) || {isGroup:false, group:null, key:val, label:val, parties:[val]};
+}
+function lgOpenUnitModal(){
+  const val = document.getElementById('ledgerPartySelect').value;
+  const sel = lgCurSel();
+  if(!sel){ toast('Pehle party select karein','warning'); return; }
+  const an = lgAnalyzeScope(sel);
+  if(!an.hasUnits){ toast('Is party ki DCs mein koi Unit nahi likha','info'); return; }
+  lgUnitList = an.units.map(u=>({val:(u.key===''?'__none__':u.key), label:u.label, count:u.count}));
+  document.getElementById('lgUnitTitle').textContent = '🏭 Unit-wise Ledger — '+sel.label;
+  const from = (document.getElementById('ledgerFrom')||{}).value, to = (document.getElementById('ledgerTo')||{}).value;
+  document.getElementById('lgUnitInfo').textContent = 'Date range: '+(from?fmtDate(from):'Start')+' → '+(to?fmtDate(to):'Today')+'  |  Mode: '+(((document.getElementById('ledger-mode')||{}).value==='with_details')?'With All Details':'Summary');
+  document.getElementById('lgUnitTbody').innerHTML = lgUnitList.map((u,i)=>`<tr>
+    <td><input type="checkbox" class="lg-unit-chk" data-i="${i}"></td>
+    <td style="font-weight:600;">🏭 ${_lgEsc(u.label)}</td><td>${u.count}</td>
+    <td style="white-space:nowrap;"><button class="btn btn-neon btn-xs" onclick="lgUnitView(${i})">👁️ Dekhein</button>
+    <button class="btn btn-purple btn-xs" onclick="lgUnitOnePDF(${i})">📄 PDF</button></td></tr>`).join('');
+  openModal('lgUnitModal');
+}
+function lgUnitTickAll(on){ document.querySelectorAll('.lg-unit-chk').forEach(c=>c.checked = !!on); }
+function lgUnitView(i){
+  const u = lgUnitList[i]; if(!u) return;
+  const el = document.getElementById('ledgerUnitSelect');
+  if(!el){ return; }
+  el.value = u.val;
+  closeModal('lgUnitModal');
+  renderLedger();
+  toast('Ledger: '+u.label,'success');
+  try{ window.scrollTo({top:0,behavior:'smooth'}); }catch(e){}
+}
+function lgPdfArgs(){
+  return {
+    val: document.getElementById('ledgerPartySelect').value,
+    detail: (document.getElementById('ledger-mode')||{}).value==='with_details',
+    from: (document.getElementById('ledgerFrom')||{}).value || '',
+    to: (document.getElementById('ledgerTo')||{}).value || ''
+  };
+}
+function lgUnitOnePDF(i){
+  const u = lgUnitList[i]; if(!u) return;
+  const a = lgPdfArgs();
+  generateLedgerPDF(a.val, a.detail, a.from, a.to, u.val);
+}
+function lgUnitsPDF(mode){
+  const picked = Array.from(document.querySelectorAll('.lg-unit-chk')).filter(c=>c.checked).map(c=>lgUnitList[parseInt(c.dataset.i)]).filter(Boolean);
+  if(!picked.length){ toast('Kam az kam ek unit tick karein','warning'); return; }
+  const a = lgPdfArgs();
+  if(mode==='many'){
+    // separate files, spaced out slightly so the browser does not block the multiple downloads
+    picked.forEach((u,k)=> setTimeout(()=>generateLedgerPDF(a.val, a.detail, a.from, a.to, u.val), k*700));
+    toast(picked.length+' PDF file(s) ban rahi hain — browser download allow karein','info');
+    return;
+  }
+  const ctx = {doc:new jspdf.jsPDF(), started:false, quiet:true, count:0};
+  picked.forEach(u=>generateLedgerPDF(a.val, a.detail, a.from, a.to, u.val, ctx));
+  if(!ctx.started){ toast('Selected units mein is range ki koi entry nahi','warning'); return; }
+  stampBrandLogoOnAllPages(ctx.doc);
+  const sel = lgCurSel();
+  ctx.doc.save(`Ledger_${String(sel?sel.label:'Party').replace(/[^a-zA-Z0-9]/g,'_')}_Units_${localDateStr()}.pdf`);
+  toast('PDF ban gayi — '+ctx.count+' unit(s)','success');
 }
 
 // ==================== MODULE 11: BARCODE / QR SYSTEM ====================
