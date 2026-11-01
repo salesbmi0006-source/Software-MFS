@@ -391,6 +391,35 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
   table:not(.no-mobile-card) td::before{content:attr(data-label);font-weight:600;color:var(--text2);font-size:10px;text-transform:uppercase;letter-spacing:.3px;margin-right:auto;text-align:left;white-space:nowrap;}
   table:not(.no-mobile-card) td:not([data-label])::before{content:none;}
 }
+/* ===== FBR STOCK REPORT (v95) ===== */
+.fbs-tbl th,.fbs-tbl td{white-space:nowrap;}
+.fbs-tbl td.n{text-align:right;font-variant-numeric:tabular-nums;}
+.fbs-tbl .fbs-hs{text-align:center;font-weight:800;color:var(--neon);letter-spacing:.5px;}
+.fbs-tbl tfoot td{background:var(--bg3);font-weight:800;}
+.fbs-ctl{white-space:nowrap;}
+.fbs-ctl .btn{padding:1px 5px;margin-right:2px;}
+.fbs-g1{background:rgba(0,245,255,.05);} .fbs-g2{background:rgba(0,255,157,.05);} .fbs-g3{background:rgba(255,187,0,.06);} .fbs-g4{background:rgba(123,47,255,.07);}
+.fbs-tbl th.fbs-g1h{background:rgba(0,245,255,.15);text-align:center;} .fbs-tbl th.fbs-g2h{background:rgba(0,255,157,.15);text-align:center;}
+.fbs-tbl th.fbs-g3h{background:rgba(255,187,0,.18);text-align:center;} .fbs-tbl th.fbs-g4h{background:rgba(123,47,255,.2);text-align:center;}
+.fbs-pos{color:var(--neon4);font-weight:800;} .fbs-neg{color:var(--neon3)!important;font-weight:800;}
+.fbs-rowneg td{background:rgba(255,45,120,.07);}
+.fbs-in{width:110px;text-align:right;font-size:12px;padding:3px 6px;} .fbs-in-s{width:80px;}
+.fbs-sub td{background:var(--bg3);font-weight:700;font-size:11px;color:var(--neon5);}
+.fbs-cur td{background:rgba(0,245,255,.08);}
+.fbs-sug{position:absolute;left:0;min-width:240px;top:100%;z-index:60;background:var(--card);border:1px solid var(--border2);border-radius:6px;max-height:250px;overflow:auto;display:none;box-shadow:0 8px 24px rgba(0,0,0,.35);}
+.fbs-sug div{padding:7px 10px;cursor:pointer;display:flex;gap:14px;justify-content:space-between;font-size:12px;border-bottom:1px solid var(--border);}
+.fbs-sug div:hover{background:var(--bg3);}
+.fbs-chip{display:inline-block;margin:0 6px 6px 0;padding:3px 10px;border-radius:20px;background:var(--bg3);border:1px solid var(--border2);font-size:12px;}
+.fbs-barrow{display:flex;align-items:center;gap:10px;margin:5px 0;font-size:12px;}
+.fbs-barlbl{width:150px;font-weight:700;color:var(--neon);} .fbs-barlbl small{color:var(--text3);font-weight:400;}
+.fbs-barwrap{flex:1;background:var(--bg3);border-radius:4px;height:9px;overflow:hidden;}
+.fbs-bar{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--neon),var(--neon2));}
+.fbs-barval{width:120px;text-align:right;font-variant-numeric:tabular-nums;}
+.fbs-box{padding:10px 14px;border-radius:var(--radius2);margin-bottom:8px;font-size:12px;line-height:1.6;}
+.fbs-errbox{border-left:3px solid var(--neon3);background:rgba(255,45,120,.09);}
+.fbs-warnbox{border-left:3px solid var(--neon5);background:rgba(255,187,0,.09);}
+.fbs-okbox{border-left:3px solid var(--neon4);background:rgba(0,255,157,.08);}
+.fbs-ul{margin:6px 0 0 18px;padding:0;} .fbs-ul li{margin-bottom:3px;}
 </style>
 </head>
 <body>
@@ -489,6 +518,7 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
     <div class="tab" onclick="showTab('purchaseorders')" id="tab-purchaseorders">📝 Purchase Orders</div>
     <div class="tab" onclick="showTab('warehouses')" id="tab-warehouses">🏭 Warehouses</div>
     <div class="tab" onclick="showTab('hscodes')" id="tab-hscodes">🏷️ HS Codes</div>
+    <div class="tab" onclick="showTab('fbrstock')" id="tab-fbrstock">📑 FBR Stock Report</div>
 
     <div class="tab-group-label">Finance</div>
     <div class="tab" onclick="showTab('cheques')" id="tab-cheques" style="display:none;">🏦 Cheques</div>
@@ -1066,6 +1096,102 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
     <button class="btn" onclick="closeModal('rejEditModal')">Cancel</button>
   </div>
 </div>
+</div>
+
+<!-- ====== FBR STOCK REPORT TAB ====== -->
+<div class="tab-panel" id="panel-fbrstock">
+
+  <!-- Month bar -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">📑 FBR Stock Report</div>
+      <div class="flex-gap">
+        <button class="btn btn-neon btn-sm" onclick="fbsGoMonth(-1)" title="Pichla mahina">◀</button>
+        <input type="month" id="fbs-month" onchange="fbsSetMonth(this.value)" style="width:160px;">
+        <button class="btn btn-neon btn-sm" onclick="fbsGoMonth(1)" title="Agla mahina">▶</button>
+        <span id="fbs-status-badge"></span>
+        <button class="btn btn-yellow btn-sm" onclick="fbsRefresh()" title="DC records se is mahine ki sale dobara load karo">🔄 Refresh</button>
+        <button class="btn btn-green btn-sm" onclick="fbsExportCsv()">📤 CSV</button>
+        <button class="btn btn-purple btn-sm" onclick="fbsExportPdf()">📄 PDF</button>
+      </div>
+    </div>
+    <div id="fbs-start-note"></div>
+  </div>
+
+  <!-- 1. New HS Code Add -->
+  <div class="card">
+    <div class="card-header"><div class="card-title">➕ New HS Code Add</div></div>
+    <div class="flex-gap" style="align-items:flex-end;">
+      <div><label>HS Code</label><input type="text" id="fbs-n-hs" placeholder="0000.0000" maxlength="9" oninput="formatHsCodeInput(this)" onkeydown="if(event.key==='Enter')fbsAddItem()" style="width:130px;text-align:center;font-weight:700;"></div>
+      <div><label>UOM</label><input type="text" id="fbs-n-uom" list="fbs-uom-list" placeholder="Nos, Pcs" onkeydown="if(event.key==='Enter')fbsAddItem()" style="width:130px;">
+        <datalist id="fbs-uom-list"><option value="Nos, Pcs"><option value="KG"><option value="Meter"><option value="FT"><option value="Ltr"><option value="Set"><option value="Box"><option value="Roll"><option value="Dozen"></datalist></div>
+      <div><label>Tax %</label><input type="number" id="fbs-n-tax" value="18" min="0" max="100" step="0.01" onkeydown="if(event.key==='Enter')fbsAddItem()" style="width:80px;"></div>
+      <div><label>Start Month</label><input type="month" id="fbs-n-start" style="width:150px;"></div>
+      <button class="btn btn-green btn-sm" onclick="fbsAddItem()">➕ Add HS Code</button>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:8px;">Ek baar HS Code + UOM + Tax % save ho jaye to aage purchase mein sirf HS code likhna hai — UOM aur Tax % khud aa jayega. Naya HS code table mein sab se oper aata hai.</div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="fbs-dash"></div>
+
+  <!-- 2. Report -->
+  <div class="card">
+    <div class="card-header"><div class="card-title" id="fbs-report-title">📊 Stock Report</div></div>
+    <div id="fbs-report"></div>
+    <div class="flex-gap" style="margin-top:14px;">
+      <button class="btn btn-green" id="fbs-save-btn" onclick="fbsSaveCalc()">🧮 Save &amp; Calculate</button>
+      <button class="btn btn-yellow" onclick="fbsRefresh()">🔄 Refresh (DC se Sale)</button>
+      <button class="btn btn-red btn-sm" id="fbs-unlock-btn" onclick="fbsUnlock()" style="display:none;">🔓 Edit (Unlock) Month</button>
+    </div>
+    <div id="fbs-check" style="margin-top:12px;"></div>
+  </div>
+
+  <!-- 3. Purchase -->
+  <div class="card">
+    <div class="card-header"><div class="card-title" id="fbs-p-title">🛒 Purchase</div></div>
+    <div id="fbs-p-lock" class="fbs-box fbs-warnbox" style="display:none;">🔒 Ye mahina saved hai. Purchase badalne ke liye upar "Edit (Unlock) Month" dabayein.</div>
+    <div class="flex-gap" style="align-items:flex-end;">
+      <div style="position:relative;"><label>HS Code (likhein, list se chunein)</label>
+        <input type="text" id="fbs-p-hs" placeholder="8539…" maxlength="9" autocomplete="off" oninput="fbsPurSuggest(this)" onfocus="fbsPurSuggest(this)" onblur="setTimeout(fbsHideSug,180)" style="width:150px;text-align:center;font-weight:700;">
+        <div class="fbs-sug" id="fbs-p-sug"></div></div>
+      <div><label>UOM</label><input type="text" id="fbs-p-uom" readonly tabindex="-1" style="width:110px;opacity:.85;"></div>
+      <div><label>Tax %</label><input type="text" id="fbs-p-tax" readonly tabindex="-1" style="width:70px;opacity:.85;"></div>
+      <div><label>Amount</label><input type="number" id="fbs-p-amt" step="any" min="0" placeholder="1000" style="width:120px;"></div>
+      <div><label>Qty</label><input type="number" id="fbs-p-qty" step="any" min="0" placeholder="200" style="width:100px;"></div>
+      <div><label>Date</label><input type="date" id="fbs-p-date" style="width:150px;"></div>
+      <div><label>Note (optional)</label><input type="text" id="fbs-p-note" placeholder="Supplier / Inv #" style="width:160px;" onkeydown="if(event.key==='Enter')fbsAddPurchase()"></div>
+      <button class="btn btn-green btn-sm" id="fbs-p-btn" onclick="fbsAddPurchase()">➕ Add Purchase</button>
+      <button class="btn btn-neon btn-sm" id="fbs-p-cancel" onclick="fbsClearPurForm(true)" style="display:none;">✖ Cancel</button>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin:8px 0;">Same HS code ki kai purchase alag alag line mein save hoti hain (jaise 1000/200 aur 5000/10). Upar Stock Report mein un ka total (6000 / 210) ek hi line mein dikhta hai. Amount tax ke baghair likhein.</div>
+    <div id="fbs-p-list"></div>
+  </div>
+
+  <!-- 4. Monthly summary -->
+  <div class="card">
+    <div class="card-header"><div class="card-title">🗓️ Her Mahine Ki Summary</div></div>
+    <div id="fbs-summary"></div>
+  </div>
+</div>
+
+<!-- HS code edit modal -->
+<div class="modal-overlay" id="fbsItemModal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header"><h3>✏️ HS Code Edit</h3><button class="close-btn" onclick="closeModal('fbsItemModal')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="fbs-e-id">
+      <div class="form-group"><label>HS Code</label><input type="text" id="fbs-e-hs" maxlength="9" oninput="formatHsCodeInput(this)" style="text-align:center;font-weight:700;"></div>
+      <div class="form-group"><label>UOM</label><input type="text" id="fbs-e-uom" list="fbs-uom-list"></div>
+      <div class="form-group"><label>Tax %</label><input type="number" id="fbs-e-tax" min="0" max="100" step="0.01"></div>
+      <div class="form-group"><label>Start Month</label><input type="month" id="fbs-e-start"></div>
+      <div id="fbs-e-lock" class="fbs-box fbs-warnbox" style="display:none;">Ye HS code saved report mein use ho chuka hai — sirf UOM aur Tax % badal sakte hain.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-red btn-sm" id="fbs-e-del" onclick="fbsDeleteItem()">🗑 Delete</button>
+      <button class="btn btn-green" onclick="fbsSaveItemEdit()">💾 Save</button>
+    </div>
+  </div>
 </div>
 
 <!-- ====== HS CODES TAB ====== -->
@@ -5845,7 +5971,7 @@ async function buildFullBackupData(){
   return {
     db, cheques, ledgerData:ledgerData, fbrParties, descMaster, settings, partyOpeningBalances, ledgerGroupsJson: JSON.stringify(ledgerGroups),
     digitalInvoices: diWithPdf,
-    partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
+    partyContacts, invoiceSendStatus, hsStockData, fbrStockData:(typeof fbsData!=='undefined'?fbsData:null), rateLists, partyDispatchData,
     savedQuotations, quotSettings, rrSettings, employees, mktData, crmData, emailHistory, emailTemplates, autoNumberSettings,
     stockItems, stockMovements, salesReturns, returnReceipts, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     fbCustomers, fbBills, fbQuotations, fbLedger, fbSettings, fbDescriptions, fbStockItems, fbStockMovements,
@@ -6033,7 +6159,7 @@ function desanitizeFromFirebase(value){
 function buildCloudSyncData(){
   return {
     db, cheques, ledgerData, fbrParties, descMaster, settings, partyOpeningBalances, ledgerGroupsJson: JSON.stringify(ledgerGroups),
-    partyContacts, invoiceSendStatus, hsStockData, rateLists, partyDispatchData,
+    partyContacts, invoiceSendStatus, hsStockData, fbrStockData:(typeof fbsData!=='undefined'?fbsData:null), rateLists, partyDispatchData,
     savedQuotations, quotSettings, rrSettings, employees, mktData, crmData, emailHistory, emailTemplates, autoNumberSettings,
     stockItems, stockMovements, salesReturns, returnReceipts, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     fbCustomers, fbBills, fbQuotations, fbLedger, fbSettings, fbDescriptions, fbStockItems, fbStockMovements,
@@ -6744,6 +6870,7 @@ async function applyRestoredBackupData(data){
   if(data.partyContacts) partyContacts = data.partyContacts;
   if(data.invoiceSendStatus) invoiceSendStatus = data.invoiceSendStatus;
   if(data.hsStockData) hsStockData = data.hsStockData;
+  if(data.fbrStockData && Array.isArray(data.fbrStockData.master)){ fbsData = data.fbrStockData; saveFbsData(); }
   if(data.rateLists) rateLists = data.rateLists;
   if(data.partyDispatchData) partyDispatchData = data.partyDispatchData;
   if(data.savedQuotations) savedQuotations = data.savedQuotations;
@@ -6974,7 +7101,7 @@ function resetAllWithAdminGate(){
   }
   if(!confirm('FINAL CONFIRMATION:\n\nThis will erase EVERYTHING permanently. This cannot be undone.\n\nAre you absolutely sure?')) return;
   db=[]; cheques=[]; ledgerData=[]; fbrParties=[];
-  digitalInvoices=[]; partyContacts={}; invoiceSendStatus={}; hsStockData={};
+  digitalInvoices=[]; partyContacts={}; invoiceSendStatus={}; hsStockData={}; if(typeof fbsStockReset==='function') fbsStockReset();
   if(typeof rateLists!=='undefined') rateLists={};
   if(typeof savedQuotations!=='undefined') savedQuotations=[];
   if(typeof quotationBasket!=='undefined') quotationBasket=[];
@@ -6984,6 +7111,7 @@ function resetAllWithAdminGate(){
   if(typeof savePartyContacts==='function') savePartyContacts();
   if(typeof saveInvoiceSendStatus==='function') saveInvoiceSendStatus();
   if(typeof saveHsStockData==='function') saveHsStockData();
+  if(typeof fbsData!=='undefined' && fbsData && typeof saveFbsData==='function') saveFbsData();
   if(typeof saveRateLists==='function') saveRateLists();
   if(typeof saveSavedQuotations==='function') saveSavedQuotations();
   if(typeof savePartyDispatchData==='function') savePartyDispatchData();
@@ -7110,7 +7238,7 @@ const DZ_MODULES = [
   {key:'parties',label:'👥 Parties'},{key:'partylookup',label:'📨 Party Lookup'},{key:'crm',label:'🤝 CRM'},
   {key:'sendcenter',label:'📤 Send Center'},{key:'dispatch',label:'🚚 Dispatch'},
   {key:'employees',label:'👔 Employees'},{key:'marketing',label:'📣 Marketing'},{key:'stock',label:'📦 Stock'},{key:'purchaseorders',label:'📝 Purchase Orders'},
-  {key:'warehouses',label:'🏭 Warehouses'},{key:'hscodes',label:'🏷️ HS Codes'},
+  {key:'warehouses',label:'🏭 Warehouses'},{key:'hscodes',label:'🏷️ HS Codes'},{key:'fbrstock',label:'📑 FBR Stock Report'},
   {key:'cheques',label:'🏦 Cheques'},{key:'salesreturns',label:'🔄 Sales Returns'},{key:'bank',label:'🏛️ Bank'},
   {key:'expenses',label:'💸 Expenses'},{key:'pantry',label:'🍵 Pantry'},{key:'receipts',label:'🧾 Receipts'},
   {key:'tools',label:'🔧 Tools'},{key:'auditlog',label:'📜 Audit Log'},{key:'aisearch',label:'🤖 AI Search'}
@@ -7564,6 +7692,7 @@ function renderTabContent(id){
   if(id==='parties'){ syncPartiesFromDB(); renderParties(); }
   if(id==='cheques') { renderCheques(); renderAllPayments(); }
   if(id==='hscodes'){ renderHSCodes(); renderHsStockComparison(); }
+  if(id==='fbrstock') renderFbsTab();
   if(id==='settings') { applySettings(); renderAutoNumberConfig(); const abf=document.getElementById('ab-frequency'); if(abf) abf.value = advancedBackupSettings.frequency; renderBackupVersionsList(); const ape=document.getElementById('ap-enabled'); if(ape) ape.checked = !!settings.approvalWorkflowEnabled; const apPo=document.getElementById('ap-po-enabled'); if(apPo) apPo.checked = !!settings.poApprovalWorkflowEnabled; const apExp=document.getElementById('ap-exp-enabled'); if(apExp) apExp.checked = !!settings.expApprovalWorkflowEnabled; const apChq=document.getElementById('ap-chq-enabled'); if(apChq) apChq.checked = !!settings.chqApprovalWorkflowEnabled; const apLed=document.getElementById('ap-led-enabled'); if(apLed) apLed.checked = !!settings.ledgerApprovalWorkflowEnabled; refreshGDriveSettingsUI(); if(typeof refreshDzOwnerPanel==='function') refreshDzOwnerPanel(); }
   if(id==='digitalinvoices'){ cbSyncFbrNumbers({silent:true}); renderDigitalInvoices(); updateDiCount(); }
   if(id==='commercialbills'){ cbOnOpen(); }
@@ -7648,7 +7777,7 @@ const MOBILE_MORE_GROUPS = [
   ]},
   {label:'Operations', tabs:[
     {id:'employees',label:'Employees',icon:'👔'},{id:'marketing',label:'Marketing',icon:'📣'},{id:'stock',label:'Stock',icon:'📦'},
-    {id:'warehouses',label:'Warehouses',icon:'🏭'},{id:'hscodes',label:'HS Codes',icon:'🏷️'}
+    {id:'warehouses',label:'Warehouses',icon:'🏭'},{id:'hscodes',label:'HS Codes',icon:'🏷️'},{id:'fbrstock',label:'FBR Stock',icon:'📑'}
   ]},
   {label:'Finance', tabs:[
     {id:'cheques',label:'Cheques',icon:'🏦'},{id:'salesreturns',label:'Sales Returns',icon:'🔄'},
@@ -12359,6 +12488,7 @@ function init(){
   loadPartyContacts();
   loadInvoiceSendStatus();
   loadHsStockData();
+  loadFbsData();
   loadRateLists();
   loadPartyDispatchData();
   loadEnvelopeDispatches();
@@ -16458,6 +16588,595 @@ function formatHsCodeInput(el){
   const diff = el.value.length - before;
   try{ el.setSelectionRange(start+diff, start+diff); }catch(e){}
 }
+// ==================== FBR STOCK REPORT (v95) ====================
+// Monthly HS-code stock register for FBR:  Opening + Purchase - Sale = Closing  (Amount + Qty)
+//  - HS master (UOM + Tax %) is saved once, then only the HS code is typed (auto-fill).
+//  - Sales come automatically from invoiced DC records (invoice month = report month).
+//  - Purchases are separate entries; the report shows one merged total per HS code.
+//  - "Save & Calculate" validates first; only an error-free month is saved and locked,
+//    and its closing automatically becomes next month's opening.
+// Storage key: sau_fbr_stock  (included in JSON backup + cloud sync as `fbrStockData`).
+var fbsData = null;
+var fbsUi = {month:'', selPur:null, editPur:null, check:null, banner:null};
+
+function fbsDefault(){ return {v:1, seeded:false, seedStart:'', master:[], purchases:[], months:{}}; }
+function fbsEl(id){ return document.getElementById(id); }
+function fbsNum(v){ const n=parseFloat(v); return isFinite(n)?n:0; }
+function fbsEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fbsFmtQty(n){ return fbsNum(n).toLocaleString('en-PK',{minimumFractionDigits:0,maximumFractionDigits:3}); }
+function fbsFmtAmt(n){ return fbsNum(n).toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fbsUid(){ return 'fs'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function fbsHsDigits(h){ return String(h||'').replace(/[^0-9]/g,''); }
+function fbsHsFmt(h){ const d=fbsHsDigits(h); return d.length===8 ? d.slice(0,4)+'.'+d.slice(4) : String(h||'').trim(); }
+function fbsUomKey(u){
+  const k=String(u||'').toLowerCase().replace(/[^a-z]/g,'');
+  if(['pcs','pc','nos','no','piece','pieces','nospcs','nospc','pcsnos','unit','units'].indexOf(k)>-1) return 'pcs';
+  if(['kg','kgs','kilo','kilos','kilogram','kilograms'].indexOf(k)>-1) return 'kg';
+  if(['mtr','mtrs','meter','meters','metre','metres','m'].indexOf(k)>-1) return 'mtr';
+  if(['ft','feet','foot'].indexOf(k)>-1) return 'ft';
+  return k;
+}
+function fbsPad(n){ return String(n).padStart(2,'0'); }
+function fbsNowMonth(){ const d=new Date(); return d.getFullYear()+'-'+fbsPad(d.getMonth()+1); }
+function fbsNextMonth(m){ const p=m.split('-').map(Number); const d=new Date(p[0],p[1],1); return d.getFullYear()+'-'+fbsPad(d.getMonth()+1); }
+function fbsPrevMonth(m){ const p=m.split('-').map(Number); const d=new Date(p[0],p[1]-2,1); return d.getFullYear()+'-'+fbsPad(d.getMonth()+1); }
+function fbsMonthLabel(m){ if(!/^\d{4}-\d{2}$/.test(m||'')) return m||''; const p=m.split('-').map(Number); return new Date(p[0],p[1]-1,1).toLocaleDateString('en-GB',{month:'long',year:'numeric'}); }
+function fbsStartOf(it){ return it.startMonth || (fbsData&&fbsData.seedStart) || '0000-00'; }
+function fbsActiveItems(m){ return fbsData.master.filter(it=>fbsStartOf(it)<=m); }
+function fbsAudit(action, summary){ try{ if(typeof logAudit==='function') logAudit(action,'FBR Stock',summary); }catch(e){} }
+
+// ---------- storage ----------
+function fbsEarliestInvMonth(){
+  let min='';
+  (typeof db!=='undefined'?db:[]).forEach(r=>{
+    if(r.cancelled||!r.invNo) return;
+    const m=r.invDate||'';
+    if(/^\d{4}-\d{2}$/.test(m) && (!min||m<min)) min=m;
+  });
+  return min;
+}
+function fbsSeedMaster(){
+  // Your starting HS list (UOM + tax). New codes you add later go on top.
+  const rows=[
+    ['0710.2900','Nos, Pcs',18],['3919.9020','KG',18],['8504.1000','Nos, Pcs',18],['8506.1000','Nos, Pcs',18],
+    ['8536.6990','Nos, Pcs',18],['8536.9090','Nos, Pcs',18],['8539.3120','Nos, Pcs',18],['8539.3190','Nos, Pcs',18],
+    ['8539.3900','Nos, Pcs',18],['8539.5210','Nos, Pcs',18],['8539.5220','Nos, Pcs',18],['8544.4990','Meter',18],
+    ['9405.1190','Nos, Pcs',25],['9405.4200','Nos, Pcs',18],['9405.9900','Nos, Pcs',18],['9405.9900','KG',18]
+  ];
+  const start = fbsEarliestInvMonth() || fbsNowMonth();
+  const t=Date.now();
+  fbsData.seedStart=start;
+  fbsData.master=rows.map((r,i)=>({id:'fs'+t.toString(36)+i, hs:r[0], uom:r[1], tax:r[2], startMonth:start, openQty:0, openAmt:0, addedAt:t+i}));
+  fbsData.seeded=true;
+}
+function loadFbsData(){
+  let d=null;
+  try{ const raw=localStorage.getItem('sau_fbr_stock'); if(raw) d=JSON.parse(raw); }catch(e){}
+  fbsData=(d&&typeof d==='object'&&Array.isArray(d.master))?d:fbsDefault();
+  fbsData.purchases=fbsData.purchases||[]; fbsData.months=fbsData.months||{};
+  if(!fbsData.seeded){ fbsSeedMaster(); saveFbsData(); }
+}
+function saveFbsData(){
+  try{ safeSetItem('sau_fbr_stock', JSON.stringify(fbsData)); }catch(e){ console.error('fbs save',e); }
+}
+function fbsStockReset(){ fbsData=fbsDefault(); fbsUi.month=''; }
+function fbsLastSaved(){ let last=''; Object.keys(fbsData.months).forEach(m=>{ if(fbsData.months[m].saved && m>last) last=m; }); return last; }
+
+// ---------- sales from DC records (invoice month) ----------
+function fbsLiveSales(month){
+  const byHs={};
+  fbsData.master.forEach(it=>{ const k=fbsHsDigits(it.hs); (byHs[k]=byHs[k]||[]).push(it); });
+  const map={}, issues={missing:[],unknown:[],uom:[],tax:[]};
+  (typeof db!=='undefined'?db:[]).forEach(r=>{
+    if(r.cancelled||!r.invNo) return;
+    if((r.invDate||'')!==month) return;
+    (r.items||[]).forEach(it=>{
+      const q=fbsNum(it.qty), rate=fbsNum(it.rate);
+      if(!q) return;
+      const ref={dcNo:r.dcNo||'', invNo:r.invNo||'', party:r.partyName||'', hs:it.hscode||'', desc:it.desc||'', uom:it.uom||'', qty:q, tax:it.tax};
+      const hsD=fbsHsDigits(it.hscode);
+      if(!hsD){ issues.missing.push(ref); return; }
+      const all=byHs[hsD]||[];
+      const cands=all.filter(c=>fbsStartOf(c)<=month);
+      if(!cands.length){ ref.notStarted=all.length>0; issues.unknown.push(ref); return; }
+      let pick=cands.find(c=>fbsUomKey(c.uom)===fbsUomKey(it.uom));
+      if(!pick){ pick=cands[0]; issues.uom.push(Object.assign({},ref,{masterUom:pick.uom})); }
+      if(it.tax!==undefined && it.tax!=='' && fbsNum(it.tax)!==fbsNum(pick.tax)) issues.tax.push(Object.assign({},ref,{masterTax:pick.tax}));
+      const s=map[pick.id]||(map[pick.id]={qty:0,amt:0});
+      s.qty+=q; s.amt+=q*rate;
+    });
+  });
+  return {map:map, issues:issues};
+}
+
+// ---------- the monthly chain: closing of one month = opening of the next ----------
+function fbsChain(upTo){
+  if(!fbsData.master.length) return {start:'',res:{}};
+  const start=fbsData.master.map(fbsStartOf).sort()[0];
+  const res={};
+  if(!/^\d{4}-\d{2}$/.test(start)||upTo<start) return {start:start,res:res};
+  const pur={};
+  fbsData.purchases.forEach(p=>{ const k=p.month+'|'+p.itemId; const o=pur[k]||(pur[k]={qty:0,amt:0,count:0}); o.qty+=fbsNum(p.qty); o.amt+=fbsNum(p.amt); o.count++; });
+  let prev=null, m=start, guard=0;
+  while(m<=upTo && guard++<240){
+    const rec=fbsData.months[m];
+    const isSaved=!!(rec&&rec.saved);
+    let sales, issues;
+    if(isSaved){ sales=rec.snap||{}; issues=rec.issues||{missing:[],unknown:[],uom:[],tax:[]}; }
+    else { const l=fbsLiveSales(m); sales=l.map; issues=l.issues; }
+    const rows=[], byId={};
+    fbsData.master.forEach(it=>{
+      if(fbsStartOf(it)>m) return;
+      let oq, oa;
+      if(m===fbsStartOf(it)){ oq=fbsNum(it.openQty); oa=fbsNum(it.openAmt); }
+      else { const p=prev&&prev[it.id]; oq=p?p.closeQty:0; oa=p?p.closeAmt:0; }
+      const pu=pur[m+'|'+it.id]||{qty:0,amt:0,count:0};
+      const s=sales[it.id]||{qty:0,amt:0};
+      const row={item:it, month:m, openQty:oq, openAmt:oa, purQty:pu.qty, purAmt:pu.amt, purCount:pu.count,
+        saleQty:s.qty, saleAmt:s.amt, closeQty:oq+pu.qty-s.qty, closeAmt:oa+pu.amt-s.amt};
+      rows.push(row); byId[it.id]=row;
+    });
+    res[m]={rows:rows, byId:byId, saved:isSaved, issues:issues};
+    prev=byId;
+    m=fbsNextMonth(m);
+  }
+  return {start:start,res:res};
+}
+function fbsDefaultMonth(){
+  if(!fbsData.master.length) return fbsNowMonth();
+  const start=fbsData.master.map(fbsStartOf).sort()[0], now=fbsNowMonth();
+  if(!/^\d{4}-\d{2}$/.test(start)||start>now) return /^\d{4}-\d{2}$/.test(start)?start:now;
+  let m=start, guard=0;
+  while(m<now && guard++<240){ const r=fbsData.months[m]; if(!(r&&r.saved)) return m; m=fbsNextMonth(m); }
+  return now;
+}
+
+// ---------- the automatic error check ----------
+function fbsValidate(month, chainIn){
+  const errors=[], warnings=[];
+  const chain=chainIn||fbsChain(month);
+  const cur=chain.res[month];
+  if(!cur){
+    errors.push({t:'Is mahine mein koi HS code active nahi hai (HS code ka Start Month check karein).'});
+    return {errors:errors,warnings:warnings,cur:null,chain:chain};
+  }
+  for(let m=chain.start; m<month; m=fbsNextMonth(m)){
+    if(!(fbsData.months[m]&&fbsData.months[m].saved)){
+      errors.push({t:'Pehle '+fbsMonthLabel(m)+' ko Save & Calculate karein — us ke baad '+fbsMonthLabel(month)+' save hoga.', go:m});
+      break;
+    }
+  }
+  const is=cur.issues||{missing:[],unknown:[],uom:[],tax:[]};
+  is.missing.forEach(x=>errors.push({t:'DC '+x.dcNo+' (Inv '+x.invNo+') — "'+(x.desc||'item')+'" mein HS Code missing hai. DC mein HS code lagayen.'}));
+  is.unknown.forEach(x=>errors.push({t:'DC '+x.dcNo+' (Inv '+x.invNo+') — HS '+x.hs+' '+(x.notStarted?'is mahine mein start nahi hua (Start Month baad ka hai).':'FBR Stock list mein nahi hai (ya HS code galat likha hai). "New HS Code Add" se add karein ya DC theek karein.')}));
+  cur.rows.forEach(r=>{
+    const lab=r.item.hs+' ('+r.item.uom+')';
+    if(r.closeQty<-0.0005||r.closeAmt<-0.005){
+      errors.push({t:'HS '+lab+' — Closing minus hai (Qty '+fbsFmtQty(r.closeQty)+', Amount '+fbsFmtAmt(r.closeAmt)+'). Opening '+fbsFmtQty(r.openQty)+' + Purchase '+fbsFmtQty(r.purQty)+' − Sale '+fbsFmtQty(r.saleQty)+'. Purchase/Opening check karein.'});
+    } else if(Math.abs(r.closeQty)<0.0005 && r.closeAmt>0.5){
+      warnings.push({t:'HS '+lab+' — Closing Qty 0 hai lekin Amount '+fbsFmtAmt(r.closeAmt)+' bacha hai.'});
+    } else if(r.closeQty>0.0005 && r.closeAmt<=0.005){
+      warnings.push({t:'HS '+lab+' — Closing Qty '+fbsFmtQty(r.closeQty)+' hai lekin Amount 0 hai.'});
+    }
+  });
+  is.uom.forEach(x=>warnings.push({t:'DC '+x.dcNo+' — HS '+x.hs+': DC mein UOM "'+x.uom+'" hai, stock list mein "'+x.masterUom+'" (sale is line mein add ho gayi).'}));
+  is.tax.forEach(x=>warnings.push({t:'DC '+x.dcNo+' — HS '+x.hs+': DC mein Tax '+x.tax+'% hai, stock list mein '+x.masterTax+'%.'}));
+  return {errors:errors,warnings:warnings,cur:cur,chain:chain};
+}
+
+// ---------- actions ----------
+function fbsSetMonth(m){
+  if(!/^\d{4}-\d{2}$/.test(m||'')) return;
+  fbsUi.month=m; fbsUi.check=null; fbsUi.banner=null; fbsUi.editPur=null; fbsUi.selPur=null;
+  fbsClearPurForm(true);
+  renderFbsTab();
+}
+function fbsGoMonth(d){ fbsSetMonth(d>0?fbsNextMonth(fbsUi.month):fbsPrevMonth(fbsUi.month)); }
+function fbsSaveCalc(){
+  const m=fbsUi.month;
+  if(fbsData.months[m]&&fbsData.months[m].saved){ toast('Ye mahina pehle se saved hai','info'); return; }
+  const v=fbsValidate(m);
+  fbsUi.check={month:m, errors:v.errors, warnings:v.warnings};
+  fbsUi.banner=null;
+  if(v.errors.length){
+    toast('❌ '+v.errors.length+' error mili — neeche dekhein, theek karke dobara Save & Calculate dabayein','error');
+    renderFbsTab(); return;
+  }
+  const live=fbsLiveSales(m);
+  fbsData.months[m]={saved:true, savedAt:new Date().toISOString(), snap:live.map, issues:live.issues};
+  saveFbsData();
+  fbsAudit('create','FBR Stock Report saved for '+fbsMonthLabel(m));
+  fbsUi.banner={month:m, next:fbsNextMonth(m)};
+  toast('✅ '+fbsMonthLabel(m)+' save ho gaya — '+fbsMonthLabel(fbsNextMonth(m))+' ki Opening auto ready hai','success');
+  renderFbsTab();
+}
+function fbsRefresh(){
+  const m=fbsUi.month, rec=fbsData.months[m];
+  if(rec&&rec.saved){
+    if(!confirm(fbsMonthLabel(m)+' saved hai. DC records se sale dobara load karke is mahine ki saved sale update karun?')) return;
+    const live=fbsLiveSales(m);
+    rec.snap=live.map; rec.issues=live.issues;
+    const v=fbsValidate(m);
+    fbsUi.check={month:m, errors:v.errors, warnings:v.warnings};
+    if(v.errors.length){ rec.saved=false; toast('⚠️ Refresh ke baad error aayi — mahina Draft ho gaya, theek karke dobara Save karein','warning'); }
+    else toast('🔄 Sale DC records se update ho gayi (mahina saved hai)','success');
+    saveFbsData(); renderFbsTab(); return;
+  }
+  const v=fbsValidate(m);
+  fbsUi.check={month:m, errors:v.errors, warnings:v.warnings};
+  toast('🔄 Sale DC records se dobara load ho gayi','success');
+  renderFbsTab();
+}
+function fbsUnlock(){
+  const m=fbsUi.month, rec=fbsData.months[m];
+  if(!(rec&&rec.saved)) return;
+  if(!confirm(fbsMonthLabel(m)+' ko edit ke liye unlock karun?\nSave dobara karne tak aglay mahinon ki Opening is mahine ke hisab se badal sakti hai.')) return;
+  rec.saved=false;
+  saveFbsData(); fbsAudit('edit','FBR Stock month unlocked: '+fbsMonthLabel(m));
+  fbsUi.check=null; fbsUi.banner=null;
+  renderFbsTab();
+}
+function fbsSetOpening(id,field,val){
+  const it=fbsData.master.find(x=>x.id===id); if(!it) return;
+  it[field]=fbsNum(val);
+  saveFbsData(); renderFbsTab();
+}
+function fbsMoveItem(id,dir){
+  const vis=fbsActiveItems(fbsUi.month).map(x=>x.id);
+  const i=vis.indexOf(id); if(i<0) return;
+  const j=i+dir; if(j<0||j>=vis.length) return;
+  const a=fbsData.master.findIndex(x=>x.id===vis[i]), b=fbsData.master.findIndex(x=>x.id===vis[j]);
+  const t=fbsData.master[a]; fbsData.master[a]=fbsData.master[b]; fbsData.master[b]=t;
+  saveFbsData(); renderFbsTab();
+}
+function fbsMoveTop(id){
+  const i=fbsData.master.findIndex(x=>x.id===id); if(i<=0) return;
+  const it=fbsData.master.splice(i,1)[0]; fbsData.master.unshift(it);
+  saveFbsData(); renderFbsTab();
+}
+function fbsApplyStartAll(){
+  const v=(fbsEl('fbs-start-input')||{}).value;
+  if(!/^\d{4}-\d{2}$/.test(v||'')){ toast('Start month select karein','warning'); return; }
+  if(fbsLastSaved()){ toast('Koi mahina save ho chuka hai — ab Start Month change nahi ho sakta','error'); return; }
+  fbsData.master.forEach(it=>{ it.startMonth=v; });
+  fbsData.seedStart=v;
+  saveFbsData();
+  fbsUi.month=v; fbsUi.check=null; fbsUi.banner=null;
+  toast('Start Month '+fbsMonthLabel(v)+' sab HS codes ke liye set ho gaya','success');
+  renderFbsTab();
+}
+
+// ---------- HS master: add / edit / delete ----------
+function fbsAddItem(){
+  const hs=fbsHsFmt(fbsEl('fbs-n-hs').value);
+  const uom=(fbsEl('fbs-n-uom').value||'').trim();
+  const taxRaw=fbsEl('fbs-n-tax').value;
+  const tax=fbsNum(taxRaw);
+  let start=fbsEl('fbs-n-start').value||fbsUi.month;
+  if(fbsHsDigits(hs).length!==8){ toast('HS Code 8 digits ka hona chahiye (e.g. 8539.5220)','warning'); return; }
+  if(!uom){ toast('UOM likhein (e.g. Nos, Pcs / KG / Meter)','warning'); return; }
+  if(taxRaw===''||tax<0||tax>100){ toast('Tax % sahi likhein (0–100)','warning'); return; }
+  if(!/^\d{4}-\d{2}$/.test(start)){ toast('Start Month select karein','warning'); return; }
+  const last=fbsLastSaved();
+  if(last && start<=last){ toast('Start Month '+fbsMonthLabel(fbsNextMonth(last))+' ya us ke baad ka rakhein (pehle ke mahine saved hain)','error'); return; }
+  if(fbsData.master.some(x=>fbsHsDigits(x.hs)===fbsHsDigits(hs)&&fbsUomKey(x.uom)===fbsUomKey(uom))){ toast('Ye HS Code + UOM pehle se list mein hai','error'); return; }
+  const it={id:fbsUid(), hs:hs, uom:uom, tax:tax, startMonth:start, openQty:0, openAmt:0, addedAt:Date.now()};
+  fbsData.master.unshift(it);   // newest on top
+  saveFbsData(); fbsAudit('create','FBR Stock HS code added: '+hs+' '+uom+' '+tax+'%');
+  fbsEl('fbs-n-hs').value=''; fbsEl('fbs-n-uom').value='';
+  toast('✅ '+hs+' add ho gaya — sab se oper hai. Opening Balance/Qty table mein bhar dein.','success');
+  if(fbsUi.month<start) fbsUi.month=start;
+  renderFbsTab();
+}
+function fbsEditItem(id){
+  const it=fbsData.master.find(x=>x.id===id); if(!it) return;
+  const locked=!!fbsLastSaved() && fbsLastSaved()>=fbsStartOf(it);
+  fbsEl('fbs-e-id').value=id;
+  fbsEl('fbs-e-hs').value=it.hs; fbsEl('fbs-e-uom').value=it.uom; fbsEl('fbs-e-tax').value=it.tax; fbsEl('fbs-e-start').value=fbsStartOf(it);
+  fbsEl('fbs-e-hs').disabled=locked; fbsEl('fbs-e-start').disabled=locked;
+  fbsEl('fbs-e-lock').style.display=locked?'block':'none';
+  fbsEl('fbs-e-del').style.display=locked?'none':'inline-flex';
+  openModal('fbsItemModal');
+}
+function fbsSaveItemEdit(){
+  const id=fbsEl('fbs-e-id').value;
+  const it=fbsData.master.find(x=>x.id===id); if(!it) return;
+  const hs=fbsHsFmt(fbsEl('fbs-e-hs').value), uom=(fbsEl('fbs-e-uom').value||'').trim();
+  const tax=fbsNum(fbsEl('fbs-e-tax').value), start=fbsEl('fbs-e-start').value;
+  if(fbsHsDigits(hs).length!==8){ toast('HS Code 8 digits ka hona chahiye','warning'); return; }
+  if(!uom){ toast('UOM likhein','warning'); return; }
+  if(tax<0||tax>100){ toast('Tax % sahi likhein','warning'); return; }
+  if(!/^\d{4}-\d{2}$/.test(start||'')){ toast('Start Month select karein','warning'); return; }
+  if(fbsData.master.some(x=>x.id!==id&&fbsHsDigits(x.hs)===fbsHsDigits(hs)&&fbsUomKey(x.uom)===fbsUomKey(uom))){ toast('Ye HS Code + UOM pehle se list mein hai','error'); return; }
+  const last=fbsLastSaved();
+  const locked=!!last && last>=fbsStartOf(it);
+  if(!locked && last && start<=last){ toast('Start Month '+fbsMonthLabel(fbsNextMonth(last))+' ya baad ka rakhein','error'); return; }
+  if(!locked){ it.hs=hs; it.startMonth=start; }
+  it.uom=uom; it.tax=tax;
+  saveFbsData(); fbsAudit('edit','FBR Stock HS code edited: '+it.hs);
+  closeModal('fbsItemModal'); toast('Update ho gaya','success'); renderFbsTab();
+}
+function fbsDeleteItem(){
+  const id=fbsEl('fbs-e-id').value;
+  const it=fbsData.master.find(x=>x.id===id); if(!it) return;
+  if(fbsLastSaved()&&fbsLastSaved()>=fbsStartOf(it)){ toast('Ye HS code saved report mein use ho chuka hai — delete nahi ho sakta','error'); return; }
+  if(!confirm(it.hs+' ('+it.uom+') aur is ki purchase entries delete karun?')) return;
+  fbsData.master=fbsData.master.filter(x=>x.id!==id);
+  fbsData.purchases=fbsData.purchases.filter(p=>p.itemId!==id);
+  saveFbsData(); fbsAudit('delete','FBR Stock HS code deleted: '+it.hs);
+  closeModal('fbsItemModal'); toast('Delete ho gaya','success'); renderFbsTab();
+}
+
+// ---------- purchase entry (HS suggestion + auto UOM / tax) ----------
+function fbsClearPurForm(full){
+  ['fbs-p-qty','fbs-p-amt','fbs-p-note'].forEach(i=>{ const e=fbsEl(i); if(e) e.value=''; });
+  if(full){ ['fbs-p-hs','fbs-p-uom','fbs-p-tax'].forEach(i=>{ const e=fbsEl(i); if(e) e.value=''; }); fbsUi.selPur=null; }
+  fbsUi.editPur=null;
+  const b=fbsEl('fbs-p-btn'); if(b) b.textContent='➕ Add Purchase';
+  const c=fbsEl('fbs-p-cancel'); if(c) c.style.display='none';
+}
+function fbsPurSuggest(el){
+  if(el.value) formatHsCodeInput(el);
+  fbsUi.selPur=null; fbsEl('fbs-p-uom').value=''; fbsEl('fbs-p-tax').value='';
+  const q=fbsHsDigits(el.value), box=fbsEl('fbs-p-sug');
+  const act=fbsActiveItems(fbsUi.month);
+  const c=act.filter(it=>!q||fbsHsDigits(it.hs).indexOf(q)>-1).slice(0,20);
+  if(q.length===8 && c.length===1){ fbsPickPur(c[0].id); return; }
+  if(!c.length){ box.innerHTML='<div style="color:var(--text3);cursor:default;">Koi HS code nahi mila — pehle "New HS Code Add" se add karein</div>'; box.style.display='block'; return; }
+  box.innerHTML=c.map(it=>'<div onmousedown="event.preventDefault();fbsPickPur(\''+it.id+'\')"><strong style="color:var(--neon);">'+fbsEsc(it.hs)+'</strong><span>'+fbsEsc(it.uom)+' · '+fbsNum(it.tax)+'%</span></div>').join('');
+  box.style.display='block';
+}
+function fbsHideSug(){ const b=fbsEl('fbs-p-sug'); if(b) b.style.display='none'; }
+function fbsPickPur(id){
+  const it=fbsData.master.find(x=>x.id===id); if(!it) return;
+  fbsUi.selPur=id;
+  fbsEl('fbs-p-hs').value=it.hs; fbsEl('fbs-p-uom').value=it.uom; fbsEl('fbs-p-tax').value=fbsNum(it.tax)+'%';
+  fbsHideSug();
+  const q=fbsEl('fbs-p-qty'); if(q) q.focus();
+}
+function fbsAddPurchase(){
+  const m=fbsUi.month;
+  if(fbsData.months[m]&&fbsData.months[m].saved){ toast('Mahina saved hai — pehle Edit (Unlock) karein','warning'); return; }
+  let id=fbsUi.selPur;
+  if(!id){
+    const d=fbsHsDigits(fbsEl('fbs-p-hs').value);
+    const c=fbsActiveItems(m).filter(x=>fbsHsDigits(x.hs)===d);
+    if(c.length===1) id=c[0].id;
+    else if(c.length>1){ toast('Is HS code ke 2 UOM hain — list se select karein','warning'); return; }
+  }
+  if(!id){ toast('HS code suggestion list se select karein','warning'); return; }
+  const qty=fbsNum(fbsEl('fbs-p-qty').value), amt=fbsNum(fbsEl('fbs-p-amt').value);
+  const date=fbsEl('fbs-p-date').value, note=(fbsEl('fbs-p-note').value||'').trim();
+  if(qty<=0){ toast('Qty likhein','warning'); return; }
+  if(amt<=0){ toast('Amount likhein','warning'); return; }
+  if(!date||date.slice(0,7)!==m){ toast('Date '+fbsMonthLabel(m)+' ke andar ki honi chahiye','warning'); return; }
+  if(fbsUi.editPur){
+    const p=fbsData.purchases.find(x=>x.id===fbsUi.editPur);
+    if(p){ p.itemId=id; p.qty=qty; p.amt=amt; p.date=date; p.note=note; }
+    toast('Purchase update ho gayi','success'); fbsAudit('edit','FBR Stock purchase updated');
+    fbsClearPurForm(true);
+  } else {
+    fbsData.purchases.push({id:fbsUid(), itemId:id, month:m, date:date, qty:qty, amt:amt, note:note, ts:Date.now()});
+    toast('Purchase save ho gayi','success'); fbsAudit('create','FBR Stock purchase added');
+    ['fbs-p-qty','fbs-p-amt','fbs-p-note'].forEach(i=>{ fbsEl(i).value=''; });
+  }
+  fbsUi.check=null;
+  saveFbsData(); renderFbsTab();
+  const q=fbsEl('fbs-p-qty'); if(q&&!fbsUi.editPur&&fbsUi.selPur) q.focus();
+}
+function fbsEditPurchase(pid){
+  const m=fbsUi.month;
+  if(fbsData.months[m]&&fbsData.months[m].saved){ toast('Mahina saved hai — pehle Edit (Unlock) karein','warning'); return; }
+  const p=fbsData.purchases.find(x=>x.id===pid); if(!p) return;
+  const it=fbsData.master.find(x=>x.id===p.itemId); if(!it) return;
+  fbsUi.editPur=pid; fbsUi.selPur=it.id;
+  fbsEl('fbs-p-hs').value=it.hs; fbsEl('fbs-p-uom').value=it.uom; fbsEl('fbs-p-tax').value=fbsNum(it.tax)+'%';
+  fbsEl('fbs-p-qty').value=p.qty; fbsEl('fbs-p-amt').value=p.amt; fbsEl('fbs-p-date').value=p.date||''; fbsEl('fbs-p-note').value=p.note||'';
+  fbsEl('fbs-p-btn').textContent='💾 Update Purchase'; fbsEl('fbs-p-cancel').style.display='inline-flex';
+  fbsEl('fbs-p-hs').scrollIntoView({behavior:'smooth',block:'center'});
+}
+function fbsDeletePurchase(pid){
+  const m=fbsUi.month;
+  if(fbsData.months[m]&&fbsData.months[m].saved){ toast('Mahina saved hai — pehle Edit (Unlock) karein','warning'); return; }
+  if(!confirm('Ye purchase entry delete karun?')) return;
+  fbsData.purchases=fbsData.purchases.filter(x=>x.id!==pid);
+  fbsAudit('delete','FBR Stock purchase deleted');
+  fbsUi.check=null;
+  saveFbsData(); renderFbsTab();
+}
+
+// ---------- rendering ----------
+function renderFbsTab(){
+  try{
+    if(!fbsData) loadFbsData();
+    if(!fbsUi.month) fbsUi.month=fbsDefaultMonth();
+    const month=fbsUi.month, now=fbsNowMonth(), last=fbsLastSaved();
+    let endM=month; if(now>endM) endM=now; if(last&&fbsNextMonth(last)>endM) endM=fbsNextMonth(last);
+    const chain=fbsChain(endM);
+    const cur=chain.res[month]||null;
+    const saved=!!(fbsData.months[month]&&fbsData.months[month].saved);
+
+    fbsEl('fbs-month').value=month;
+    fbsEl('fbs-status-badge').innerHTML=saved?'<span class="badge badge-invoiced">✅ SAVED</span>':'<span class="badge badge-pending">📝 DRAFT</span>';
+    const n=fbsEl('fbs-n-start'); if(n&&(!n.value||(last&&n.value<=last))) n.value=last?fbsNextMonth(last):month;
+    fbsRenderStartNote(chain,last);
+    fbsRenderDash(cur,month);
+    fbsRenderReport(cur,month,saved);
+    fbsEl('fbs-save-btn').style.display=saved?'none':'inline-flex';
+    fbsEl('fbs-unlock-btn').style.display=saved?'inline-flex':'none';
+    fbsRenderCheck(cur,month,chain);
+    fbsRenderPurchases(month,saved);
+    fbsRenderSummary(chain,month);
+  }catch(e){ console.error('FBR Stock render error',e); if(typeof toast==='function') toast('FBR Stock error: '+e.message,'error'); }
+}
+function fbsRenderStartNote(chain,last){
+  const box=fbsEl('fbs-start-note');
+  if(last){ box.innerHTML='<div style="font-size:11px;color:var(--text3);">📅 Tracking start: <strong>'+fbsMonthLabel(chain.start)+'</strong> · Last saved: <strong>'+fbsMonthLabel(last)+'</strong></div>'; return; }
+  box.innerHTML='<div class="flex-gap" style="font-size:12px;"><span>📅 Stock Start Month:</span>'
+    +'<input type="month" id="fbs-start-input" value="'+fbsEsc(chain.start||fbsData.seedStart||'')+'" style="width:150px;">'
+    +'<button class="btn btn-neon btn-xs" onclick="fbsApplyStartAll()">Apply to all HS codes</button>'
+    +'<span style="color:var(--text3);">Isi mahine ki Opening Balance/Qty neeche bharni hai; us ke baad har mahine ki Opening khud aati rahegi.</span></div>';
+}
+function fbsRenderDash(cur,month){
+  const box=fbsEl('fbs-dash');
+  if(!cur||!cur.rows.length){ box.innerHTML='<div class="card"><div style="color:var(--text3);padding:10px;">'+fbsMonthLabel(month)+' se pehle koi HS code start nahi hua. Upar Start Month check karein ya naya HS code add karein.</div></div>'; return; }
+  let oA=0,pA=0,sA=0,cA=0,pN=0,neg=0; const byUom={};
+  cur.rows.forEach(r=>{ oA+=r.openAmt; pA+=r.purAmt; sA+=r.saleAmt; cA+=r.closeAmt; pN+=r.purCount; if(r.closeQty<-0.0005||r.closeAmt<-0.005) neg++; const u=r.item.uom; byUom[u]=(byUom[u]||0)+r.closeQty; });
+  const chips=Object.keys(byUom).map(u=>'<span class="fbs-chip">'+fbsEsc(u)+': <b>'+fbsFmtQty(byUom[u])+'</b></span>').join('');
+  const top=cur.rows.filter(r=>r.closeAmt>0.005).sort((a,b)=>b.closeAmt-a.closeAmt).slice(0,8);
+  const mx=top.length?top[0].closeAmt:1;
+  const bars=top.map(r=>'<div class="fbs-barrow"><span class="fbs-barlbl">'+fbsEsc(r.item.hs)+' <small>'+fbsEsc(r.item.uom)+'</small></span><div class="fbs-barwrap"><div class="fbs-bar" style="width:'+Math.max(2,r.closeAmt/mx*100).toFixed(1)+'%"></div></div><span class="fbs-barval">'+fbsFmtAmt(r.closeAmt)+'</span></div>').join('');
+  box.innerHTML='<div class="stats-grid">'
+    +'<div class="stat-card c1"><div class="stat-val">'+cur.rows.length+'</div><div class="stat-label">Active HS Codes</div></div>'
+    +'<div class="stat-card c2"><div class="stat-val" style="font-size:17px;">'+fbsFmtAmt(oA)+'</div><div class="stat-label">Opening Amount</div></div>'
+    +'<div class="stat-card c4"><div class="stat-val" style="font-size:17px;">'+fbsFmtAmt(pA)+'</div><div class="stat-label">+ Purchase ('+pN+' entries)</div></div>'
+    +'<div class="stat-card c5"><div class="stat-val" style="font-size:17px;">'+fbsFmtAmt(sA)+'</div><div class="stat-label">− Sale (invoiced)</div></div>'
+    +'<div class="stat-card c1"><div class="stat-val" style="font-size:17px;">'+fbsFmtAmt(cA)+'</div><div class="stat-label">Closing Amount</div></div>'
+    +'<div class="stat-card '+(neg?'c3':'c4')+'"><div class="stat-val">'+neg+'</div><div class="stat-label">'+(neg?'⚠️ Minus Stock':'✅ Minus Stock')+'</div></div>'
+    +'</div>'
+    +'<div class="card"><div class="card-header"><div class="card-title">📈 Closing Qty by UOM &amp; Closing Amount (Top HS)</div></div>'
+    +'<div style="margin-bottom:10px;">'+chips+'</div>'+(bars||'<div style="color:var(--text3);font-size:12px;">Closing amount abhi koi nahi.</div>')+'</div>';
+}
+function fbsRenderReport(cur,month,saved){
+  const wrap=fbsEl('fbs-report');
+  fbsEl('fbs-report-title').textContent='📊 '+fbsMonthLabel(month)+' — Stock Report';
+  if(!cur||!cur.rows.length){ wrap.innerHTML='<div style="color:var(--text3);padding:10px;">Is mahine ke liye koi HS code active nahi.</div>'; return; }
+  let tO=0,tP=0,tS=0,tC=0;
+  const body=cur.rows.map((r,i)=>{
+    const it=r.item;
+    tO+=r.openAmt; tP+=r.purAmt; tS+=r.saleAmt; tC+=r.closeAmt;
+    const editOpen=(month===fbsStartOf(it))&&!saved;
+    const negQ=r.closeQty<-0.0005, negA=r.closeAmt<-0.005;
+    const openA=editOpen?'<input type="number" step="any" value="'+fbsNum(it.openAmt)+'" onchange="fbsSetOpening(\''+it.id+'\',\'openAmt\',this.value)" class="fbs-in">':fbsFmtAmt(r.openAmt);
+    const openQ=editOpen?'<input type="number" step="any" value="'+fbsNum(it.openQty)+'" onchange="fbsSetOpening(\''+it.id+'\',\'openQty\',this.value)" class="fbs-in fbs-in-s">':fbsFmtQty(r.openQty);
+    const badge=r.purCount>1?' <span class="badge badge-ready" title="'+r.purCount+' purchase entries">×'+r.purCount+'</span>':'';
+    return '<tr'+((negQ||negA)?' class="fbs-rowneg"':'')+'>'
+      +'<td class="fbs-ctl"><button class="btn btn-xs btn-neon" title="Upar" onclick="fbsMoveItem(\''+it.id+'\',-1)">▲</button><button class="btn btn-xs btn-neon" title="Neeche" onclick="fbsMoveItem(\''+it.id+'\',1)">▼</button><button class="btn btn-xs btn-neon" title="Sab se oper" onclick="fbsMoveTop(\''+it.id+'\')">⤒</button></td>'
+      +'<td style="text-align:center;color:var(--text3);">'+(i+1)+'</td>'
+      +'<td class="fbs-hs">'+fbsEsc(it.hs)+'</td>'
+      +'<td>'+fbsEsc(it.uom)+'</td>'
+      +'<td style="text-align:center;">'+fbsNum(it.tax)+'%</td>'
+      +'<td class="n fbs-g1">'+openA+'</td><td class="n fbs-g1">'+openQ+'</td>'
+      +'<td class="n fbs-g2">'+fbsFmtAmt(r.purAmt)+badge+'</td><td class="n fbs-g2">'+fbsFmtQty(r.purQty)+'</td>'
+      +'<td class="n fbs-g3">'+fbsFmtAmt(r.saleAmt)+'</td><td class="n fbs-g3">'+fbsFmtQty(r.saleQty)+'</td>'
+      +'<td class="n fbs-g4 '+(negA?'fbs-neg':'fbs-pos')+'">'+fbsFmtAmt(r.closeAmt)+'</td><td class="n fbs-g4 '+(negQ?'fbs-neg':'fbs-pos')+'">'+fbsFmtQty(r.closeQty)+'</td>'
+      +'<td><button class="btn btn-xs btn-yellow" onclick="fbsEditItem(\''+it.id+'\')" title="HS code edit">✏️</button></td>'
+      +'</tr>';
+  }).join('');
+  wrap.innerHTML='<div class="tbl-wrap"><table class="fbs-tbl no-mobile-card"><thead>'
+    +'<tr><th colspan="5"></th><th colspan="2" class="fbs-g1h">Opening Balance</th><th colspan="2" class="fbs-g2h">+ Purchase</th><th colspan="2" class="fbs-g3h">− Sale</th><th colspan="2" class="fbs-g4h">Closing Balance</th><th></th></tr>'
+    +'<tr><th>Move</th><th>#</th><th style="text-align:center;">HS Code</th><th>UOM</th><th>Tax %</th><th>Amount</th><th>Qty</th><th>Amount</th><th>Qty</th><th>Amount</th><th>Qty</th><th>Amount</th><th>Qty</th><th></th></tr>'
+    +'</thead><tbody>'+body+'</tbody>'
+    +'<tfoot><tr><td colspan="5" style="text-align:right;font-weight:800;">TOTAL</td><td class="n">'+fbsFmtAmt(tO)+'</td><td></td><td class="n">'+fbsFmtAmt(tP)+'</td><td></td><td class="n">'+fbsFmtAmt(tS)+'</td><td></td><td class="n">'+fbsFmtAmt(tC)+'</td><td></td><td></td></tr></tfoot></table></div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-top:6px;">Sale = is mahine ki invoiced DC (basic amount, tax ke baghair). Purchase = neeche ki alag alag entries ka total. '+(saved?'🔒 Mahina saved hai.':'Opening sirf pehle (start) mahine mein edit hoti hai; baad ke mahinon mein pichle mahine ki Closing khud aati hai.')+'</div>';
+}
+function fbsIssueLines(arr,cls,max){
+  const sh=arr.slice(0,max).map(x=>'<li>'+fbsEsc(x.t)+(x.go?' <button class="btn btn-xs btn-neon" onclick="fbsSetMonth(\''+x.go+'\')">Open '+fbsMonthLabel(x.go)+'</button>':'')+'</li>').join('');
+  return '<ul class="'+cls+'">'+sh+(arr.length>max?'<li>… aur '+(arr.length-max)+' aur</li>':'')+'</ul>';
+}
+function fbsRenderCheck(cur,month,chain){
+  const box=fbsEl('fbs-check');
+  let html='';
+  if(fbsUi.banner&&fbsUi.banner.month===month){
+    html+='<div class="fbs-box fbs-okbox">✅ <strong>'+fbsMonthLabel(month)+' save ho gaya.</strong> '+fbsMonthLabel(fbsUi.banner.next)+' ki Opening Balance &amp; Qty (is mahine ki Closing) auto ready hai. '
+      +'<button class="btn btn-green btn-sm" onclick="fbsSetMonth(\''+fbsUi.banner.next+'\')">➡️ '+fbsMonthLabel(fbsUi.banner.next)+' kholein</button></div>';
+  }
+  const ck=(fbsUi.check&&fbsUi.check.month===month)?fbsUi.check:null;
+  const v=ck?{errors:ck.errors,warnings:ck.warnings}:fbsValidate(month,chain);
+  if(ck||v.errors.length||v.warnings.length){
+    if(v.errors.length) html+='<div class="fbs-box fbs-errbox"><strong>❌ '+v.errors.length+' error — save nahi ho sakta jab tak theek na hon:</strong>'+fbsIssueLines(v.errors,'fbs-ul',40)+'</div>';
+    else if(ck) html+='<div class="fbs-box fbs-okbox">✅ Koi error nahi mili.</div>';
+    if(v.warnings.length) html+='<div class="fbs-box fbs-warnbox"><strong>⚠️ '+v.warnings.length+' warning (save ho sakta hai):</strong>'+fbsIssueLines(v.warnings,'fbs-ul',25)+'</div>';
+  }
+  if(!ck&&!(fbsUi.banner&&fbsUi.banner.month===month)&&v.errors.length+v.warnings.length===0&&cur) html+='<div class="fbs-box fbs-okbox">✅ Auto-check: abhi koi error/warning nahi. "Save &amp; Calculate" dabayein.</div>';
+  box.innerHTML=html;
+}
+function fbsRenderPurchases(month,saved){
+  const dl=fbsEl('fbs-p-date');
+  if(dl&&(!dl.value||dl.value.slice(0,7)!==month)){
+    const t=new Date(); const today=t.getFullYear()+'-'+fbsPad(t.getMonth()+1)+'-'+fbsPad(t.getDate());
+    dl.value=today.slice(0,7)===month?today:month+'-01';
+  }
+  ['fbs-p-hs','fbs-p-qty','fbs-p-amt','fbs-p-date','fbs-p-note','fbs-p-btn'].forEach(i=>{ const e=fbsEl(i); if(e) e.disabled=saved; });
+  const lock=fbsEl('fbs-p-lock'); if(lock) lock.style.display=saved?'block':'none';
+  fbsEl('fbs-p-title').textContent='🛒 Purchase — '+fbsMonthLabel(month);
+  const list=fbsData.purchases.filter(p=>p.month===month);
+  const box=fbsEl('fbs-p-list');
+  if(!list.length){ box.innerHTML='<div style="color:var(--text3);padding:8px;font-size:12px;">Is mahine ki koi purchase entry nahi.</div>'; return; }
+  const byItem={}; list.forEach(p=>{ (byItem[p.itemId]=byItem[p.itemId]||[]).push(p); });
+  let rows='', tq=0, ta=0;
+  fbsData.master.filter(it=>byItem[it.id]).forEach(it=>{
+    const g=byItem[it.id].sort((a,b)=>(a.ts||0)-(b.ts||0));
+    let gq=0,ga=0;
+    g.forEach(p=>{
+      gq+=fbsNum(p.qty); ga+=fbsNum(p.amt);
+      rows+='<tr><td>'+fbsEsc(p.date||'')+'</td><td class="fbs-hs">'+fbsEsc(it.hs)+'</td><td>'+fbsEsc(it.uom)+'</td><td style="text-align:center;">'+fbsNum(it.tax)+'%</td>'
+        +'<td class="n">'+fbsFmtAmt(p.amt)+'</td><td class="n">'+fbsFmtQty(p.qty)+'</td><td>'+fbsEsc(p.note||'')+'</td>'
+        +'<td>'+(saved?'':'<button class="btn btn-xs btn-yellow" onclick="fbsEditPurchase(\''+p.id+'\')">✏️</button> <button class="btn btn-xs btn-red" onclick="fbsDeletePurchase(\''+p.id+'\')">🗑</button>')+'</td></tr>';
+    });
+    tq+=gq; ta+=ga;
+    if(g.length>1) rows+='<tr class="fbs-sub"><td colspan="4" style="text-align:right;">'+fbsEsc(it.hs)+' ('+fbsEsc(it.uom)+') — report mein total:</td><td class="n">'+fbsFmtAmt(ga)+'</td><td class="n">'+fbsFmtQty(gq)+'</td><td colspan="2">'+g.length+' entries</td></tr>';
+  });
+  box.innerHTML='<div class="tbl-wrap"><table class="fbs-tbl no-mobile-card"><thead><tr><th>Date</th><th style="text-align:center;">HS Code</th><th>UOM</th><th>Tax %</th><th>Amount</th><th>Qty</th><th>Note</th><th></th></tr></thead><tbody>'+rows+'</tbody>'
+    +'<tfoot><tr><td colspan="4" style="text-align:right;font-weight:800;">TOTAL PURCHASE</td><td class="n">'+fbsFmtAmt(ta)+'</td><td></td><td colspan="2"></td></tr></tfoot></table></div>';
+}
+function fbsRenderSummary(chain,month){
+  const box=fbsEl('fbs-summary');
+  const ms=Object.keys(chain.res).sort();
+  if(!ms.length){ box.innerHTML='<div style="color:var(--text3);padding:8px;">Abhi koi mahina nahi.</div>'; return; }
+  let broken=false, maxC=1;
+  const data=ms.map(m=>{ const rows=chain.res[m].rows; const s={m:m,saved:chain.res[m].saved,n:rows.length,o:0,p:0,s:0,c:0}; rows.forEach(r=>{ s.o+=r.openAmt; s.p+=r.purAmt; s.s+=r.saleAmt; s.c+=r.closeAmt; }); if(s.c>maxC) maxC=s.c; return s; });
+  const body=data.map(s=>{
+    let st;
+    if(s.saved&&!broken) st='<span class="badge badge-invoiced">✅ Saved</span>';
+    else if(s.saved&&broken) st='<span class="badge badge-cancelled" title="Pichla mahina draft hai — dobara save zaroori">⚠️ Re-save</span>';
+    else { st='<span class="badge badge-pending">📝 Draft</span>'; broken=true; }
+    return '<tr'+(s.m===month?' class="fbs-cur"':'')+'><td><strong>'+fbsMonthLabel(s.m)+'</strong></td><td>'+st+'</td><td style="text-align:center;">'+s.n+'</td>'
+      +'<td class="n">'+fbsFmtAmt(s.o)+'</td><td class="n">'+fbsFmtAmt(s.p)+'</td><td class="n">'+fbsFmtAmt(s.s)+'</td>'
+      +'<td class="n"><div>'+fbsFmtAmt(s.c)+'</div><div class="fbs-barwrap" style="height:5px;"><div class="fbs-bar" style="width:'+Math.max(0,s.c/maxC*100).toFixed(1)+'%"></div></div></td>'
+      +'<td><button class="btn btn-xs btn-neon" onclick="fbsSetMonth(\''+s.m+'\')">Open</button></td></tr>';
+  }).join('');
+  box.innerHTML='<div class="tbl-wrap"><table class="fbs-tbl no-mobile-card"><thead><tr><th>Month</th><th>Status</th><th>HS</th><th>Opening Amt</th><th>+ Purchase Amt</th><th>− Sale Amt</th><th>Closing Amt</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div>';
+}
+
+// ---------- export ----------
+function fbsViewRows(){
+  const m=fbsUi.month, chain=fbsChain(m);
+  return {m:m, cur:chain.res[m]||null};
+}
+function fbsExportCsv(){
+  const v=fbsViewRows(); if(!v.cur||!v.cur.rows.length){ toast('Export ke liye data nahi','warning'); return; }
+  const q=s=>'"'+String(s==null?'':s).replace(/"/g,'""')+'"';
+  const lines=[['HS Code','UOM','Tax %','Opening Amount','Opening Qty','Purchase Amount','Purchase Qty','Sale Amount','Sale Qty','Closing Amount','Closing Qty'].map(q).join(',')];
+  v.cur.rows.forEach(r=>lines.push([r.item.hs,r.item.uom,r.item.tax,r.openAmt.toFixed(2),r.openQty,r.purAmt.toFixed(2),r.purQty,r.saleAmt.toFixed(2),r.saleQty,r.closeAmt.toFixed(2),r.closeQty].map(q).join(',')));
+  const blob=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='FBR_Stock_Report_'+v.m+'.csv'; a.click(); URL.revokeObjectURL(a.href);
+  toast('CSV download ho gayi','success');
+}
+function fbsExportPdf(){
+  const v=fbsViewRows(); if(!v.cur||!v.cur.rows.length){ toast('Export ke liye data nahi','warning'); return; }
+  if(!(window.jspdf&&window.jspdf.jsPDF)){ toast('PDF library load nahi hui (internet check karein)','error'); return; }
+  const doc=new window.jspdf.jsPDF({orientation:'landscape',unit:'pt',format:'a4'});
+  if(typeof doc.autoTable!=='function'){ toast('PDF table library load nahi hui','error'); return; }
+  const st=(typeof settings!=='undefined'?settings:{})||{};
+  doc.setFontSize(14); doc.text('FBR STOCK REPORT — '+fbsMonthLabel(v.m).toUpperCase(),40,40);
+  doc.setFontSize(9); doc.text((st.companyName||'')+'   NTN: '+(st.ntn||'')+'   STRN: '+(st.strn||''),40,56);
+  let tO=0,tP=0,tS=0,tC=0;
+  const body=v.cur.rows.map(r=>{ tO+=r.openAmt; tP+=r.purAmt; tS+=r.saleAmt; tC+=r.closeAmt;
+    return [r.item.hs,r.item.uom,fbsNum(r.item.tax)+'%',fbsFmtAmt(r.openAmt),fbsFmtQty(r.openQty),fbsFmtAmt(r.purAmt),fbsFmtQty(r.purQty),fbsFmtAmt(r.saleAmt),fbsFmtQty(r.saleQty),fbsFmtAmt(r.closeAmt),fbsFmtQty(r.closeQty)]; });
+  doc.autoTable({startY:68, theme:'grid', styles:{fontSize:8,cellPadding:3}, headStyles:{fillColor:[30,30,70]},
+    head:[['HS Code','UOM','Tax','Opening Amt','Opening Qty','Purchase Amt','Purchase Qty','Sale Amt','Sale Qty','Closing Amt','Closing Qty']],
+    body:body, foot:[['TOTAL','','',fbsFmtAmt(tO),'',fbsFmtAmt(tP),'',fbsFmtAmt(tS),'',fbsFmtAmt(tC),'']], footStyles:{fillColor:[230,230,240],textColor:[0,0,0]},
+    columnStyles:{0:{halign:'center'},3:{halign:'right'},4:{halign:'right'},5:{halign:'right'},6:{halign:'right'},7:{halign:'right'},8:{halign:'right'},9:{halign:'right'},10:{halign:'right'}}});
+  const pl=fbsData.purchases.filter(p=>p.month===v.m);
+  if(pl.length){
+    const pb=[]; fbsData.master.forEach(it=>{ pl.filter(p=>p.itemId===it.id).sort((a,b)=>(a.ts||0)-(b.ts||0)).forEach(p=>pb.push([p.date||'',it.hs,it.uom,fbsFmtAmt(p.amt),fbsFmtQty(p.qty),p.note||''])); });
+    doc.setFontSize(11); const y=doc.lastAutoTable.finalY+24; doc.text('Purchase Details',40,y);
+    doc.autoTable({startY:y+6, theme:'grid', styles:{fontSize:8,cellPadding:3}, headStyles:{fillColor:[30,30,70]}, head:[['Date','HS Code','UOM','Amount','Qty','Note']], body:pb});
+  }
+  doc.save('FBR_Stock_Report_'+v.m+'.pdf');
+}
+
 // ==================== HS CODE TAX RATE BREAKDOWN ====================
 function generateHSReportWithTaxBreakdown(){
   const month = document.getElementById('hsReportMonth').value;
@@ -16557,9 +17276,9 @@ const PERM_ALL = Object.keys(PERM_LABELS);
 const ROLE_PRESETS = {
   'Super Admin': PERM_ALL,
   'Admin': PERM_ALL,
-  'Accounts': ['dashboard','ledger','fbr','reports','cheques','bank','expenses','pantry','auditlog','commercialbills'],
+  'Accounts': ['dashboard','ledger','fbr','fbrstock','reports','cheques','bank','expenses','pantry','auditlog','commercialbills'],
   'Sales': ['dashboard','records','quotation','parties','crm','sendcenter','digitalinvoices','commercialbills','marketing'],
-  'Store': ['dashboard','stock','purchaseorders','warehouses','hscodes'],
+  'Store': ['dashboard','stock','purchaseorders','warehouses','hscodes','fbrstock'],
   'Dispatch': ['dashboard','dispatch','records','employees','pantry'],
   'Viewer': ['dashboard','reports']
 };
