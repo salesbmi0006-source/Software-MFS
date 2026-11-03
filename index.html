@@ -691,6 +691,8 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
       <div class="flex-gap">
         <button class="btn btn-purple btn-sm" id="fu-nav-dash" onclick="fuGo('dash')">📊 Dashboard</button>
         <button class="btn btn-neon btn-sm" id="fu-nav-parties" onclick="fuGo('parties')">👥 All Parties</button>
+        <button class="btn btn-neon btn-sm" id="fu-nav-cash" onclick="fuGo('cash')">💵 Cash Parties</button>
+        <button class="btn btn-neon btn-sm" onclick="fuRepOpen()">📑 Reports</button>
       </div>
     </div>
     <div id="fu-body"></div>
@@ -758,6 +760,91 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
     <div class="fu-sub">PDF mein: party ka balance, last payment, follow-up log (purani se nayi tartib mein), us dauran aai payments aur bills.</div>
   </div>
   <div class="modal-footer"><button class="btn btn-neon" onclick="closeModal('fuPdfModal')">Cancel</button><button class="btn btn-purple" onclick="fuPdfDo()">📄 PDF Download</button></div>
+</div>
+</div>
+
+<!-- ====== FOLLOW UP: CASH PARTIES MODALS ====== -->
+<div class="modal-overlay" id="fuCpModal">
+<div class="modal modal-md">
+  <div class="modal-header"><h3 id="fu-cp-title">💵 Cash Party</h3><button class="close-btn" onclick="closeModal('fuCpModal')">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="fu-cp-id">
+    <div class="form-group"><label>Party ka naam *</label><input type="text" id="fu-cp-name" placeholder="e.g. Ali Electric Store" autocomplete="off"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Mobile (optional)</label><input type="text" id="fu-cp-phone" placeholder="03xx-xxxxxxx"></div>
+      <div class="form-group"><label>Note (optional)</label><input type="text" id="fu-cp-note" placeholder="e.g. Market ki dukaan"></div>
+    </div>
+    <div class="fu-sub">💡 Ye party sirf Follow Up mein save hogi — Ledger / Bills / Parties list se iska koi link nahi.</div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-neon" onclick="closeModal('fuCpModal')">Cancel</button><button class="btn btn-green" onclick="fuCpSave()">💾 Save Party</button></div>
+</div>
+</div>
+
+<div class="modal-overlay" id="fuCeModal">
+<div class="modal modal-md">
+  <div class="modal-header"><h3 id="fu-ce-title">🧾 Cash Bill</h3><button class="close-btn" onclick="closeModal('fuCeModal')">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="fu-ce-pid"><input type="hidden" id="fu-ce-eid"><input type="hidden" id="fu-ce-type">
+    <div class="form-row">
+      <div class="form-group"><label>Date *</label><input type="date" id="fu-ce-date"></div>
+      <div class="form-group" id="fu-ce-billno-wrap"><label>Bill No</label><input type="text" id="fu-ce-billno" placeholder="e.g. 1245" autocomplete="off"></div>
+    </div>
+    <div class="form-group"><label id="fu-ce-amt-lbl">Total Amount *</label><input type="number" step="0.01" id="fu-ce-amt" placeholder="0.00"></div>
+    <div class="form-group" id="fu-ce-link-wrap"><label>Ye payment kis bill ki hai?</label><select id="fu-ce-link"></select></div>
+    <div class="form-group" id="fu-ce-now-wrap"><label>Bill ke waqt cash kitna mila (optional)</label><input type="number" step="0.01" id="fu-ce-now" placeholder="0.00 — baqi follow-up mein rahega">
+      <div class="fu-sub" style="margin-top:3px;">Agar poora mil gaya to Total Amount likh dein — bill khud clear ho jayega.</div></div>
+    <div class="form-group"><label id="fu-ce-rem-lbl">Remarks (cash mein kya cheez gai)</label><textarea id="fu-ce-rem" rows="2" placeholder="e.g. 10 LED bulb, 2 switch board"></textarea></div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-neon" onclick="closeModal('fuCeModal')">Cancel</button><button class="btn btn-green" onclick="fuCeSave()">💾 Save</button></div>
+</div>
+</div>
+
+<div class="modal-overlay" id="fuCcModal">
+<div class="modal modal-md">
+  <div class="modal-header"><h3 id="fu-cc-title">📞 Cash Party Follow-Up</h3><button class="close-btn" onclick="closeModal('fuCcModal')">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="fu-cc-pid">
+    <div id="fu-cc-ctx" class="fu-ctx"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Call ki date *</label><input type="date" id="fu-cc-date"></div>
+      <div class="form-group"><label>Kis se baat hui</label><input type="text" id="fu-cc-spoke" placeholder="Naam"></div>
+    </div>
+    <div class="form-group"><label>Party ne kya kaha</label><textarea id="fu-cc-said" rows="2" placeholder="e.g. Kal tak 5000 bhej dunga"></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><label>Payment ki date (party ne kaha)</label><input type="date" id="fu-cc-pdate" onchange="fuCcPdateChanged()"></div>
+      <div class="form-group"><label>Kitni payment karega</label><div style="display:flex;gap:6px;"><input type="number" step="0.01" id="fu-cc-pamt" placeholder="0.00"><button type="button" class="btn btn-neon btn-xs" onclick="fuCcFull()">Full</button></div></div>
+    </div>
+    <div class="form-group"><label>⏰ Agla reminder — dobara call kab karni hai *</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <input type="date" id="fu-cc-rdate" style="width:170px;" oninput="this.dataset.auto='0'">
+        <button type="button" class="btn btn-xs btn-neon" onclick="fuCcQuick(1)">Kal</button>
+        <button type="button" class="btn btn-xs btn-neon" onclick="fuCcQuick(3)">3 din</button>
+        <button type="button" class="btn btn-xs btn-neon" onclick="fuCcQuick(7)">1 hafta</button>
+      </div></div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-neon" onclick="closeModal('fuCcModal')">Cancel</button><button class="btn btn-green" onclick="fuCcSave()">💾 Save Follow-Up</button></div>
+</div>
+</div>
+
+<div class="modal-overlay" id="fuRepModal">
+<div class="modal modal-md">
+  <div class="modal-header"><h3>📑 Follow-Up Reports (Pending / Clear)</h3><button class="close-btn" onclick="closeModal('fuRepModal')">✕</button></div>
+  <div class="modal-body">
+    <div class="form-row">
+      <div class="form-group"><label>Kin parties ki report</label>
+        <select id="fu-rep-scope"><option value="both">👥 Dono (Ledger + Cash)</option><option value="ledger">📒 Sirf Ledger Parties</option><option value="cash">💵 Sirf Cash Parties</option></select></div>
+      <div class="form-group"><label>Report ki kism</label>
+        <select id="fu-rep-kind"><option value="pending">🔴 Pending (balance baqi)</option><option value="clear">✅ Clear (balance khatam)</option><option value="all">📚 Sab (Pending + Clear)</option></select></div>
+    </div>
+    <label style="display:flex;gap:8px;align-items:center;margin:6px 0 12px;"><input type="checkbox" id="fu-rep-detail" checked> Cash parties ki poori detail (har bill, payment, remarks, follow-up)</label>
+    <div class="fu-sub" style="margin-bottom:10px;">Ledger parties ke liye "Clear" mein wo parties aati hain jin ka follow-up hua aur ab balance 0 hai. Cash parties mein wo jin ka poora paisa aa chuka.</div>
+    <div class="flex-gap" style="flex-wrap:wrap;">
+      <button class="btn btn-purple" onclick="fuRepRun('pdf')">📄 PDF Download</button>
+      <button class="btn btn-green" onclick="fuRepRun('a4')">🖨️ A4 Print</button>
+      <button class="btn btn-yellow" onclick="fuRepRun('thermal')">🧾 Thermal Print</button>
+    </div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-neon" onclick="closeModal('fuRepModal')">Close</button></div>
 </div>
 </div>
 
@@ -6066,7 +6153,7 @@ async function buildFullBackupData(){
     db, cheques, ledgerData:ledgerData, fbrParties, descMaster, settings, partyOpeningBalances, ledgerGroupsJson: JSON.stringify(ledgerGroups),
     digitalInvoices: diWithPdf,
     partyContacts, invoiceSendStatus, hsStockData, fbrStockData:(typeof fbsData!=='undefined'?fbsData:null), rateLists, partyDispatchData,
-    savedQuotations, quotSettings, rrSettings, employees, mktData, crmData, followUpData:{v:1, entries:(typeof followUps!=='undefined'?followUps:[])}, emailHistory, emailTemplates, autoNumberSettings,
+    savedQuotations, quotSettings, rrSettings, employees, mktData, crmData, followUpData:{v:2, entries:(typeof followUps!=='undefined'?followUps:[]), cashParties:(typeof fuCash!=='undefined'?fuCash:[])}, emailHistory, emailTemplates, autoNumberSettings,
     stockItems, stockMovements, salesReturns, returnReceipts, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     fbCustomers, fbBills, fbQuotations, fbLedger, fbSettings, fbDescriptions, fbStockItems, fbStockMovements,
     documentManager: docsWithBlob,
@@ -6254,7 +6341,7 @@ function buildCloudSyncData(){
   return {
     db, cheques, ledgerData, fbrParties, descMaster, settings, partyOpeningBalances, ledgerGroupsJson: JSON.stringify(ledgerGroups),
     partyContacts, invoiceSendStatus, hsStockData, fbrStockData:(typeof fbsData!=='undefined'?fbsData:null), rateLists, partyDispatchData,
-    savedQuotations, quotSettings, rrSettings, employees, mktData, crmData, followUpData:{v:1, entries:(typeof followUps!=='undefined'?followUps:[])}, emailHistory, emailTemplates, autoNumberSettings,
+    savedQuotations, quotSettings, rrSettings, employees, mktData, crmData, followUpData:{v:2, entries:(typeof followUps!=='undefined'?followUps:[]), cashParties:(typeof fuCash!=='undefined'?fuCash:[])}, emailHistory, emailTemplates, autoNumberSettings,
     stockItems, stockMovements, salesReturns, returnReceipts, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     fbCustomers, fbBills, fbQuotations, fbLedger, fbSettings, fbDescriptions, fbStockItems, fbStockMovements,
     securityData: (typeof securityData!=='undefined'?securityData:null),
@@ -6995,7 +7082,7 @@ async function applyRestoredBackupData(data){
   }
   if(data.employees) { employees = data.employees; saveEmployees(); }
   if(data.crmData) { crmData = data.crmData; saveCrmData(); }
-  if(data.followUpData) { followUps = Array.isArray(data.followUpData.entries) ? data.followUpData.entries : []; saveFollowUps(); }
+  if(data.followUpData) { followUps = Array.isArray(data.followUpData.entries) ? data.followUpData.entries : []; saveFollowUps(); if(Array.isArray(data.followUpData.cashParties)){ fuCash = data.followUpData.cashParties; saveFuCash(); } }
   if(data.mktData) { mktData = data.mktData; saveMktData(); }
   if(data.emailHistory) { emailHistory = data.emailHistory; saveEmailHistory(); }
   if(data.emailTemplates) { emailTemplates = data.emailTemplates; saveEmailTemplatesList(); }
@@ -19521,6 +19608,7 @@ if(typeof followUps==='undefined'){ var followUps = []; }
 var fuState = { view:'dash', party:'', q:'', status:'balance', sort:'balance' };
 
 function loadFollowUps(){
+  try{ if(typeof loadFuCash==='function') loadFuCash(); }catch(e){}
   try{ const d = localStorage.getItem('sau_followups'); followUps = d ? JSON.parse(d) : []; }catch(e){ followUps = []; }
   if(!Array.isArray(followUps)) followUps = [];
 }
@@ -19706,11 +19794,13 @@ function fuRefreshAll(){
 }
 function fuRenderTab(){
   const body = document.getElementById('fu-body'); if(!body) return;
-  ['dash','parties'].forEach(v=>{
+  ['dash','parties','cash'].forEach(v=>{
     const b = document.getElementById('fu-nav-'+v);
-    if(b) b.className = 'btn btn-sm ' + ((fuState.view===v || (v==='parties' && fuState.view==='party')) ? 'btn-purple' : 'btn-neon');
+    if(b) b.className = 'btn btn-sm ' + ((fuState.view===v || (v==='parties' && fuState.view==='party') || (v==='cash' && fuState.view==='cashparty')) ? 'btn-purple' : 'btn-neon');
   });
-  if(fuState.view==='party' && fuState.party) fuRenderParty(fuState.party);
+  if(fuState.view==='cashparty' && fuState.party) fuCashRenderParty(fuState.party);
+  else if(fuState.view==='cash') fuCashRenderList();
+  else if(fuState.view==='party' && fuState.party) fuRenderParty(fuState.party);
   else if(fuState.view==='parties') fuRenderParties();
   else fuRenderDash();
 }
@@ -19769,7 +19859,7 @@ function fuRenderDash(){
       <div class="stat-card c6"><div class="stat-val">${noFu.length}</div><div class="stat-label">⚠️ Balance hai, follow-up nahi</div></div>
     </div>
     ${sec('📞 Aaj ki Calls', c.due.length, c.due.length ? fuReminderTable(c.due,{snooze:true}) : empty('Aaj koi call due nahi 🎉'), 'var(--neon5)')}
-    ${sec('🔴 Overdue — jis date tak kaha tha wo guzar gai', c.overdue.length, c.overdue.length ? fuReminderTable(c.overdue,{snooze:true}) : empty('Koi overdue follow-up nahi'), 'var(--neon3)')}
+    ${fuCashDashSection()}${sec('🔴 Overdue — jis date tak kaha tha wo guzar gai', c.overdue.length, c.overdue.length ? fuReminderTable(c.overdue,{snooze:true}) : empty('Koi overdue follow-up nahi'), 'var(--neon3)')}
     ${sec('💰 Payment aa gai (follow-up ke dauran Ledger mein entry hui)', c.received.length, c.received.length ? fuReminderTable(c.received) : empty('Abhi kisi follow-up wali party ki nayi payment nahi aai'), 'var(--neon4)')}
     ${sec('📅 Aane wali promises (agle 7 din)', c.upcoming.length, c.upcoming.length ? fuReminderTable(c.upcoming) : empty('Agle 7 din mein koi promise nahi'), 'var(--neon2)')}
     ${sec('⚠️ Balance baqi hai lekin follow-up shuru nahi hua (top 10)', noFu.length, noFu.length ? `<div class="tbl-wrap"><table><thead><tr><th>Party</th><th style="text-align:right;">Balance</th><th>Last Payment</th><th>Action</th></tr></thead><tbody>${noFu.slice(0,10).map(x=>`<tr><td data-label="Party"><b>${fuE(x.p.label)}</b></td><td data-label="Balance" style="text-align:right;font-weight:700;color:var(--neon3);">${fuMoney(x.st.balance)}</td><td data-label="Last Payment">${x.st.lastPay?fmtDate(x.st.lastPay.date)+' — '+fuMoney(x.st.lastPay.amount):'<span class="fu-sub">Koi payment nahi</span>'}</td><td data-label="Action"><button class="btn btn-green btn-xs" onclick="fuOpenLog(${fuQ(x.p.key)})">📞 Follow-up shuru</button> <button class="btn btn-neon btn-xs" onclick="fuOpenParty(${fuQ(x.p.key)})">📂 Open</button></td></tr>`).join('')}</tbody></table></div>` : empty('Sab balance wali parties ka follow-up chal raha hai'), '')}
@@ -19820,24 +19910,29 @@ function fuRenderParties(){
     <div class="flex-gap mb-8" style="flex-wrap:wrap;align-items:center;">
       <input type="text" id="fu-q" placeholder="🔎 Party search…" value="${fuE(fuState.q)}" oninput="fuState.q=this.value;fuRenderPartiesTable()" style="width:220px;" autocomplete="off">
       <select id="fu-status" onchange="fuState.status=this.value;fuRenderPartiesTable()" style="width:230px;">
-        ${[['balance','💰 Balance wali parties'],['all','Sab parties'],['due','🟡 Aaj call karni hai'],['overdue','🔴 Overdue'],['waiting','⏳ Intezar mein'],['received','💰 Payment aa gai'],['nofu','⚠️ Balance hai, follow-up nahi'],['hasfu','📞 Follow-up chal raha hai']].map(o=>`<option value="${o[0]}" ${fuState.status===o[0]?'selected':''}>${o[1]}</option>`).join('')}
+        ${[['balance','💰 Balance wali parties'],['all','Sab parties'],['cash','💵 Cash Parties (alag)'],['ledger','📒 Sirf Ledger Parties'],['nopay','0️⃣ Jin ki payment 0 hai'],['clear','✅ Clear (balance 0)'],['due','🟡 Aaj call karni hai'],['overdue','🔴 Overdue'],['waiting','⏳ Intezar mein'],['received','💰 Payment aa gai'],['nofu','⚠️ Balance hai, follow-up nahi'],['hasfu','📞 Follow-up chal raha hai']].map(o=>`<option value="${o[0]}" ${fuState.status===o[0]?'selected':''}>${o[1]}</option>`).join('')}
       </select>
       <select id="fu-sort" onchange="fuState.sort=this.value;fuRenderPartiesTable()" style="width:190px;">
         ${[['balance','Sort: Balance (zyada pehle)'],['name','Sort: Naam'],['next','Sort: Agli call date'],['lastpay','Sort: Purani payment pehle']].map(o=>`<option value="${o[0]}" ${fuState.sort===o[0]?'selected':''}>${o[1]}</option>`).join('')}
       </select>
       <button class="btn btn-purple btn-sm" onclick="fuPdfAllParties()">📄 Sab Parties Summary PDF</button>
+      <button class="btn btn-green btn-sm" onclick="fuRepOpen()">📑 Pending / Clear Reports</button>
     </div>
     <div id="fu-parties-table"></div>`;
   fuRenderPartiesTable();
 }
 function fuRenderPartiesTable(){
   const wrap = document.getElementById('fu-parties-table'); if(!wrap) return;
-  let rows = fuPartyRows();
+  let rows = fuPartyRows().concat(fuCashRows());
   const q = (fuState.q||'').trim().toLowerCase();
   if(q) rows = rows.filter(r=>r.label.toLowerCase().includes(q));
   const s = fuState.status;
   rows = rows.filter(r=>{
     const state = r.ev ? r.ev.state : '';
+    if(s==='cash') return !!r.cash;
+    if(s==='ledger') return !r.cash;
+    if(s==='nopay') return !r.st.lastPay;
+    if(s==='clear') return r.st.balance<=0.5 && r.st.billed>0;
     if(s==='balance') return r.st.balance>0.5 || !!r.f;
     if(s==='due') return state==='due';
     if(s==='overdue') return state==='overdue';
@@ -19864,12 +19959,12 @@ function fuRenderPartiesTable(){
       const mb = r.st.monthBills.length ? `${r.st.monthBills.length} bill — <b>${fuMoney(r.st.monthBilled)}</b>` : '<span class="fu-sub">—</span>';
       const nxt = r.f ? `<div class="fu-sub">${r.f.promiseDate?'Promise: '+fmtDate(r.f.promiseDate)+(r.f.promiseAmount?' ('+fuMoney(r.f.promiseAmount)+')':''):'Reminder: '+(r.f.reminderDate?fmtDate(r.f.reminderDate):'—')}</div>` : '';
       return `<tr>
-        <td data-label="Party"><b style="cursor:pointer;color:var(--neon);" onclick="fuOpenParty(${fuQ(r.key)})">${fuE(r.label)}</b></td>
+        <td data-label="Party"><b style="cursor:pointer;color:var(--neon);" onclick="${r.cash?`fuCashOpen('${r.id}')`:`fuOpenParty(${fuQ(r.key)})`}">${fuE(r.cash?r.name:r.label)}</b>${r.cash?' <span class="fu-badge fu-b-blue">💵 Cash</span>':''}</td>
         <td data-label="Balance" style="text-align:right;font-weight:700;color:${r.st.balance>0.5?'var(--neon3)':'var(--neon4)'};">${fuMoney(Math.abs(r.st.balance))} ${r.st.balance<-0.5?'CR':''}</td>
         <td data-label="Last Payment">${lpTxt}</td>
         <td data-label="Is Month ke Bills">${mb}</td>
-        <td data-label="Follow-Up">${fuBadge(r.ev, r.f)}${nxt}</td>
-        <td data-label="Actions" style="white-space:nowrap;"><button class="btn btn-green btn-xs" onclick="fuOpenLog(${fuQ(r.key)})">📞 Follow-Up</button> <button class="btn btn-neon btn-xs" onclick="fuOpenParty(${fuQ(r.key)})">📂 Detail</button></td>
+        <td data-label="Follow-Up">${(r.cash&&r.ev&&!r.f)?fuBadge(r.ev,{}):fuBadge(r.ev, r.f)}${nxt}</td>
+        <td data-label="Actions" style="white-space:nowrap;">${r.cash?`<button class="btn btn-green btn-xs" onclick="fuCcOpen('${r.id}')">📞 Follow-Up</button> <button class="btn btn-neon btn-xs" onclick="fuCashOpen('${r.id}')">📂 Detail</button>`:`<button class="btn btn-green btn-xs" onclick="fuOpenLog(${fuQ(r.key)})">📞 Follow-Up</button> <button class="btn btn-neon btn-xs" onclick="fuOpenParty(${fuQ(r.key)})">📂 Detail</button>`}</td>
       </tr>`; }).join('')}
     </tbody><tfoot><tr><td><b>Total (${rows.length} parties)</b></td><td style="text-align:right;font-weight:800;">${fuMoney(total)}</td><td colspan="4"></td></tr></tfoot></table></div>`;
 }
@@ -20173,7 +20268,7 @@ function fuPdfDo(){
 // one-page summary of every party that has a balance or a follow-up
 function fuPdfAllParties(){
   if(!window.jspdf){ toast('PDF library load nahi hui — internet check karein','error'); return; }
-  const rows = fuPartyRows().filter(r=>r.st.balance>0.5 || r.f).sort((a,b)=>b.st.balance-a.st.balance);
+  const rows = fuPartyRows().concat(fuCashRows()).filter(r=>r.st.balance>0.5 || r.f).sort((a,b)=>b.st.balance-a.st.balance);
   if(!rows.length){ toast('Koi party nahi mili','warning'); return; }
   const doc = new jspdf.jsPDF({orientation:'landscape'});
   let y = pdfHeader(doc, 'Follow-Up Summary - All Parties');
@@ -20197,7 +20292,7 @@ function fuPdfAllParties(){
 
 // ---------- notification-bell alerts (called from computeReminders) ----------
 function fuReminderAlerts(){
-  const out = [];
+  const out = fuCashAlerts();
   if(!followUps.length) return out;
   try{
     const c = fuCompute();
@@ -20207,6 +20302,547 @@ function fuReminderAlerts(){
     if(c.received.length) out.push({type:'Follow-Up Payment Received', icon:'💰', count:c.received.length, detail:names(c.received)+' — payment aa gai', severity:'warning', tab:'followup'});
   }catch(e){ console.warn('fuReminderAlerts failed', e); }
   return out;
+}
+
+// ==================== FOLLOW UP: CASH PARTIES ====================
+// Cash parties (jin ki payment cash mein aati hai) — Ledger / Parties / Bills se KOI link nahi.
+// Sirf Follow Up mein save hoti hain. Har party: bills (date, bill no, amount, remarks) + payments
+// (cash aane par add) + follow-up calls. Balance = total bills - total received.
+// STORE : localStorage 'sau_fu_cash' via safeSetItem  => cloud sync + JSON backup/restore (followUpData.cashParties)
+// DATA  : fuCash = [ {id, name, phone, note, createdAt,
+//                     entries:[ {id, type:'bill'|'pay', date, billNo, amount, remarks, billId(pay only), createdAt} ],
+//                     calls:[ {id, callDate, spokeTo, said, promiseDate, promiseAmount, reminderDate, balanceAtCall, createdAt} ] } ]
+if(typeof fuCash==='undefined'){ var fuCash = []; }
+var fuCashState = { q:'', f:'pending' };
+
+function loadFuCash(){
+  try{ const d = localStorage.getItem('sau_fu_cash'); fuCash = d ? JSON.parse(d) : []; }catch(e){ fuCash = []; }
+  if(!Array.isArray(fuCash)) fuCash = [];
+}
+function saveFuCash(){ safeSetItem('sau_fu_cash', JSON.stringify(fuCash)); }
+function fuCashById(id){ return fuCash.find(p=>p.id===id); }
+function fuCashUser(){ return (typeof securityData!=='undefined' && securityData.currentUser) ? securityData.currentUser.username : (settings.operatorName||'Operator'); }
+function fuCashAudit(a, txt){ try{ logAudit(a, 'Follow Up (Cash)', txt); }catch(e){} }
+
+// ---------- numbers ----------
+function fuCashStats(p){
+  const ents = (p.entries||[]).slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'') || (a.createdAt||'').localeCompare(b.createdAt||''));
+  const month = fuToday().slice(0,7), linked = {};
+  ents.forEach(e=>{ if(e.type==='pay' && e.billId) linked[e.billId] = (linked[e.billId]||0) + (+e.amount||0); });
+  let billed = 0, received = 0, run = 0, monthBilled = 0;
+  const rows = [], bills = [], pays = [], monthBills = [];
+  ents.forEach(e=>{
+    const a = +e.amount||0;
+    if(e.type==='bill'){ billed += a; run += a; bills.push(e); if((e.date||'').startsWith(month)){ monthBills.push(e); monthBilled += a; } }
+    else { received += a; run -= a; pays.push(e); }
+    rows.push(Object.assign({}, e, {run}));
+  });
+  const billRows = bills.map(b=>{ const paid = linked[b.id]||0; return Object.assign({}, b, {paid, due:(+b.amount||0)-paid}); });
+  const balance = Math.round((billed-received)*100)/100;
+  return { rows, bills:billRows, pays, billed, received, balance, cleared: billed>0 && balance<=0.5,
+           lastPay: pays.length ? pays[pays.length-1] : null, monthBills, monthBilled };
+}
+function fuCashCalls(p){
+  return (p.calls||[]).slice().sort((a,b)=>(a.callDate||'').localeCompare(b.callDate||'') || (a.createdAt||'').localeCompare(b.createdAt||''));
+}
+function fuCashEval(p, s){
+  const calls = fuCashCalls(p), f = calls[calls.length-1] || null;
+  if(s.cleared) return { f, ev:{state:'cleared', partial:false, recv:0, pays:[], need:0, daysLate:0} };
+  if(!f) return { f:null, ev:null };
+  const today = fuToday();
+  const pays = s.pays.filter(x=>(x.date||'')>=(f.callDate||''));
+  const recv = pays.reduce((t,x)=>t+(+x.amount||0),0), need = parseFloat(f.promiseAmount)||0;
+  let state, partial = false;
+  if(recv>0.5 && (need>0 ? recv>=need-0.5 : true)) state = 'kept';
+  else {
+    partial = recv>0.5;
+    if(!f.reminderDate) state = 'none';
+    else if(f.reminderDate<today) state = 'overdue';
+    else if(f.reminderDate===today) state = 'due';
+    else state = 'waiting';
+  }
+  return { f, ev:{state, partial, recv, pays, need, daysLate:(f.reminderDate && f.reminderDate<today) ? fuDiff(f.reminderDate, today) : 0} };
+}
+// same row shape as fuPartyRows() so the All-Parties table / reports can treat both alike
+function fuCashRows(){
+  return fuCash.map(p=>{
+    const s = fuCashStats(p), e = fuCashEval(p, s);
+    return { cash:true, id:p.id, key:'cash:'+p.id, name:p.name, label:p.name+' (Cash)', p, s, f:e.f, ev:e.ev, last:e.f,
+             st:{ balance:s.balance, lastPay:s.lastPay, monthBills:s.monthBills, monthBilled:s.monthBilled, billed:s.billed, received:s.received } };
+  });
+}
+function fuRowStatus(r){
+  if(r.st.balance<=0.5 && r.st.billed>0) return 'CLEAR';
+  if(!r.f) return 'No follow-up';
+  const st = r.ev ? r.ev.state : 'none';
+  return ({cleared:'Cleared', kept:'Payment received', overdue:'Overdue '+(r.ev?r.ev.daysLate:0)+'d', due:'Call today', waiting:'Waiting '+(r.f.reminderDate?fmtDate(r.f.reminderDate):''), none:'No reminder'})[st] || '';
+}
+
+// ---------- navigation ----------
+function fuCashOpen(id){
+  fuState.view = 'cashparty'; fuState.party = id;
+  const panel = document.getElementById('panel-followup');
+  if(panel && panel.classList.contains('active')) fuRenderTab(); else showTab('followup');
+}
+
+// =====================================================================
+//  CASH PARTIES — LIST
+// =====================================================================
+function fuCashRenderList(){
+  const body = document.getElementById('fu-body'); if(!body) return;
+  const all = fuCashRows();
+  const pend = all.filter(r=>r.st.balance>0.5), clr = all.filter(r=>r.s.cleared);
+  const sum = (a,fn)=>a.reduce((t,r)=>t+fn(r),0);
+  const opt = (v,l)=>`<option value="${v}" ${fuCashState.f===v?'selected':''}>${l}</option>`;
+  body.innerHTML = `
+    <div class="flex-gap mb-8" style="flex-wrap:wrap;align-items:center;">
+      <input type="text" placeholder="🔎 Cash party search…" value="${fuE(fuCashState.q)}" oninput="fuCashState.q=this.value;fuCashRenderTable()" style="width:220px;" autocomplete="off">
+      <select onchange="fuCashState.f=this.value;fuCashRenderTable()" style="width:210px;">
+        ${opt('pending','🔴 Pending (balance baqi)')}${opt('clear','✅ Clear (poori payment aa gai)')}${opt('all','📚 Sab cash parties')}${opt('due','🟡 Call due / overdue')}${opt('nofu','⚠️ Baqi hai, follow-up nahi')}
+      </select>
+      <span style="flex:1;"></span>
+      <button class="btn btn-green btn-sm" onclick="fuCpOpen()">➕ Nayi Cash Party</button>
+      <button class="btn btn-purple btn-sm" onclick="fuRepOpen()">📑 Pending / Clear Reports</button>
+    </div>
+    <div class="stats-grid" style="margin-bottom:12px;">
+      <div class="stat-card c1"><div class="stat-val">${all.length}</div><div class="stat-label">💵 Cash Parties</div></div>
+      <div class="stat-card c3"><div class="stat-val" style="font-size:16px;">${fuMoney(sum(pend,r=>r.st.balance))}</div><div class="stat-label">🔴 Total Pending (${pend.length} parties)</div></div>
+      <div class="stat-card c5"><div class="stat-val" style="font-size:16px;">${fuMoney(sum(all,r=>r.s.billed))}</div><div class="stat-label">🧾 Total Cash Bills</div></div>
+      <div class="stat-card c4"><div class="stat-val" style="font-size:16px;">${fuMoney(sum(all,r=>r.s.received))}</div><div class="stat-label">✅ Total Mila</div></div>
+      <div class="stat-card c2"><div class="stat-val">${clr.length}</div><div class="stat-label">✅ Clear Parties</div></div>
+    </div>
+    <div id="fu-cash-table"></div>`;
+  fuCashRenderTable();
+}
+function fuCashRenderTable(){
+  const wrap = document.getElementById('fu-cash-table'); if(!wrap) return;
+  let rows = fuCashRows();
+  const q = (fuCashState.q||'').trim().toLowerCase();
+  if(q) rows = rows.filter(r=>r.name.toLowerCase().includes(q) || (r.p.phone||'').includes(q));
+  const f = fuCashState.f;
+  rows = rows.filter(r=>{
+    if(f==='pending') return r.st.balance>0.5;
+    if(f==='clear') return r.s.cleared;
+    if(f==='due') return !!r.ev && (r.ev.state==='due' || r.ev.state==='overdue');
+    if(f==='nofu') return r.st.balance>0.5 && !r.f;
+    return true;
+  });
+  rows.sort((a,b)=> f==='clear' ? a.name.localeCompare(b.name) : (b.st.balance-a.st.balance));
+  if(!fuCash.length){ wrap.innerHTML = '<div class="card" style="border:1px dashed var(--border2);padding:18px;text-align:center;">Abhi koi cash party nahi. <b>➕ Nayi Cash Party</b> dabayein — naam likhein, phir bill (date, bill no, amount, remarks) add karein.</div>'; return; }
+  if(!rows.length){ wrap.innerHTML = '<div style="padding:16px;color:var(--text3);">Koi party nahi mili.</div>'; return; }
+  const tB = rows.reduce((t,r)=>t+r.s.billed,0), tR = rows.reduce((t,r)=>t+r.s.received,0), tD = rows.reduce((t,r)=>t+r.st.balance,0);
+  wrap.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>Party</th><th style="text-align:right;">Total Bill</th><th style="text-align:right;">Mila</th><th style="text-align:right;">Baqi</th><th>Last Payment</th><th>Follow-Up</th><th>Actions</th></tr></thead><tbody>
+    ${rows.map(r=>{
+      const lp = r.s.lastPay;
+      const nxt = (r.f && !r.s.cleared) ? `<div class="fu-sub">${r.f.promiseDate?'Promise: '+fmtDate(r.f.promiseDate)+(r.f.promiseAmount?' ('+fuMoney(r.f.promiseAmount)+')':''):'Reminder: '+(r.f.reminderDate?fmtDate(r.f.reminderDate):'—')}</div>` : '';
+      const badge = r.s.cleared ? '<span class="fu-badge fu-b-ok">✅ Clear</span>' : fuBadge(r.ev, r.f);
+      return `<tr>
+        <td data-label="Party"><b style="cursor:pointer;color:var(--neon);" onclick="fuCashOpen('${r.id}')">${fuE(r.name)}</b> <span class="fu-badge fu-b-blue">💵 Cash</span>${r.p.phone?`<div class="fu-sub">${fuE(r.p.phone)}</div>`:''}</td>
+        <td data-label="Total Bill" style="text-align:right;">${fmt(r.s.billed)}<div class="fu-sub">${r.s.bills.length} bill</div></td>
+        <td data-label="Mila" style="text-align:right;">${fmt(r.s.received)}</td>
+        <td data-label="Baqi" style="text-align:right;font-weight:800;color:${r.st.balance>0.5?'var(--neon3)':'var(--neon4)'};">${fmt(Math.abs(r.st.balance))}${r.st.balance<-0.5?' CR':''}</td>
+        <td data-label="Last Payment">${lp?`<b>${fmtDate(lp.date)}</b> — ${fmt(lp.amount)}<div class="fu-sub">${fuDiff(lp.date, fuToday())} din pehle</div>`:'<span class="fu-sub">Koi payment nahi</span>'}</td>
+        <td data-label="Follow-Up">${badge}${nxt}</td>
+        <td data-label="Actions" style="white-space:nowrap;">
+          <button class="btn btn-neon btn-xs" onclick="fuCashOpen('${r.id}')">📂 Open</button>
+          <button class="btn btn-yellow btn-xs" onclick="fuCeOpen('${r.id}','bill')" title="Nayi bill">🧾 Bill</button>
+          <button class="btn btn-green btn-xs" onclick="fuCeOpen('${r.id}','pay')" title="Payment mili">💵 Payment</button>
+          <button class="btn btn-xs btn-purple" onclick="fuCcOpen('${r.id}')" title="Follow-up call">📞</button>
+        </td></tr>`; }).join('')}
+    </tbody><tfoot><tr><td><b>Total (${rows.length})</b></td><td style="text-align:right;font-weight:800;">${fmt(tB)}</td><td style="text-align:right;font-weight:800;">${fmt(tR)}</td><td style="text-align:right;font-weight:800;">${fmt(tD)}</td><td colspan="3"></td></tr></tfoot></table></div>`;
+}
+
+// ---------- reminders for the dashboard + bell ----------
+function fuCashDashSection(){
+  const rows = fuCashRows(), pend = rows.filter(r=>r.st.balance>0.5);
+  const hot = rows.filter(r=>r.ev && (r.ev.state==='overdue'||r.ev.state==='due'));
+  const tot = pend.reduce((t,r)=>t+r.st.balance,0);
+  const head = `<div class="card-header"><div class="card-title">💵 Cash Parties <span class="fu-badge fu-b-none">${pend.length} pending</span> ${hot.length?`<span class="fu-badge fu-b-red">${hot.length} call due</span>`:''}</div>
+    <div class="flex-gap"><button class="btn btn-green btn-xs" onclick="fuCpOpen()">➕ Nayi Cash Party</button><button class="btn btn-neon btn-xs" onclick="fuGo('cash')">Sab dekhein →</button></div></div>`;
+  if(!rows.length) return `<div class="card" style="border:1px dashed var(--border2);">${head}<div class="fu-sub">Jo parties software mein nahi aur cash mein payment deti hain unhein yahan add karein.</div></div>`;
+  return `<div class="card" style="border-left:3px solid var(--neon4);">${head}
+    <div class="fu-sub" style="margin-bottom:6px;">Total pending: <b style="color:var(--neon3);">${fuMoney(tot)}</b></div>
+    ${hot.length ? `<div class="tbl-wrap"><table><thead><tr><th>Party</th><th style="text-align:right;">Baqi</th><th>Status</th><th>Actions</th></tr></thead><tbody>${hot.map(r=>`<tr><td data-label="Party"><b>${fuE(r.name)}</b>${r.f&&r.f.said?`<div class="fu-said">💬 ${fuE(r.f.said).slice(0,100)}</div>`:''}</td><td data-label="Baqi" style="text-align:right;font-weight:700;color:var(--neon3);">${fuMoney(r.st.balance)}</td><td data-label="Status">${fuBadge(r.ev,r.f)}</td><td data-label="Actions" style="white-space:nowrap;"><button class="btn btn-purple btn-xs" onclick="fuCcOpen('${r.id}')">📞 Call Log</button> <button class="btn btn-neon btn-xs" onclick="fuCashOpen('${r.id}')">📂 Open</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="fu-sub">Aaj kisi cash party ki call due nahi.</div>'}
+  </div>`;
+}
+function fuCashAlerts(){
+  const out = [];
+  try{
+    const rows = fuCashRows(), od = rows.filter(r=>r.ev&&r.ev.state==='overdue'), du = rows.filter(r=>r.ev&&r.ev.state==='due');
+    const nm = a => a.slice(0,3).map(r=>r.name).join(', ') + (a.length>3?' +'+(a.length-3)+' more':'');
+    if(od.length) out.push({type:'Cash Follow-Up Overdue', icon:'🔴', count:od.length, detail:nm(od)+' — cash party ki date guzar gai', severity:'danger', tab:'followup'});
+    if(du.length) out.push({type:'Cash Follow-Up Calls Today', icon:'📞', count:du.length, detail:nm(du)+' — aaj call karni hai', severity:'warning', tab:'followup'});
+  }catch(e){ console.warn('fuCashAlerts failed', e); }
+  return out;
+}
+
+// =====================================================================
+//  CASH PARTY — DETAIL
+// =====================================================================
+function fuCashRenderParty(id){
+  const body = document.getElementById('fu-body'); if(!body) return;
+  const p = fuCashById(id);
+  if(!p){ fuState.view='cash'; fuRenderTab(); return; }
+  const s = fuCashStats(p), e = fuCashEval(p, s), f = e.f, ev = e.ev, calls = fuCashCalls(p).slice().reverse();
+  const pendBills = s.bills.filter(b=>b.due>0.5);
+  const statusBadge = s.cleared ? '<span class="fu-badge fu-b-ok">✅ CLEAR</span>' : (s.balance>0.5 ? '<span class="fu-badge fu-b-red">🔴 PENDING</span>' : '<span class="fu-badge fu-b-none">Koi bill nahi</span>');
+
+  const cur = (f && !s.cleared) ? `<div class="card" style="border:1px solid var(--neon5);">
+      <div class="card-header"><div class="card-title">🔔 Maujooda Follow-Up</div><div>${fuBadge(ev,f)}</div></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;font-size:13px;">
+        <div><div class="fu-sub">Last call</div><b>${fmtDate(f.callDate)}</b>${f.spokeTo?' • '+fuE(f.spokeTo):''}</div>
+        <div><div class="fu-sub">Party ne kaha</div>${fuE(f.said)||'—'}</div>
+        <div><div class="fu-sub">Payment ki date / amount</div><b>${f.promiseDate?fmtDate(f.promiseDate):'—'}</b>${f.promiseAmount?' — <b>'+fuMoney(f.promiseAmount)+'</b>':''}</div>
+        <div><div class="fu-sub">Agla reminder</div><b>${f.reminderDate?fmtDate(f.reminderDate):'—'}</b></div>
+        <div><div class="fu-sub">Call ke baad mili payment</div>${ev.recv>0.5?'<b class="fu-recv">'+fuMoney(ev.recv)+'</b>':'<span class="fu-sub">Abhi koi nahi</span>'}</div>
+      </div></div>` : '';
+
+  const billTbl = s.bills.length ? `<div class="card"><div class="card-header"><div class="card-title">🧾 Bill-wise Hisaab <span class="fu-badge fu-b-none">${s.bills.length}</span></div></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Bill No</th><th>Remarks</th><th style="text-align:right;">Amount</th><th style="text-align:right;">Mila</th><th style="text-align:right;">Baqi</th><th>Status</th><th></th></tr></thead><tbody>
+      ${s.bills.map(b=>`<tr><td data-label="Date">${fmtDate(b.date)}</td><td data-label="Bill No">${fuE(b.billNo)||'—'}</td><td data-label="Remarks" style="max-width:240px;">${fuE(b.remarks)||'—'}</td>
+        <td data-label="Amount" style="text-align:right;">${fmt(b.amount)}</td><td data-label="Mila" style="text-align:right;">${fmt(b.paid)}</td>
+        <td data-label="Baqi" style="text-align:right;font-weight:700;color:${b.due>0.5?'var(--neon3)':'var(--neon4)'};">${fmt(Math.max(0,b.due))}</td>
+        <td data-label="Status">${b.due<=0.5?'<span class="fu-badge fu-b-ok">Clear</span>':(b.paid>0.5?'<span class="fu-badge fu-b-yel">Partial</span>':'<span class="fu-badge fu-b-red">Unpaid</span>')}</td>
+        <td data-label="" style="white-space:nowrap;">${b.due>0.5?`<button class="btn btn-xs btn-green" onclick="fuCeOpen('${p.id}','pay','','${b.id}')" title="Is bill ki payment mili">💵</button> `:''}<button class="btn btn-xs btn-neon" onclick="fuCeOpen('${p.id}','bill','${b.id}')">✏️</button> <button class="btn btn-xs btn-red" onclick="fuCeDelete('${p.id}','${b.id}')">🗑️</button></td></tr>`).join('')}
+      </tbody></table></div></div>` : '';
+
+  const stmt = `<div class="card"><div class="card-header"><div class="card-title">📒 Poora Hisaab (Statement)</div></div>
+      ${s.rows.length ? `<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Detail</th><th>Remarks</th><th style="text-align:right;">Bill</th><th style="text-align:right;">Mila</th><th style="text-align:right;">Balance</th><th></th></tr></thead><tbody>
+      ${s.rows.map(r=>{ const isB = r.type==='bill'; const lk = (!isB && r.billId) ? (s.bills.find(b=>b.id===r.billId)||{}).billNo : '';
+        return `<tr><td data-label="Date">${fmtDate(r.date)}</td><td data-label="Detail">${isB?'🧾 Bill '+(fuE(r.billNo)||''):'💵 Payment'+(lk?' (Bill '+fuE(lk)+')':'')}</td><td data-label="Remarks" style="max-width:240px;">${fuE(r.remarks)||'—'}</td>
+        <td data-label="Bill" style="text-align:right;">${isB?fmt(r.amount):''}</td><td data-label="Mila" style="text-align:right;color:var(--neon4);">${isB?'':fmt(r.amount)}</td>
+        <td data-label="Balance" style="text-align:right;font-weight:700;">${fmt(Math.abs(r.run))}${r.run<-0.5?' CR':''}</td>
+        <td data-label="" style="white-space:nowrap;">${isB?'':`<button class="btn btn-xs btn-neon" onclick="fuCeOpen('${p.id}','pay','${r.id}')">✏️</button> <button class="btn btn-xs btn-red" onclick="fuCeDelete('${p.id}','${r.id}')">🗑️</button>`}</td></tr>`; }).join('')}
+      </tbody><tfoot><tr><td colspan="3"><b>Total</b></td><td style="text-align:right;font-weight:800;">${fmt(s.billed)}</td><td style="text-align:right;font-weight:800;">${fmt(s.received)}</td><td style="text-align:right;font-weight:800;">${fmt(Math.abs(s.balance))}${s.balance<-0.5?' CR':''}</td><td></td></tr></tfoot></table></div>` : '<div class="fu-sub" style="padding:12px;">Abhi koi bill add nahi hui — <b>🧾 Nayi Bill</b> dabayein.</div>'}
+    </div>`;
+
+  const hist = `<div class="card"><div class="card-header"><div class="card-title">📜 Follow-Up History <span class="fu-badge fu-b-none">${calls.length}</span></div></div>
+      ${calls.length ? `<div class="tbl-wrap"><table><thead><tr><th>Call Date</th><th>Kis se</th><th>Party ne kaha</th><th>Promise</th><th>Reminder</th><th style="text-align:right;">Baqi (call par)</th><th></th></tr></thead><tbody>
+      ${calls.map(c=>`<tr><td data-label="Call Date">${fmtDate(c.callDate)}</td><td data-label="Kis se">${fuE(c.spokeTo)||'—'}</td><td data-label="Party ne kaha" style="max-width:260px;">${fuE(c.said)||'—'}</td>
+        <td data-label="Promise">${c.promiseDate?'<b>'+fmtDate(c.promiseDate)+'</b>':'—'}${c.promiseAmount?'<div>'+fuMoney(c.promiseAmount)+'</div>':''}</td>
+        <td data-label="Reminder">${c.reminderDate?fmtDate(c.reminderDate):'—'}</td><td data-label="Baqi" style="text-align:right;">${fuMoney(c.balanceAtCall||0)}</td>
+        <td data-label=""><button class="btn btn-xs btn-red" onclick="fuCcDelete('${p.id}','${c.id}')">🗑️</button></td></tr>`).join('')}
+      </tbody></table></div>` : '<div class="fu-sub" style="padding:12px;">Abhi koi follow-up call save nahi hui.</div>'}
+    </div>`;
+
+  body.innerHTML = `
+    <div class="flex-gap mb-8" style="flex-wrap:wrap;align-items:center;">
+      <button class="btn btn-neon btn-sm" onclick="fuGo('cash')">← Cash Parties</button>
+      <div style="font-size:17px;font-weight:800;color:var(--neon);">${fuE(p.name)}</div> <span class="fu-badge fu-b-blue">💵 Cash</span> ${statusBadge}
+      <span style="flex:1;"></span>
+      <button class="btn btn-yellow btn-sm" onclick="fuCeOpen('${p.id}','bill')">🧾 Nayi Bill</button>
+      <button class="btn btn-green btn-sm" onclick="fuCeOpen('${p.id}','pay')">💵 Payment Mili</button>
+      <button class="btn btn-purple btn-sm" onclick="fuCcOpen('${p.id}')">📞 Follow-Up</button>
+    </div>
+    <div class="flex-gap mb-8" style="flex-wrap:wrap;align-items:center;">
+      <button class="btn btn-sm btn-neon" onclick="fuCashPdfParty('${p.id}')">📄 PDF</button>
+      <button class="btn btn-sm btn-neon" onclick="fuCashPrintParty('${p.id}','a4')">🖨️ A4 Print</button>
+      <button class="btn btn-sm btn-neon" onclick="fuCashPrintParty('${p.id}','thermal')">🧾 Thermal Print</button>
+      <button class="btn btn-sm btn-neon" onclick="fuCpOpen('${p.id}')">✏️ Naam / Mobile</button>
+      <button class="btn btn-sm btn-red" onclick="fuCpDelete('${p.id}')">🗑️ Party Delete</button>
+      ${p.phone?`<a class="btn btn-sm btn-neon" href="tel:${fuE(String(p.phone).replace(/[^\d+]/g,''))}">☎ ${fuE(p.phone)}</a>`:''}
+      ${p.note?`<span class="fu-sub">📝 ${fuE(p.note)}</span>`:''}
+    </div>
+    <div class="stats-grid" style="margin-bottom:12px;">
+      <div class="stat-card c5"><div class="stat-val" style="font-size:16px;">${fuMoney(s.billed)}</div><div class="stat-label">🧾 Total Bill (${s.bills.length})</div></div>
+      <div class="stat-card c4"><div class="stat-val" style="font-size:16px;">${fuMoney(s.received)}</div><div class="stat-label">✅ Total Mila</div></div>
+      <div class="stat-card ${s.balance>0.5?'c3':'c4'}"><div class="stat-val" style="font-size:16px;">${fuMoney(Math.abs(s.balance))}${s.balance<-0.5?' CR':''}</div><div class="stat-label">${s.cleared?'✅ CLEAR — kuch baqi nahi':'🔴 Baqi Balance'}</div></div>
+      <div class="stat-card c2"><div class="stat-val" style="font-size:14px;">${s.lastPay?fmtDate(s.lastPay.date):'—'}</div><div class="stat-label">🧾 Last Payment ${s.lastPay?'— '+fuMoney(s.lastPay.amount):''}</div></div>
+      <div class="stat-card c6"><div class="stat-val">${pendBills.length}</div><div class="stat-label">⚠️ Pending Bills</div></div>
+    </div>
+    ${cur}${billTbl}${stmt}${hist}`;
+}
+
+// =====================================================================
+//  PARTY / ENTRY / CALL  — add, edit, delete
+// =====================================================================
+function fuCpOpen(id){
+  const p = id ? fuCashById(id) : null;
+  document.getElementById('fu-cp-id').value = p ? p.id : '';
+  document.getElementById('fu-cp-name').value = p ? p.name : '';
+  document.getElementById('fu-cp-phone').value = p ? (p.phone||'') : '';
+  document.getElementById('fu-cp-note').value = p ? (p.note||'') : '';
+  document.getElementById('fu-cp-title').textContent = p ? '✏️ Cash Party Edit' : '💵 Nayi Cash Party';
+  openModal('fuCpModal');
+  setTimeout(()=>{ const n = document.getElementById('fu-cp-name'); if(n) n.focus(); }, 80);
+}
+function fuCpSave(){
+  const id = document.getElementById('fu-cp-id').value, name = document.getElementById('fu-cp-name').value.trim();
+  const phone = document.getElementById('fu-cp-phone').value.trim(), note = document.getElementById('fu-cp-note').value.trim();
+  if(!name){ toast('Party ka naam likhein','warning'); return; }
+  if(fuCash.some(x=>x.id!==id && x.name.trim().toLowerCase()===name.toLowerCase())){ toast('Is naam ki cash party pehle se maujood hai','warning'); return; }
+  let np = null;
+  if(id){ const p = fuCashById(id); if(!p) return; p.name = name; p.phone = phone; p.note = note; fuCashAudit('edit', 'Party: '+name); }
+  else { np = { id:'CP'+uid(), name, phone, note, entries:[], calls:[], createdAt:new Date().toISOString(), createdBy:fuCashUser() }; fuCash.push(np); fuCashAudit('add', 'Party: '+name); }
+  saveFuCash(); closeModal('fuCpModal'); toast(id?'Party update ho gai':'Cash party add ho gai — ab bill add karein','success');
+  if(np){ fuCashOpen(np.id); } else fuRefreshAll();
+}
+function fuCpDelete(id){
+  const p = fuCashById(id); if(!p) return;
+  if(!confirm(`"${p.name}" aur is ki ${p.entries.length} entries delete karein? (wapas nahi aayengi)`)) return;
+  fuCash = fuCash.filter(x=>x.id!==id); saveFuCash(); fuCashAudit('delete', 'Party: '+p.name);
+  toast('Cash party delete ho gai','info'); fuState.view = 'cash'; fuRefreshAll();
+}
+
+function fuCeOpen(pid, type, eid, linkBillId){
+  const p = fuCashById(pid); if(!p) return;
+  const e = eid ? (p.entries||[]).find(x=>x.id===eid) : null, isBill = type==='bill';
+  const set = (i,v)=>{ document.getElementById(i).value = v; };
+  set('fu-ce-pid', pid); set('fu-ce-eid', e?e.id:''); set('fu-ce-type', type);
+  set('fu-ce-date', e ? e.date : fuToday()); set('fu-ce-billno', e ? (e.billNo||'') : ''); set('fu-ce-amt', e ? e.amount : '');
+  set('fu-ce-rem', e ? (e.remarks||'') : ''); set('fu-ce-now', '');
+  document.getElementById('fu-ce-title').textContent = (e?'✏️ ':'') + (isBill ? '🧾 Cash Bill — ' : '💵 Payment Mili — ') + p.name;
+  document.getElementById('fu-ce-amt-lbl').textContent = isBill ? 'Total Amount (bill ka total) *' : 'Kitni payment mili *';
+  document.getElementById('fu-ce-rem-lbl').textContent = isBill ? 'Remarks (cash mein kya cheez gai)' : 'Remarks (optional)';
+  document.getElementById('fu-ce-billno-wrap').style.display = isBill ? '' : 'none';
+  document.getElementById('fu-ce-link-wrap').style.display = isBill ? 'none' : '';
+  document.getElementById('fu-ce-now-wrap').style.display = (isBill && !e) ? '' : 'none';
+  if(!isBill){
+    const s = fuCashStats(p), sel = document.getElementById('fu-ce-link');
+    sel.innerHTML = '<option value="">Overall (kisi khaas bill se nahi)</option>' + s.bills.filter(b=>b.due>0.5 || (e && e.billId===b.id)).map(b=>`<option value="${b.id}">Bill ${fuE(b.billNo)||'—'} • ${fmtDate(b.date)} • baqi ${fmt(Math.max(0,b.due))}</option>`).join('');
+    sel.value = e ? (e.billId||'') : (linkBillId||'');
+    if(!e && linkBillId){ const b = s.bills.find(x=>x.id===linkBillId); if(b) set('fu-ce-amt', Math.max(0, Math.round(b.due*100)/100) || ''); }
+  }
+  openModal('fuCeModal');
+}
+function fuCeSave(){
+  const g = i => document.getElementById(i).value;
+  const pid = g('fu-ce-pid'), eid = g('fu-ce-eid'), type = g('fu-ce-type'), isBill = type==='bill';
+  const p = fuCashById(pid); if(!p) return;
+  const date = g('fu-ce-date'), amt = parseFloat(g('fu-ce-amt'))||0, rem = g('fu-ce-rem').trim();
+  if(!date){ toast('Date likhein','warning'); return; }
+  if(!(amt>0)){ toast('Amount likhein','warning'); return; }
+  const now = new Date().toISOString();
+  if(eid){
+    const e = p.entries.find(x=>x.id===eid); if(!e) return;
+    e.date = date; e.amount = amt; e.remarks = rem; e.editedAt = now;
+    if(isBill) e.billNo = g('fu-ce-billno').trim(); else e.billId = g('fu-ce-link');
+    fuCashAudit('edit', p.name+': '+(isBill?'bill ':'payment ')+fmt(amt));
+  } else if(isBill){
+    const bill = { id:'CE'+uid(), type:'bill', date, billNo:g('fu-ce-billno').trim(), amount:amt, remarks:rem, createdAt:now };
+    p.entries.push(bill);
+    const got = parseFloat(g('fu-ce-now'))||0;
+    if(got>0){ p.entries.push({ id:'CE'+uid(), type:'pay', date, billId:bill.id, billNo:bill.billNo, amount:Math.min(got, amt), remarks:'Bill ke waqt cash mila', createdAt:new Date(Date.now()+1).toISOString() }); }
+    fuCashAudit('add', p.name+': bill '+(bill.billNo||'')+' '+fmt(amt)+(got>0?' (mila '+fmt(got)+')':''));
+  } else {
+    p.entries.push({ id:'CE'+uid(), type:'pay', date, billId:g('fu-ce-link'), amount:amt, remarks:rem, createdAt:now });
+    fuCashAudit('add', p.name+': payment '+fmt(amt));
+  }
+  saveFuCash(); closeModal('fuCeModal');
+  const s = fuCashStats(p);
+  toast(s.cleared ? '✅ Save ho gaya — ab ye party CLEAR hai' : (isBill?'Bill save ho gai':'Payment save ho gai — baqi '+fuMoney(Math.max(0,s.balance))), 'success');
+  fuRefreshAll();
+}
+function fuCeDelete(pid, eid){
+  const p = fuCashById(pid); if(!p) return;
+  const e = p.entries.find(x=>x.id===eid); if(!e) return;
+  const linked = e.type==='bill' ? p.entries.filter(x=>x.type==='pay' && x.billId===e.id).length : 0;
+  if(!confirm(e.type==='bill' ? `Ye bill delete karein?${linked?`\n(Is se judi ${linked} payment(s) delete nahi hongi, "Overall" ban jayengi.)`:''}` : 'Ye payment delete karein?')) return;
+  p.entries = p.entries.filter(x=>x.id!==eid);
+  if(e.type==='bill') p.entries.forEach(x=>{ if(x.billId===e.id) x.billId = ''; });
+  saveFuCash(); fuCashAudit('delete', p.name+': '+e.type+' '+fmt(e.amount));
+  toast('Delete ho gaya','info'); fuRefreshAll();
+}
+
+function fuCcOpen(pid){
+  const p = fuCashById(pid); if(!p) return;
+  const s = fuCashStats(p), e = fuCashEval(p, s);
+  document.getElementById('fu-cc-pid').value = pid;
+  document.getElementById('fu-cc-title').textContent = '📞 Follow-Up — ' + p.name;
+  ['fu-cc-spoke','fu-cc-said','fu-cc-pdate','fu-cc-pamt','fu-cc-rdate'].forEach(i=>document.getElementById(i).value = '');
+  document.getElementById('fu-cc-date').value = fuToday(); document.getElementById('fu-cc-rdate').dataset.auto = '';
+  const f = e.f;
+  document.getElementById('fu-cc-ctx').innerHTML = `<div><b>Baqi:</b> <span style="color:var(--neon3);font-weight:800;">${fuMoney(s.balance)}</span> &nbsp;•&nbsp; <b>Last payment:</b> ${s.lastPay?fmtDate(s.lastPay.date)+' — '+fuMoney(s.lastPay.amount):'koi nahi'} &nbsp;•&nbsp; <b>Pending bills:</b> ${s.bills.filter(b=>b.due>0.5).length}</div>`
+    + (f ? `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--border2);">⏰ <b>Pichli baar kaha tha:</b> ${f.promiseDate?fmtDate(f.promiseDate):'(date nahi)'}${f.promiseAmount?' — '+fuMoney(f.promiseAmount):''}${f.said?'<div class="fu-sub">💬 '+fuE(f.said)+'</div>':''}${e.ev && e.ev.recv>0.5?'<div class="fu-recv">💰 Is ke baad '+fuMoney(e.ev.recv)+' mil chuke hain</div>':''}</div>` : '');
+  openModal('fuCcModal');
+}
+function fuCcPdateChanged(){ const p = document.getElementById('fu-cc-pdate').value, r = document.getElementById('fu-cc-rdate'); if(p && (!r.value || r.dataset.auto==='1')){ r.value = p; r.dataset.auto = '1'; } }
+function fuCcQuick(n){ const r = document.getElementById('fu-cc-rdate'); r.value = fuAddDays(fuToday(), n); r.dataset.auto = '0'; }
+function fuCcFull(){ const p = fuCashById(document.getElementById('fu-cc-pid').value); if(!p) return; document.getElementById('fu-cc-pamt').value = Math.max(0, fuCashStats(p).balance) || ''; }
+function fuCcSave(){
+  const g = i => document.getElementById(i).value;
+  const p = fuCashById(g('fu-cc-pid')); if(!p) return;
+  const callDate = g('fu-cc-date'), pdate = g('fu-cc-pdate'), rdate = g('fu-cc-rdate') || pdate;
+  if(!callDate){ toast('Call ki date likhein','warning'); return; }
+  if(!rdate){ toast('Agla reminder (dobara call ki date) zaroor likhein','warning'); return; }
+  const s = fuCashStats(p);
+  p.calls = p.calls || [];
+  p.calls.push({ id:'CC'+uid(), callDate, spokeTo:g('fu-cc-spoke').trim(), said:g('fu-cc-said').trim(), promiseDate:pdate, promiseAmount:parseFloat(g('fu-cc-pamt'))||0,
+                 reminderDate:rdate, balanceAtCall:Math.round(s.balance*100)/100, createdAt:new Date().toISOString(), createdBy:fuCashUser() });
+  saveFuCash(); fuCashAudit('add', p.name+': follow-up, reminder '+rdate);
+  closeModal('fuCcModal'); toast('Follow-up save ho gaya — reminder: '+fmtDate(rdate),'success'); fuRefreshAll();
+}
+function fuCcDelete(pid, cid){
+  const p = fuCashById(pid); if(!p) return;
+  if(!confirm('Ye follow-up entry delete karein?')) return;
+  p.calls = (p.calls||[]).filter(x=>x.id!==cid); saveFuCash(); toast('Delete ho gaya','info'); fuRefreshAll();
+}
+
+// =====================================================================
+//  PRINT (A4 + Thermal)  and  PDF
+// =====================================================================
+function fuStatusWord(s){ return s.cleared ? 'CLEAR' : (s.balance>0.5 ? 'PENDING' : 'NO BILL'); }
+function fuPartyBodyHtml(p, size){
+  const s = fuCashStats(p), calls = fuCashCalls(p), th = size==='thermal', cur = settings.currency||'PKR';
+  const stat = fuStatusWord(s);
+  if(th){
+    const lines = s.rows.map(r=>{ const isB = r.type==='bill';
+      return `<div class="te"><div class="tl"><b>${fmtDate(r.date)}</b>${isB&&r.billNo?' &nbsp;Bill# '+fuE(r.billNo):''}</div>`
+        + (r.remarks?`<div class="tm">${fuE(r.remarks)}</div>`:'')
+        + `<div class="tl"><span>${isB?'Bill':'Payment'}</span><span>${isB?'':'-'}${fmt(r.amount)}</span></div><div class="tl"><span>Balance</span><span>${fmt(r.run)}</span></div></div>`; }).join('');
+    return `<div class="c b" style="font-size:13px;">${fuE(p.name)}</div>${p.phone?`<div class="c">${fuE(p.phone)}</div>`:''}<div class="c b">[ ${stat} ]</div><hr>${lines||'<div class="c">No entries</div>'}<hr>
+      <div class="tl b"><span>Total Bill</span><span>${fmt(s.billed)}</span></div><div class="tl b"><span>Received</span><span>${fmt(s.received)}</span></div>
+      <div class="tl b" style="font-size:13px;"><span>BALANCE</span><span>${fmt(s.balance)}</span></div>
+      ${calls.length?`<hr><div class="b">Follow-up:</div>${calls.map(c=>`<div class="tm">${fmtDate(c.callDate)}${c.said?' - '+fuE(c.said):''}${c.promiseDate?' | Promise '+fmtDate(c.promiseDate)+(c.promiseAmount?' '+fmt(c.promiseAmount):''):''}</div>`).join('')}`:''}`;
+  }
+  return `<div class="ph"><span class="pn">${fuE(p.name)}</span> <span class="st ${s.cleared?'ok':'pe'}">${stat}</span>${p.phone?` <span class="sm">Mobile: ${fuE(p.phone)}</span>`:''}</div>
+    <table class="t"><thead><tr><th>Date</th><th>Bill No</th><th>Detail / Remarks</th><th class="r">Bill (${cur})</th><th class="r">Received</th><th class="r">Balance</th></tr></thead><tbody>
+    ${s.rows.map(r=>{ const isB = r.type==='bill'; const lk = (!isB && r.billId) ? (s.bills.find(b=>b.id===r.billId)||{}).billNo : '';
+      return `<tr><td>${fmtDate(r.date)}</td><td>${isB?(fuE(r.billNo)||'-'):(lk?fuE(lk):'-')}</td><td>${isB?'':'<b>Payment</b> '}${fuE(r.remarks)||''}</td><td class="r">${isB?fmt(r.amount):''}</td><td class="r">${isB?'':fmt(r.amount)}</td><td class="r">${fmt(r.run)}</td></tr>`; }).join('') || '<tr><td colspan="6" class="c">No entries</td></tr>'}
+    <tr class="tot"><td colspan="3">TOTAL</td><td class="r">${fmt(s.billed)}</td><td class="r">${fmt(s.received)}</td><td class="r">${fmt(s.balance)}</td></tr></tbody></table>
+    ${calls.length?`<div class="sm b" style="margin-top:6px;">Follow-up history</div><table class="t"><thead><tr><th>Call Date</th><th>Spoke To</th><th>Party Said</th><th>Promise</th><th>Reminder</th></tr></thead><tbody>${calls.map(c=>`<tr><td>${fmtDate(c.callDate)}</td><td>${fuE(c.spokeTo)||'-'}</td><td>${fuE(c.said)||'-'}</td><td>${c.promiseDate?fmtDate(c.promiseDate):'-'}${c.promiseAmount?' ('+fmt(c.promiseAmount)+')':''}</td><td>${c.reminderDate?fmtDate(c.reminderDate):'-'}</td></tr>`).join('')}</tbody></table>`:''}`;
+}
+function fuDocHeadHtml(title, size){
+  const th = size==='thermal';
+  return `<div class="c b" style="font-size:${th?'14':'18'}px;">${fuE(settings.companyName||'SAU CORPORATION')}</div>`
+    + (!th && settings.address ? `<div class="c sm">${fuE(String(settings.address).replace(/\n/g,' '))}</div>` : '')
+    + (!th && settings.phone ? `<div class="c sm">Phone: ${fuE(settings.phone)}</div>` : '')
+    + `<div class="c b" style="margin-top:4px;font-size:${th?'12':'14'}px;">${fuE(title)}</div><div class="c sm">Date: ${new Date().toLocaleString('en-PK')}</div><hr>`;
+}
+function fuCashPartyHtml(p, size){ const s = fuCashStats(p); return fuDocHeadHtml('CASH PARTY STATEMENT'+(s.cleared?' - CLEAR':''), size) + fuPartyBodyHtml(p, size) + (size==='thermal' ? '<hr><div class="c sm">*** Thank You ***</div>' : '<div class="sig"><span>Prepared By</span><span>Party Signature</span></div>'); }
+function fuPrintHtml(html, size){
+  const th = size==='thermal', tw = (typeof quotSettings!=='undefined' && quotSettings.thermalWidth) ? parseInt(quotSettings.thermalWidth)||80 : 80;
+  const w = window.open('','_blank'); if(!w){ toast('Pop-up block hai — browser mein allow karein','warning'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Print</title><style>
+    @page{size:${th?tw+'mm auto':'A4 portrait'};margin:${th?'2mm':'10mm'};}
+    body{margin:0;font-family:${th?"'Courier New',monospace":'Arial,sans-serif'};color:#000;font-size:${th?'11px':'12px'};${th?'width:'+(tw-6)+'mm;':''}}
+    .c{text-align:center}.r{text-align:right}.b{font-weight:bold}.sm{font-size:${th?'10px':'11px'};color:#333}
+    hr{border:0;border-top:1px ${th?'dashed':'solid'} #000;margin:5px 0}
+    table.t{width:100%;border-collapse:collapse;margin:4px 0 8px}
+    table.t th,table.t td{border:1px solid #444;padding:3px 5px;font-size:11px;vertical-align:top}
+    table.t th{background:#e8e8e8;text-align:left}table.t th.r{text-align:right}
+    tr.tot td{font-weight:bold;background:#f0f0f0}
+    .ph{margin:10px 0 4px;font-size:14px}.pn{font-weight:bold;font-size:15px}
+    .st{border:2px solid;padding:1px 8px;border-radius:4px;font-weight:bold;font-size:12px;margin-left:6px}.st.ok{color:#087f3a}.st.pe{color:#c0262d}
+    .pg{page-break-inside:avoid;margin-bottom:12px}
+    .te{margin:4px 0;padding-bottom:3px;border-bottom:1px dotted #777}.tl{display:flex;justify-content:space-between}.tm{font-size:10px;word-wrap:break-word}
+    .sig{display:flex;justify-content:space-between;margin-top:40px}.sig span{border-top:1px solid #000;padding-top:3px;width:30%;text-align:center}
+  </style></head><body>${html}</body></html>`);
+  w.document.close(); setTimeout(()=>w.print(), 400);
+}
+function fuCashPrintParty(id, size){ const p = fuCashById(id); if(!p) return; fuPrintHtml(fuCashPartyHtml(p, size), size); }
+
+function fuPdfFooter(doc){
+  const pages = doc.internal.getNumberOfPages();
+  for(let i=1;i<=pages;i++){ doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120,120,120);
+    doc.text('Page '+i+' of '+pages, doc.internal.pageSize.getWidth()-30, doc.internal.pageSize.getHeight()-6); }
+  doc.setTextColor(0,0,0);
+}
+function fuCashPdfBody(doc, p, y){
+  const s = fuCashStats(p), calls = fuCashCalls(p), cur = settings.currency||'PKR', H = doc.internal.pageSize.getHeight();
+  if(y > H-50){ doc.addPage(); y = 15; }
+  doc.setFontSize(11); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
+  doc.text('Party: '+p.name+(p.phone?'   ('+p.phone+')':'')+'   ['+fuStatusWord(s)+']', 14, y);
+  doc.autoTable({ startY:y+2, theme:'grid', styles:{fontSize:9,cellPadding:2}, headStyles:{fillColor:s.cleared?[0,110,70]:[150,40,40]},
+    head:[['Total Bill','Received','Balance','Status','Bills','Last Payment']],
+    body:[[ cur+' '+fmt(s.billed), cur+' '+fmt(s.received), cur+' '+fmt(Math.abs(s.balance))+(s.balance<-0.5?' CR':''), fuStatusWord(s), String(s.bills.length), s.lastPay ? fmtDate(s.lastPay.date)+' - '+fmt(s.lastPay.amount) : 'None' ]] });
+  doc.autoTable({ startY:doc.lastAutoTable.finalY+3, theme:'grid', styles:{fontSize:8,cellPadding:2,valign:'top'}, headStyles:{fillColor:[40,40,90]},
+    head:[['Date','Bill No','Detail / Remarks','Bill','Received','Balance']],
+    body: s.rows.length ? s.rows.map(r=>{ const isB = r.type==='bill'; const lk = (!isB && r.billId) ? (s.bills.find(b=>b.id===r.billId)||{}).billNo : '';
+        return [ fmtDate(r.date), isB?(r.billNo||'-'):(lk||'-'), (isB?'':'Payment. ')+(r.remarks||''), isB?fmt(r.amount):'', isB?'':fmt(r.amount), fmt(r.run) ]; })
+      .concat([['','','TOTAL', fmt(s.billed), fmt(s.received), fmt(s.balance)]]) : [['','','No entries','','','']],
+    columnStyles:{3:{halign:'right'},4:{halign:'right'},5:{halign:'right'}},
+    didParseCell:d=>{ if(d.row.index===s.rows.length && s.rows.length){ d.cell.styles.fontStyle='bold'; d.cell.styles.fillColor=[235,235,235]; } } });
+  let ny = doc.lastAutoTable.finalY + 4;
+  if(calls.length){
+    doc.autoTable({ startY:ny, theme:'grid', styles:{fontSize:8,cellPadding:2,valign:'top'}, headStyles:{fillColor:[90,60,120]},
+      head:[['Call Date','Spoke To','Party Said','Promise Date','Promise Amt','Reminder','Balance at Call']],
+      body: calls.map(c=>[fmtDate(c.callDate), c.spokeTo||'-', c.said||'-', c.promiseDate?fmtDate(c.promiseDate):'-', c.promiseAmount?fmt(c.promiseAmount):'-', c.reminderDate?fmtDate(c.reminderDate):'-', fmt(c.balanceAtCall||0)]),
+      columnStyles:{4:{halign:'right'},6:{halign:'right'}} });
+    ny = doc.lastAutoTable.finalY + 4;
+  }
+  return ny + 4;
+}
+function fuCashPdfParty(id){
+  if(!window.jspdf){ toast('PDF library load nahi hui — internet check karein','error'); return; }
+  const p = fuCashById(id); if(!p) return;
+  const doc = new jspdf.jsPDF({orientation:'portrait'}), s = fuCashStats(p);
+  let y = pdfHeader(doc, 'Cash Party Statement - '+p.name+(s.cleared?' (CLEAR)':''));
+  fuCashPdfBody(doc, p, y); fuPdfFooter(doc);
+  doc.save('CashParty_'+p.name.replace(/[^\w]+/g,'_').slice(0,40)+'_'+fuToday()+'.pdf');
+  toast('PDF download ho gai','success');
+}
+
+// =====================================================================
+//  REPORTS  (Pending / Clear / All — Ledger parties, Cash parties or both)
+// =====================================================================
+function fuRepOpen(){ openModal('fuRepModal'); }
+function fuRepData(scope, kind){
+  let rows = [];
+  if(scope!=='cash') rows = rows.concat(fuPartyRows().map(r=>Object.assign(r,{cash:false})));
+  if(scope!=='ledger') rows = rows.concat(fuCashRows());
+  rows = rows.filter(r=>{
+    const pend = r.st.balance>0.5;
+    const clr = r.st.balance<=0.5 && r.st.billed>0 && (r.cash ? true : fuEntriesOf(r.key).length>0);
+    if(kind==='pending') return pend;
+    if(kind==='clear') return clr;
+    return pend || clr || (r.cash && r.s.bills.length>0);
+  });
+  rows.sort((a,b)=> kind==='clear' ? a.label.localeCompare(b.label) : (b.st.balance-a.st.balance));
+  return rows;
+}
+function fuRepTitle(scope, kind){
+  const k = ({pending:'PENDING REPORT', clear:'CLEAR REPORT', all:'COMPLETE REPORT'})[kind];
+  const sc = ({both:'Ledger + Cash Parties', ledger:'Ledger Parties', cash:'Cash Parties'})[scope];
+  return 'Follow-Up '+k+' - '+sc;
+}
+function fuRepRun(fmtType){
+  const scope = document.getElementById('fu-rep-scope').value, kind = document.getElementById('fu-rep-kind').value, detail = document.getElementById('fu-rep-detail').checked;
+  const rows = fuRepData(scope, kind);
+  if(!rows.length){ toast('Is report mein koi party nahi mili','warning'); return; }
+  if(fmtType==='pdf') fuRepPdf(rows, scope, kind, detail); else fuRepPrint(rows, scope, kind, detail, fmtType);
+}
+function fuRepPdf(rows, scope, kind, detail){
+  if(!window.jspdf){ toast('PDF library load nahi hui — internet check karein','error'); return; }
+  const doc = new jspdf.jsPDF({orientation:'landscape'}), cur = settings.currency||'PKR', title = fuRepTitle(scope, kind);
+  let y = pdfHeader(doc, title);
+  const tB = rows.reduce((t,r)=>t+r.st.billed,0), tR = rows.reduce((t,r)=>t+r.st.received,0), tD = rows.reduce((t,r)=>t+r.st.balance,0);
+  doc.setFontSize(9); doc.setTextColor(80,80,80); doc.text('Parties: '+rows.length+'    |    Total Billed: '+cur+' '+fmt(tB)+'    |    Received: '+cur+' '+fmt(tR)+'    |    Balance: '+cur+' '+fmt(tD), 14, y); doc.setTextColor(0,0,0);
+  doc.autoTable({ startY:y+3, theme:'grid', styles:{fontSize:8,cellPadding:2}, headStyles:{fillColor:kind==='clear'?[0,110,70]:[40,40,90]},
+    head:[['#','Party','Type','Billed','Received','Balance','Last Payment','Status','Next Reminder','Last Note']],
+    body: rows.map((r,i)=>[ i+1, r.cash?r.name:r.label, r.cash?'Cash':'Ledger', fmt(r.st.billed), fmt(r.st.received), fmt(r.st.balance),
+        r.st.lastPay ? fmtDate(r.st.lastPay.date)+' - '+fmt(r.st.lastPay.amount) : '-', fuRowStatus(r), (r.f&&r.f.reminderDate&&r.st.balance>0.5)?fmtDate(r.f.reminderDate):'-', (r.f&&r.f.said)||'-' ])
+      .concat([['','TOTAL','',fmt(tB),fmt(tR),fmt(tD),'','','','']]),
+    columnStyles:{3:{halign:'right'},4:{halign:'right'},5:{halign:'right'},9:{cellWidth:55}},
+    didParseCell:d=>{ if(d.row.index===rows.length){ d.cell.styles.fontStyle='bold'; d.cell.styles.fillColor=[235,235,235]; } } });
+  const cashRows = rows.filter(r=>r.cash);
+  if(detail && cashRows.length){
+    doc.addPage(); let yy = 15;
+    doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.text('Cash Parties - Full Detail', 14, yy); yy += 6;
+    cashRows.forEach(r=>{ yy = fuCashPdfBody(doc, r.p, yy); });
+  }
+  fuPdfFooter(doc);
+  doc.save('FollowUp_'+kind+'_'+scope+'_'+fuToday()+'.pdf');
+  closeModal('fuRepModal'); toast('Report PDF download ho gai','success');
+}
+function fuRepPrint(rows, scope, kind, detail, size){
+  const th = size==='thermal', cur = settings.currency||'PKR';
+  const tB = rows.reduce((t,r)=>t+r.st.billed,0), tR = rows.reduce((t,r)=>t+r.st.received,0), tD = rows.reduce((t,r)=>t+r.st.balance,0);
+  let html = fuDocHeadHtml(fuRepTitle(scope, kind), size);
+  if(th){
+    html += rows.map(r=>`<div class="te"><div class="tl b"><span>${fuE(r.cash?r.name:r.label)}${r.cash?' (C)':''}</span><span>${fmt(r.st.balance)}</span></div><div class="tm">${fuRowStatus(r)}${r.st.lastPay?' | Last pay '+fmtDate(r.st.lastPay.date)+' '+fmt(r.st.lastPay.amount):''}${(r.f&&r.f.reminderDate&&r.st.balance>0.5)?' | Remind '+fmtDate(r.f.reminderDate):''}</div></div>`).join('')
+      + `<hr><div class="tl b"><span>Parties</span><span>${rows.length}</span></div><div class="tl b"><span>Billed</span><span>${fmt(tB)}</span></div><div class="tl b"><span>Received</span><span>${fmt(tR)}</span></div><div class="tl b" style="font-size:13px;"><span>BALANCE</span><span>${fmt(tD)}</span></div>`;
+    const cr = rows.filter(r=>r.cash);
+    if(detail && cr.length) html += '<hr>' + cr.map(r=>`<div class="pg">${fuPartyBodyHtml(r.p,'thermal')}</div><hr>`).join('');
+  } else {
+    html += `<table class="t"><thead><tr><th>#</th><th>Party</th><th>Type</th><th class="r">Billed</th><th class="r">Received</th><th class="r">Balance</th><th>Last Payment</th><th>Status</th><th>Reminder</th></tr></thead><tbody>
+      ${rows.map((r,i)=>`<tr><td>${i+1}</td><td><b>${fuE(r.cash?r.name:r.label)}</b></td><td>${r.cash?'Cash':'Ledger'}</td><td class="r">${fmt(r.st.billed)}</td><td class="r">${fmt(r.st.received)}</td><td class="r"><b>${fmt(r.st.balance)}</b></td><td>${r.st.lastPay?fmtDate(r.st.lastPay.date)+' - '+fmt(r.st.lastPay.amount):'-'}</td><td>${fuRowStatus(r)}</td><td>${(r.f&&r.f.reminderDate&&r.st.balance>0.5)?fmtDate(r.f.reminderDate):'-'}</td></tr>`).join('')}
+      <tr class="tot"><td colspan="3">TOTAL (${rows.length} parties) &nbsp;${cur}</td><td class="r">${fmt(tB)}</td><td class="r">${fmt(tR)}</td><td class="r">${fmt(tD)}</td><td colspan="3"></td></tr></tbody></table>`;
+    const cr = rows.filter(r=>r.cash);
+    if(detail && cr.length) html += '<div class="b" style="font-size:14px;margin-top:14px;page-break-before:always;">Cash Parties - Full Detail</div>' + cr.map(r=>`<div class="pg">${fuPartyBodyHtml(r.p,'a4')}</div>`).join('');
+  }
+  fuPrintHtml(html, size);
+  closeModal('fuRepModal');
 }
 
 // ==================== MODULE 6: CRM ====================
