@@ -11605,37 +11605,45 @@ function generatePartySummaryPDF(){
   list=list.slice().sort((a,b)=>(a.partyName||'').localeCompare(b.partyName||''));
   if(!list.length){toast('No parties to export','warning');return;}
   const cur=settings.currency||'PKR';
-  const doc=new jspdf.jsPDF({orientation:'landscape',format:'a4'});
-  let y=pdfHeader(doc,'Party Summary');
-  const body=list.map((p,i)=>{
+  const makeBody=(withEmail)=>list.map((p,i)=>{
     const total=db.filter(r=>r.partyName===p.partyName&&r.invNo&&!r.cancelled).reduce((s,r)=>s+getDCTotal(r),0);
     const bal=getPartyOutstandingBalance(p.partyName);
     const pays=ledgerData.filter(l=>l.partyName===p.partyName&&l.type==='payment'&&l.date)
       .sort((a,b)=>new Date(b.date)-new Date(a.date));
     const lp=pays[0];
-    const lastPay=lp?`${fmtDate(lp.date)}\n${cur} ${fmt(lp.amount||0)}`:'No payment';
+    const lastPay=lp?`${fmtDate(lp.date)} - ${fmt(lp.amount||0)}`:'No payment';
     const contacts=getContactsForParty(p.partyName);
     const cStr=contacts.length?contacts.map(c=>{
       const parts=[c.name||'-'];
-      if(c.role||c.dept) parts[0]+=` (${[c.role,c.dept].filter(Boolean).join(', ')})`;
       if(c.mobile) parts.push(c.mobile);
-      if(c.email) parts.push(c.email);
+      if(withEmail && c.email) parts.push(c.email);
       return parts.join(' | ');
     }).join('\n'):'No contact saved';
     return [i+1,p.partyName,fmt(total),fmt(bal),lastPay,cStr,p.remarks||''];
   });
-  doc.autoTable({
-    startY:y,
-    head:[['#','Party Name',`Total Amount (${cur})`,`Balance Due (${cur})`,'Last Payment','Contact Person Details','Remarks']],
-    body,
-    styles:{fontSize:8,cellPadding:2,valign:'top',lineColor:[120,120,120],lineWidth:0.2,minCellHeight:18},
-    headStyles:{fillColor:[20,20,40],textColor:255},
-    columnStyles:{0:{cellWidth:8},1:{cellWidth:48,fontStyle:'bold'},2:{cellWidth:28,halign:'right'},3:{cellWidth:28,halign:'right'},4:{cellWidth:30},5:{cellWidth:68},6:{cellWidth:'auto'}},
-    margin:{left:8,right:8,bottom:10}
-  });
+  // Auto-fit: largest font/row-height that keeps everything on 1 page (min 5pt),
+  // otherwise on 2 pages max. Smaller sizes drop e-mail to save space.
+  const ladder=[[8,16,1],[7.5,13,1],[7,11,1],[6.5,9,1],[6,7.5,1],[5.5,6,0],[5,5,0],[5,4.2,0],[5,3.6,0],[4.5,4.2,0],[4.5,3.4,0],[4,3.6,0],[4,3,0]];
+  const build=(fs,minH,em)=>{
+    const doc=new jspdf.jsPDF({orientation:'portrait',format:'a4'});
+    const y=pdfHeader(doc,'Party Summary');
+    doc.autoTable({
+      startY:y-4,
+      head:[['#','Party Name',`Total (${cur})`,`Balance (${cur})`,'Last Payment (Date - Amount)','Contact Person Details','Remarks']],
+      body:makeBody(!!em),
+      styles:{fontSize:fs,cellPadding:fs>=7?1.6:(fs>=5?0.7:0.4),valign:'top',lineColor:[120,120,120],lineWidth:0.15,minCellHeight:minH,overflow:'linebreak'},
+      headStyles:{fillColor:[20,20,40],textColor:255,fontSize:Math.min(fs,7),minCellHeight:0},
+      columnStyles:{0:{cellWidth:6},1:{cellWidth:40,fontStyle:'bold'},2:{cellWidth:19,halign:'right'},3:{cellWidth:19,halign:'right'},4:{cellWidth:28},5:{cellWidth:48},6:{cellWidth:'auto'}},
+      margin:{left:6,right:6,top:6,bottom:5}
+    });
+    return doc;
+  };
+  let doc=null,fits=false;
+  for(const [fs,h,em] of ladder.filter(l=>l[0]>=5)){ const d=build(fs,h,em); if(d.getNumberOfPages()<=1){doc=d;fits=true;break;} }
+  if(!fits){ for(const [fs,h,em] of ladder){ const d=build(fs,h,em); doc=d; if(d.getNumberOfPages()<=2){fits=true;break;} } }
   stampBrandLogoOnAllPages(doc);
   doc.save(`Party_Summary_${new Date().toISOString().slice(0,10)}.pdf`);
-  toast(`Party Summary PDF generated (${list.length} parties)`,'success');
+  toast(`Party Summary PDF: ${list.length} parties, ${doc.getNumberOfPages()} page(s)`+(fits?'':' (parties bohat zyada hain — 2 page se oopar gaya)'),fits?'success':'warning');
 }
 function generateAllPartiesPDF(){
   if(!fbrParties.length){toast('No parties to export','warning');return;}
