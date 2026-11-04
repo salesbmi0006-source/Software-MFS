@@ -11605,45 +11605,77 @@ function generatePartySummaryPDF(){
   list=list.slice().sort((a,b)=>(a.partyName||'').localeCompare(b.partyName||''));
   if(!list.length){toast('No parties to export','warning');return;}
   const cur=settings.currency||'PKR';
-  const makeBody=(withEmail)=>list.map((p,i)=>{
+  const MAX_PAGES=2;           // ← is se zyada pages kabhi nahi hongay
+  const raw=list.map((p,i)=>{
     const total=db.filter(r=>r.partyName===p.partyName&&r.invNo&&!r.cancelled).reduce((s,r)=>s+getDCTotal(r),0);
     const bal=getPartyOutstandingBalance(p.partyName);
     const pays=ledgerData.filter(l=>l.partyName===p.partyName&&l.type==='payment'&&l.date)
       .sort((a,b)=>new Date(b.date)-new Date(a.date));
     const lp=pays[0];
-    const lastPay=lp?`${fmtDate(lp.date)} - ${fmt(lp.amount||0)}`:'No payment';
     const contacts=getContactsForParty(p.partyName);
-    const cStr=contacts.length?contacts.map(c=>{
-      const parts=[c.name||'-'];
-      if(c.mobile) parts.push(c.mobile);
-      if(withEmail && c.email) parts.push(c.email);
-      return parts.join(' | ');
-    }).join('\n'):'No contact saved';
-    return [i+1,p.partyName,fmt(total),fmt(bal),lastPay,cStr,p.remarks||''];
+    return {i:i+1,name:p.partyName,total:fmt(total),bal:fmt(bal),
+      lp:lp?{d:fmtDate(lp.date),a:`${cur} ${fmt(lp.amount||0)}`}:null,
+      contacts:contacts.map(c=>{
+        const parts=[c.name||'-'];
+        if(c.role||c.dept) parts[0]+=` (${[c.role,c.dept].filter(Boolean).join(', ')})`;
+        if(c.mobile) parts.push(c.mobile);
+        if(c.email) parts.push(c.email);
+        return parts.join(' | ');
+      }),
+      remarks:(p.remarks||'').replace(/\s*\n\s*/g,' ')};
   });
-  // Auto-fit: largest font/row-height that keeps everything on 1 page (min 5pt),
-  // otherwise on 2 pages max. Smaller sizes drop e-mail to save space.
-  const ladder=[[8,16,1],[7.5,13,1],[7,11,1],[6.5,9,1],[6,7.5,1],[5.5,6,0],[5,5,0],[5,4.2,0],[5,3.6,0],[4.5,4.2,0],[4.5,3.4,0],[4,3.6,0],[4,3,0]];
-  const build=(fs,minH,em)=>{
-    const doc=new jspdf.jsPDF({orientation:'portrait',format:'a4'});
-    const y=pdfHeader(doc,'Party Summary');
+  // Ek PDF build karne ka function (font size + compact mode ke sath)
+  function build(fs,compact){
+    const doc=new jspdf.jsPDF({orientation:'landscape',format:'a4'});
+    const pw=doc.internal.pageSize.getWidth();
+    // compact header (kam jagah leta hai)
+    if(settings.logoBase64){
+      try{
+        const f=settings.logoBase64.includes('image/png')?'PNG':'JPEG';
+        doc.addImage(settings.logoBase64,f,pw-24,4,16,12);
+      }catch(e){}
+    }
+    doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
+    doc.text(settings.companyName||'SAU CORPORATION',8,9);
+    doc.setFontSize(9);
+    doc.text('Party Summary',8,14);
+    doc.setFontSize(7); doc.setFont(undefined,'normal');
+    doc.text(`Generated: ${new Date().toLocaleString('en-PK')}  |  Total Parties: ${list.length}`,8,18);
+    const body=raw.map(r=>[
+      r.i,r.name,r.total,r.bal,
+      r.lp?(compact?`${r.lp.d} ${r.lp.a}`:`${r.lp.d}\n${r.lp.a}`):'No payment',
+      r.contacts.length?r.contacts.join(compact?'  ;  ':'\n'):'No contact saved',
+      r.remarks
+    ]);
+    const pad=fs>=7?1.6:(fs>=5?1:0.5);
     doc.autoTable({
-      startY:y-4,
-      head:[['#','Party Name',`Total (${cur})`,`Balance (${cur})`,'Last Payment (Date - Amount)','Contact Person Details','Remarks']],
-      body:makeBody(!!em),
-      styles:{fontSize:fs,cellPadding:fs>=7?1.6:(fs>=5?0.7:0.4),valign:'top',lineColor:[120,120,120],lineWidth:0.15,minCellHeight:minH,overflow:'linebreak'},
-      headStyles:{fillColor:[20,20,40],textColor:255,fontSize:Math.min(fs,7),minCellHeight:0},
-      columnStyles:{0:{cellWidth:6},1:{cellWidth:40,fontStyle:'bold'},2:{cellWidth:19,halign:'right'},3:{cellWidth:19,halign:'right'},4:{cellWidth:28},5:{cellWidth:48},6:{cellWidth:'auto'}},
-      margin:{left:6,right:6,top:6,bottom:5}
+      startY:21,
+      head:[['#','Party Name',`Total (${cur})`,`Balance (${cur})`,'Last Payment','Contact Person Details','Remarks']],
+      body,
+      styles:{fontSize:fs,cellPadding:pad,valign:'top',lineColor:[120,120,120],lineWidth:0.15,overflow:'linebreak'},
+      headStyles:{fillColor:[20,20,40],textColor:255,fontSize:Math.max(fs,5)},
+      columnStyles:{0:{cellWidth:7},1:{cellWidth:46,fontStyle:'bold'},2:{cellWidth:24,halign:'right'},3:{cellWidth:24,halign:'right'},4:{cellWidth:compact?34:28},5:{cellWidth:78},6:{cellWidth:'auto'}},
+      margin:{left:8,right:8,top:8,bottom:20}
     });
     return doc;
-  };
-  let doc=null,fits=false;
-  for(const [fs,h,em] of ladder.filter(l=>l[0]>=5)){ const d=build(fs,h,em); if(d.getNumberOfPages()<=1){doc=d;fits=true;break;} }
-  if(!fits){ for(const [fs,h,em] of ladder){ const d=build(fs,h,em); doc=d; if(d.getNumberOfPages()<=2){fits=true;break;} } }
-  stampBrandLogoOnAllPages(doc);
-  doc.save(`Party_Summary_${new Date().toISOString().slice(0,10)}.pdf`);
-  toast(`Party Summary PDF: ${list.length} parties, ${doc.getNumberOfPages()} page(s)`+(fits?'':' (parties bohat zyada hain — 2 page se oopar gaya)'),fits?'success':'warning');
+  }
+  // Sab se bara readable size dhoondo jo 1 page ma aaye; warna 2 page ma
+  const sizes=[8,7.5,7,6.5,6,5.5,5,4.5,4,3.6];
+  let chosen=null;
+  for(const maxP of [1,MAX_PAGES]){
+    for(const fs of sizes){
+      for(const compact of [false,true]){
+        const d=build(fs,compact);
+        if(d.internal.getNumberOfPages()<=maxP){chosen={d,fs,compact,pages:d.internal.getNumberOfPages()};break;}
+      }
+      if(chosen) break;
+    }
+    if(chosen) break;
+  }
+  if(!chosen){ const d=build(sizes[sizes.length-1],true); chosen={d,fs:sizes[sizes.length-1],compact:true,pages:d.internal.getNumberOfPages()}; }
+  stampBrandLogoOnAllPages(chosen.d);
+  chosen.d.save(`Party_Summary_${new Date().toISOString().slice(0,10)}.pdf`);
+  toast(`Party Summary PDF: ${list.length} parties, ${chosen.pages} page(s)`,'success');
 }
 function generateAllPartiesPDF(){
   if(!fbrParties.length){toast('No parties to export','warning');return;}
