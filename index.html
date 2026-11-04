@@ -269,6 +269,11 @@ body.light-mode .login-box{box-shadow:0 0 8px color-mix(in srgb,var(--neon) 22%,
 .lg-tick-btn.on{background:#1fbf75;color:#fff;border-color:#1fbf75;}
 tr.lg-ticked td{background:rgba(31,191,117,.24)!important;}
 tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
+/* Unpaid / partially paid bills — halka highlight (tick wali green row isse upar rehti hai) */
+tr.lg-unpaid td{background:rgba(245,130,32,.14);}
+tr.lg-unpaid td:first-child{box-shadow:inset 4px 0 0 #f58220;}
+tr.lg-partial td{background:rgba(245,166,35,.08);}
+tr.lg-partial td:first-child{box-shadow:inset 4px 0 0 #f5a623;}
 #ledgerSearchInfo{display:none;font-size:12px;background:var(--bg2);border-left:3px solid #1fbf75;padding:8px 10px;border-radius:6px;margin-bottom:8px;line-height:1.7;}
 .ledger-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:14px;}
 .ledger-sum-card{background:var(--bg3);border-radius:var(--radius2);padding:10px;border-top:2px solid;}
@@ -10852,13 +10857,16 @@ function renderLedger(){
     if(e.type==='bill' && e.invNo){
       if(paidAmt >= e.amount - 0.5) invCell = `${e.invNo} <span style="color:#1fbf75;font-weight:800;" title="Fully paid">✅ Paid</span>`;
       else if(paidAmt > 0.5) invCell = `${e.invNo} <span style="color:#f5a623;font-weight:800;" title="Partially paid: ${fmt(paidAmt)} of ${fmt(e.amount)}">🟡 Partial (${fmt(paidAmt)}/${fmt(e.amount)})</span>`;
+      else if((e.amount||0) > 0.5) invCell = `${e.invNo} <span style="color:#f58220;font-weight:800;" title="Is bill ki payment abhi nahi aayi">⏳ Unpaid</span>`;
       const _gh = getInvoiceGstHold(e.partyName, e.invNo);
       if(_gh>0.5) invCell += ` <span style="color:#e67e22;font-weight:800;" title="Is bill ki GST party ne hold par rakhi hai">🟠 GST Hold ${fmt(_gh)}</span>`;
     }
     const statusBadgeMap={cleared:'<span class="badge badge-paid" title="Cleared" style="margin-left:4px;">✅</span>',pending:'<span class="badge badge-pending" title="Pending" style="margin-left:4px;">⏳</span>',bounced:'<span class="badge" style="background:#c0392b;color:#fff;margin-left:4px;" title="Bounced">❌</span>'};
     const statusBadge = (e.type==='payment' && e.status) ? (statusBadgeMap[e.status]||'') : '';
     const isTicked = ticks.has(e.id);
-    return `<tr class="${isTicked?'lg-ticked':''}">
+    // Bill ki payment abhi nahi aayi -> halka orange highlight; partial -> halka yellow
+    const _payCls = (e.type==='bill' && e.invNo && (e.amount||0)>0.5) ? (paidAmt >= e.amount-0.5 ? '' : (paidAmt>0.5 ? ' lg-partial' : ' lg-unpaid')) : '';
+    return `<tr class="${(isTicked?'lg-ticked':'')+_payCls}">
       <td>${fmtDate(e.date)}</td>
       <td>${typeMap[e.type]||e.type}</td>
       <td>${e.refNo||'-'}${statusBadge}${e.type!=='bill'?ledgerApprovalBadge(e.id):''}</td>
@@ -11626,7 +11634,7 @@ function generatePartySummaryPDF(){
   });
   // Ek PDF build karne ka function (font size + compact mode ke sath)
   function build(fs,compact){
-    const doc=new jspdf.jsPDF({orientation:'landscape',format:'a4'});
+    const doc=new jspdf.jsPDF({orientation:'portrait',format:'a4'});
     const pw=doc.internal.pageSize.getWidth();
     // compact header (kam jagah leta hai)
     if(settings.logoBase64){
@@ -11635,36 +11643,36 @@ function generatePartySummaryPDF(){
         doc.addImage(settings.logoBase64,f,pw-24,4,16,12);
       }catch(e){}
     }
-    doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
-    doc.text(settings.companyName||'SAU CORPORATION',8,9);
-    doc.setFontSize(9);
-    doc.text('Party Summary',8,14);
-    doc.setFontSize(7); doc.setFont(undefined,'normal');
-    doc.text(`Generated: ${new Date().toLocaleString('en-PK')}  |  Total Parties: ${list.length}`,8,18);
+    doc.setFontSize(14); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
+    doc.text(settings.companyName||'SAU CORPORATION',8,10);
+    doc.setFontSize(10);
+    doc.text('Party Summary',8,15.5);
+    doc.setFontSize(8); doc.setFont(undefined,'normal');
+    doc.text(`Generated: ${new Date().toLocaleString('en-PK')}  |  Total Parties: ${list.length}`,8,20);
     const body=raw.map(r=>[
       r.i,r.name,r.total,r.bal,
-      r.lp?(compact?`${r.lp.d} ${r.lp.a}`:`${r.lp.d}\n${r.lp.a}`):'No payment',
-      r.contacts.length?r.contacts.join(compact?'  ;  ':'\n'):'No contact saved',
+      r.lp?`${r.lp.d}\n${r.lp.a}`:'No payment',
+      r.contacts.length?r.contacts.join('\n'):'No contact saved',
       r.remarks
     ]);
-    const pad=fs>=7?1.6:(fs>=5?1:0.5);
+    const pad=fs>=7?1.6:(fs>=6?1.2:0.8);
     doc.autoTable({
-      startY:21,
+      startY:23,
       head:[['#','Party Name',`Total (${cur})`,`Balance (${cur})`,'Last Payment','Contact Person Details','Remarks']],
       body,
       styles:{fontSize:fs,cellPadding:pad,valign:'top',lineColor:[120,120,120],lineWidth:0.15,overflow:'linebreak'},
-      headStyles:{fillColor:[20,20,40],textColor:255,fontSize:Math.max(fs,5)},
-      columnStyles:{0:{cellWidth:7},1:{cellWidth:46,fontStyle:'bold'},2:{cellWidth:24,halign:'right'},3:{cellWidth:24,halign:'right'},4:{cellWidth:compact?34:28},5:{cellWidth:78},6:{cellWidth:'auto'}},
-      margin:{left:8,right:8,top:8,bottom:20}
+      headStyles:{fillColor:[20,20,40],textColor:255,fontSize:Math.min(Math.max(fs,6),8)},
+      columnStyles:{0:{cellWidth:6},1:{cellWidth:32,fontStyle:'bold'},2:{cellWidth:20,halign:'right'},3:{cellWidth:20,halign:'right'},4:{cellWidth:22},5:{cellWidth:52},6:{cellWidth:'auto'}},
+      margin:{left:8,right:8,top:10,bottom:20}
     });
     return doc;
   }
   // Sab se bara readable size dhoondo jo 1 page ma aaye; warna 2 page ma
-  const sizes=[8,7.5,7,6.5,6,5.5,5,4.5,4,3.6];
+  const sizes=[10,9.5,9,8.5,8,7.5,7,6.5,6,5.5,5,4.5];
   let chosen=null;
-  for(const maxP of [1,MAX_PAGES]){
+  for(const maxP of [MAX_PAGES]){
     for(const fs of sizes){
-      for(const compact of [false,true]){
+      for(const compact of [false]){
         const d=build(fs,compact);
         if(d.internal.getNumberOfPages()<=maxP){chosen={d,fs,compact,pages:d.internal.getNumberOfPages()};break;}
       }
@@ -12431,7 +12439,8 @@ function generateLedgerPDF(partyVal, detailMode, from, to, unitVal, ctx){
     body.push([o.date?fmtDate(o.date):'-','Previous Balance','-','-','Opening balance carried forward'+(sel.isGroup?' | Party: '+o.party:''),'','','',fmt(Math.abs(obRun))+(obRun<0?' CR':' DR')]);
   });
   const paidAmountMap = {};
-  entries.filter(l=>l.type==='payment').map(l=>l._orig||l).forEach(l=>{
+  // built.entries = poori ledger (date filter se pehle) — warna date range ke bahar aayi payment ki wajah se bill galat "UNPAID" dikhta
+  built.entries.filter(l=>l.type==='payment').map(l=>l._orig||l).forEach(l=>{
     const invoicesOfL = (l.invNo||'').split(',').map(s=>s.trim()).filter(Boolean);
     if(!invoicesOfL.length) return;
     if(l.allocations && l.allocations.length){
@@ -12481,6 +12490,7 @@ function generateLedgerPDF(partyVal, detailMode, from, to, unitVal, ctx){
       const paidAmt = paidAmountMap[String(e.invNo).trim()]||0;
       if(paidAmt >= e.amount-0.5) invCell += ' (Paid)';
       else if(paidAmt>0.5) invCell += ` (Partial ${fmt(paidAmt)}/${fmt(e.amount)})`;
+      else if((e.amount||0)>0.5) invCell += ' (UNPAID)';
       const _gh=getInvoiceGstHold(e.partyName,e.invNo); if(_gh>0.5) invCell += ` (GST Hold ${fmt(_gh)})`;
     }
     const typeLabel={bill:'Bill',payment:'Payment',debit_note:'Debit Note'}[e.type]||e.type;
@@ -12498,6 +12508,12 @@ function generateLedgerPDF(partyVal, detailMode, from, to, unitVal, ctx){
         const t=d.row.raw[1];
         if(t==='DC - Invoice Pending'){ d.cell.styles.fillColor=[255,243,214]; d.cell.styles.textColor=[140,85,0]; }
         else if(t==='DC - Cancelled' || t==='Partial Reject' || t==='Rejection (Auto)'){ d.cell.styles.fillColor=[253,228,228]; d.cell.styles.textColor=[150,30,30]; }
+        else if(t==='Bill'){
+          // Unpaid bill = halka orange, partially paid = bohat halka orange (print mein bhi nazar aaye)
+          const inv=String(d.row.raw[3]||'');
+          if(inv.indexOf('(UNPAID)')>-1) d.cell.styles.fillColor=[255,226,196];
+          else if(inv.indexOf('(Partial')>-1) d.cell.styles.fillColor=[255,241,222];
+        }
       }
     }catch(x){} }
   });
