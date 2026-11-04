@@ -1033,6 +1033,7 @@ tr.lg-ticked td:first-child{box-shadow:inset 4px 0 0 #1fbf75;}
         <button class="btn btn-green btn-sm" onclick="openModal('addPartyModal')">➕ Add Party</button>
         <button class="btn btn-yellow btn-sm" onclick="openPartyMergeTool()">🔀 Merge Duplicates</button>
         <button class="btn btn-purple btn-sm" onclick="generateAllPartiesPDF()">📄 All Parties PDF</button>
+        <button class="btn btn-neon btn-sm" onclick="generatePartySummaryPDF()" title="A4 print: Party, Total, Last Payment, Contacts + Remarks">🖨️ Party Summary PDF</button>
       </div>
     </div>
     <div class="search-bar">
@@ -5399,6 +5400,7 @@ Switch Socket"></textarea>
     <div class="form-group"><label>Party Name *</label><input type="text" id="party-name" list="party-list3" placeholder="Select existing or type new party name"><datalist id="party-list3"></datalist></div>
     <div class="form-group"><label>NTN</label><input type="text" id="party-ntn" placeholder="NTN number"></div>
     <div class="form-group"><label>Address</label><textarea id="party-address" rows="3" placeholder="Full address..."></textarea></div>
+    <div class="form-group"><label>📝 Remarks (Party Summary PDF mein print hoga)</label><textarea id="party-remarks" rows="2" placeholder="Optional remarks..."></textarea></div>
     <div class="form-group"><label>💳 Credit Limit (PHASE 8)</label><input type="number" id="party-credit-limit" placeholder="e.g. 500000 (0 = no limit set)" min="0" step="1"><div style="font-size:11px;color:var(--text3);margin-top:3px;">Outstanding balance is ke cross hote hi warning aayegi.</div></div>
   </div>
   <div class="modal-footer">
@@ -11508,6 +11510,7 @@ function editParty(idx){
   document.getElementById('party-ntn').value=p.ntn||'';
   document.getElementById('party-address').value=p.address||'';
   document.getElementById('party-credit-limit').value=p.creditLimit||'';
+  document.getElementById('party-remarks').value=p.remarks||'';
   openModal('addPartyModal');
 }
 function saveParty(){
@@ -11517,8 +11520,10 @@ function saveParty(){
   const address=document.getElementById('party-address').value.trim();
   const creditLimit=parseFloat(document.getElementById('party-credit-limit').value)||0;
   if(!name){toast('Party name required','warning');return;}
-  if(isNaN(idx)||idx<0){ fbrParties.push({partyName:name,ntn,address,creditLimit}); toast('Party added','success'); }
-  else { fbrParties[idx]={partyName:name,ntn,address,creditLimit}; toast('Party updated','success'); }
+  const remarks=(document.getElementById('party-remarks')||{}).value?.trim()||'';
+  if(isNaN(idx)||idx<0){ fbrParties.push({partyName:name,ntn,address,creditLimit,remarks}); toast('Party added','success'); }
+  else { fbrParties[idx]=Object.assign({},fbrParties[idx],{partyName:name,ntn,address,creditLimit,remarks}); toast('Party updated','success'); }
+  if(document.getElementById('party-remarks')) document.getElementById('party-remarks').value='';
   document.getElementById('party-edit-idx').value='';
   saveData(); renderParties(); closeModal('addPartyModal'); populatePartyList();
 }
@@ -11592,6 +11597,45 @@ function generateSinglePartyPDF(partyName){
   stampBrandLogoOnAllPages(doc);
   doc.save(`Party_${partyName.replace(/[^a-zA-Z0-9]/g,'_')}.pdf`);
   toast('Party PDF generated','success');
+}
+function generatePartySummaryPDF(){
+  syncPartiesFromDB();
+  const search=(document.getElementById('partySearch')||{}).value?.toLowerCase()||'';
+  let list=fbrParties.filter(p=>!search||(p.partyName||'').toLowerCase().includes(search)||(p.ntn||'').toLowerCase().includes(search));
+  list=list.slice().sort((a,b)=>(a.partyName||'').localeCompare(b.partyName||''));
+  if(!list.length){toast('No parties to export','warning');return;}
+  const cur=settings.currency||'PKR';
+  const doc=new jspdf.jsPDF({orientation:'landscape',format:'a4'});
+  let y=pdfHeader(doc,'Party Summary');
+  const body=list.map((p,i)=>{
+    const total=db.filter(r=>r.partyName===p.partyName&&r.invNo&&!r.cancelled).reduce((s,r)=>s+getDCTotal(r),0);
+    const bal=getPartyOutstandingBalance(p.partyName);
+    const pays=ledgerData.filter(l=>l.partyName===p.partyName&&l.type==='payment'&&l.date)
+      .sort((a,b)=>new Date(b.date)-new Date(a.date));
+    const lp=pays[0];
+    const lastPay=lp?`${fmtDate(lp.date)}\n${cur} ${fmt(lp.amount||0)}`:'No payment';
+    const contacts=getContactsForParty(p.partyName);
+    const cStr=contacts.length?contacts.map(c=>{
+      const parts=[c.name||'-'];
+      if(c.role||c.dept) parts[0]+=` (${[c.role,c.dept].filter(Boolean).join(', ')})`;
+      if(c.mobile) parts.push(c.mobile);
+      if(c.email) parts.push(c.email);
+      return parts.join(' | ');
+    }).join('\n'):'No contact saved';
+    return [i+1,p.partyName,fmt(total),fmt(bal),lastPay,cStr,p.remarks||''];
+  });
+  doc.autoTable({
+    startY:y,
+    head:[['#','Party Name',`Total Amount (${cur})`,`Balance Due (${cur})`,'Last Payment','Contact Person Details','Remarks']],
+    body,
+    styles:{fontSize:8,cellPadding:2,valign:'top',lineColor:[120,120,120],lineWidth:0.2,minCellHeight:18},
+    headStyles:{fillColor:[20,20,40],textColor:255},
+    columnStyles:{0:{cellWidth:8},1:{cellWidth:48,fontStyle:'bold'},2:{cellWidth:28,halign:'right'},3:{cellWidth:28,halign:'right'},4:{cellWidth:30},5:{cellWidth:68},6:{cellWidth:'auto'}},
+    margin:{left:8,right:8,bottom:10}
+  });
+  stampBrandLogoOnAllPages(doc);
+  doc.save(`Party_Summary_${new Date().toISOString().slice(0,10)}.pdf`);
+  toast(`Party Summary PDF generated (${list.length} parties)`,'success');
 }
 function generateAllPartiesPDF(){
   if(!fbrParties.length){toast('No parties to export','warning');return;}
