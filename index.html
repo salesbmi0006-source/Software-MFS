@@ -31702,7 +31702,7 @@ function mktLineSvg(months, lastIdx, slope, mean){
 // Data key: sau_worker_khata  (safeSetItem -> auto cloud sync, full backup ma bhi shamil)
 const WK_DEF = ()=>({settings:{guestAccess:false,workerName:'Worker'},entries:[],periods:[],carry:0});
 let wkData = WK_DEF();
-let wkSec = 'given', wkEditId = null;
+let wkSec = 'given', wkEditId = null, wkLastDate = '';
 let wkF = {from:'',to:'',status:'open'};
 const WK_TYPES = {given:'💰 Paisa Liya', shop:'🏪 Shop Kharcha', home:'🏠 Ghar Kharcha'};
 const wkN = n => Number(n||0).toLocaleString('en-PK',{maximumFractionDigits:2});
@@ -31762,7 +31762,7 @@ function wkRender(){
   const adm=wkIsAdmin();
   if(!adm && !wkData.settings.guestAccess){ root.innerHTML='<div class="accent-box">🔒 Yeh tab sirf Admin ke liye hai.</div>'; return; }
   const navBtn=(id,l)=>`<button class="btn ${wkSec===id?'btn-green':'btn-neon'} btn-sm" onclick="wkSetSec('${id}')">${l}</button>`;
-  let h=`<div class="card-header"><div class="card-title">👷 Worker Khata — ${wkE(wkData.settings.workerName)} <small style="font-size:10px;color:var(--text3)">(build v105)</small></div></div>`;
+  let h=`<div class="card-header"><div class="card-title">👷 Worker Khata — ${wkE(wkData.settings.workerName)} <small style="font-size:10px;color:var(--text3)">(build v106)</small></div></div>`;
   if(adm) h+=`<div class="flex-gap mb-8" style="flex-wrap:wrap;align-items:center;">
     <input type="text" value="${wkE(wkData.settings.workerName)}" style="width:140px" onchange="wkData.settings.workerName=this.value||'Worker';wkSave();wkRender()" title="Worker ka naam">
     <label style="font-size:12px;display:flex;gap:6px;align-items:center;"><input type="checkbox" ${wkData.settings.guestAccess?'checked':''} onchange="wkToggleGuest(this.checked)"> User/Guest ko access do (sirf entry add, edit/delete nahi)</label></div>`;
@@ -31779,16 +31779,16 @@ function wkCtrlOpts(sel){
 }
 function wkEntryView(type,adm){
   const ed=wkEditId?wkData.entries.find(e=>e.id===wkEditId):null;
-  const v=ed||{date:wkToday(),desc:'',qty:'',rate:'',amount:'',by:''};
+  const v=ed||{date:wkLastDate||wkToday(),desc:'',qty:'',rate:'',amount:'',by:''};
   const isG=type==='given';
   const descs=[...new Set(wkData.entries.filter(e=>e.type===type&&e.desc).map(e=>e.desc))].sort();
   let h=`<datalist id="wk-dl">${descs.map(d=>`<option value="${wkE(d)}">`).join('')}</datalist>
   <div class="accent-box mb-8"><div class="form-row">
     <div class="form-group"><label>Date *</label><input type="date" id="wk-date" value="${wkE(v.date)}"></div>
-    ${isG?`<div class="form-group"><label>Amount *</label><input type="number" id="wk-amt" min="0" value="${wkE(v.amount)}" placeholder="10000"></div>
-           <div class="form-group" style="flex:2"><label>Note</label><input type="text" id="wk-desc" value="${wkE(v.desc)}" placeholder="Cash / Easypaisa..."></div>`
-    :`<div class="form-group" style="flex:2"><label>Description / Details *</label><input type="text" id="wk-desc" list="wk-dl" value="${wkE(v.desc)}" oninput="wkAuto(this.value)" placeholder="${type==='shop'?'Bilty, bill, chai patti...':'Sabzi, doodh...'}" autocomplete="off"></div>
-      <div class="form-group"><label>Rate / Amount *</label><input type="number" id="wk-rate" min="0" step="any" value="${wkE(v.amount)}" style="width:130px"></div>`}
+    ${isG?`<div class="form-group"><label>Amount *</label><input type="number" id="wk-amt" min="0" value="${wkE(v.amount)}" placeholder="10000" onkeydown="if(event.key==='Enter'){event.preventDefault();wkSaveEntry('${type}')}"></div>
+           <div class="form-group" style="flex:2"><label>Note</label><input type="text" id="wk-desc" value="${wkE(v.desc)}" placeholder="Cash / Easypaisa..." onkeydown="if(event.key==='Enter'){event.preventDefault();wkSaveEntry('${type}')}"></div>`
+    :`<div class="form-group" style="flex:2"><label>Description / Details *</label><input type="text" id="wk-desc" list="wk-dl" value="${wkE(v.desc)}" oninput="wkAuto(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('wk-rate').focus()}" placeholder="${type==='shop'?'Bilty, bill, chai patti...':'Sabzi, doodh...'}" autocomplete="off"></div>
+      <div class="form-group"><label>Rate / Amount *</label><input type="number" id="wk-rate" min="0" step="any" value="${wkE(v.amount)}" style="width:130px" onkeydown="if(event.key==='Enter'){event.preventDefault();wkSaveEntry('${type}')}"></div>`}
     ${wkCtrlOpts(v.by)}
   </div>
   <div class="flex-gap"><button class="btn btn-green" onclick="wkSaveEntry('${type}')">${ed?'✅ Update':'➕ Save'}</button>${ed?'<button class="btn" onclick="wkSetSec(wkSec)">Cancel</button>':''}</div></div>`;
@@ -31824,7 +31824,8 @@ function wkSaveEntry(type){
     const e=Object.assign({id:'WK'+uid(),ts:Date.now(),settled:null},obj);
     wkData.entries.push(e); logAudit('add','Worker Khata',`${WK_TYPES[type]}: ${desc} ${amount}`,undefined,e);
   }
-  wkSave(); toast('Save ho gaya','success'); wkRender();
+  wkLastDate=date; wkSave(); toast('Save ho gaya','success'); wkRender();
+  const nf=document.getElementById(isG?'wk-amt':'wk-desc'); if(nf) nf.focus();
 }
 function wkEdit(id){ if(!wkIsAdmin()) return; wkEditId=id; wkRender(); window.scrollTo({top:0,behavior:'smooth'}); }
 function wkDel(id){
