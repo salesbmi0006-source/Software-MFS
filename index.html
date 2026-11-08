@@ -549,6 +549,7 @@ tr.lg-partial td:first-child{box-shadow:inset 4px 0 0 #f5a623;}
     <div class="tab" onclick="showTab('bank')" id="tab-bank">🏛️ Bank</div>
     <div class="tab" onclick="showTab('expenses')" id="tab-expenses">💸 Expenses</div>
     <div class="tab" onclick="showTab('pantry')" id="tab-pantry">🍵 Pantry</div>
+    <div class=\"tab\" onclick=\"showTab('workerkhata')\" id=\"tab-workerkhata\">👷 Worker Khata</div>
     <div class="tab" onclick="showTab('receipts')" id="tab-receipts">🧾 Receipts</div>
 
     <div class="tab-group-label">System</div>
@@ -2525,6 +2526,7 @@ tr.lg-partial td:first-child{box-shadow:inset 4px 0 0 #f5a623;}
 
 <!-- ====== EMPLOYEES TAB (Module 4) ====== -->
 <div class="tab-panel" id="panel-employees">
+<div class="card" id="wk-ctrl-box"></div>
   <div class="card">
     <div class="card-header"><div class="card-title">🎂 Upcoming Birthdays & Work Anniversaries</div></div>
     <div id="emp-birthday-widget"></div>
@@ -3585,6 +3587,10 @@ tr.lg-partial td:first-child{box-shadow:inset 4px 0 0 #f5a623;}
 </div>
 
 <!-- PANTRY / TEA-BOY MODULE -->
+<div class="tab-panel" id="panel-workerkhata">
+  <div class="card"><div id="wk-root"></div></div>
+</div>
+
 <div class="tab-panel" id="panel-pantry">
   <div class="grid2">
     <div class="card">
@@ -6161,7 +6167,7 @@ async function buildFullBackupData(){
     digitalInvoices: diWithPdf,
     partyContacts, invoiceSendStatus, hsStockData, fbrStockData:(typeof fbsData!=='undefined'?fbsData:null), rateLists, partyDispatchData,
     savedQuotations, quotSettings, rrSettings, employees, mktData, crmData, followUpData:{v:2, entries:(typeof followUps!=='undefined'?followUps:[]), cashParties:(typeof fuCash!=='undefined'?fuCash:[])}, emailHistory, emailTemplates, autoNumberSettings,
-    stockItems, stockMovements, salesReturns, returnReceipts, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
+    stockItems, stockMovements, salesReturns, returnReceipts, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, workerKhata:(typeof wkData!=='undefined'?wkData:null), bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     fbCustomers, fbBills, fbQuotations, fbLedger, fbSettings, fbDescriptions, fbStockItems, fbStockMovements,
     documentManager: docsWithBlob,
     securityData: (typeof securityData!=='undefined'?securityData:null),
@@ -6349,7 +6355,7 @@ function buildCloudSyncData(){
     db, cheques, ledgerData, fbrParties, descMaster, settings, partyOpeningBalances, ledgerGroupsJson: JSON.stringify(ledgerGroups),
     partyContacts, invoiceSendStatus, hsStockData, fbrStockData:(typeof fbsData!=='undefined'?fbsData:null), rateLists, partyDispatchData,
     savedQuotations, quotSettings, rrSettings, employees, mktData, crmData, followUpData:{v:2, entries:(typeof followUps!=='undefined'?followUps:[]), cashParties:(typeof fuCash!=='undefined'?fuCash:[])}, emailHistory, emailTemplates, autoNumberSettings,
-    stockItems, stockMovements, salesReturns, returnReceipts, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
+    stockItems, stockMovements, salesReturns, returnReceipts, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, workerKhata:(typeof wkData!=='undefined'?wkData:null), bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     fbCustomers, fbBills, fbQuotations, fbLedger, fbSettings, fbDescriptions, fbStockItems, fbStockMovements,
     securityData: (typeof securityData!=='undefined'?securityData:null),
     updatedAt: new Date().toISOString(),
@@ -7111,6 +7117,7 @@ async function applyRestoredBackupData(data){
   if(data.expenses) { expenses = data.expenses; saveExpenses(); }
   if(data.pantryItems) { pantryItems = data.pantryItems; savePantryItems(); }
   if(data.pantryExpenses) { pantryExpenses = data.pantryExpenses; savePantryExpenses(); }
+  if(data.workerKhata && typeof wkApplyRemote==='function') wkApplyRemote(data.workerKhata);
   if(data.fbCustomers) { fbCustomers = data.fbCustomers; saveFbCustomers(); }
   if(data.fbBills) { fbBills = data.fbBills; saveFbBills(); }
   if(data.fbQuotations) { fbQuotations = data.fbQuotations; saveFbQuotations(); }
@@ -7897,6 +7904,7 @@ function renderTabContent(id){
   if(id==='partylookup') renderPartyLookup();
   if(id==='dispatch') { renderDispatchTab(); renderEnvelopeDispatchTab(); }
   if(id==='courierrates') { renderCourierRatesTab(); }
+  if(id==='employees' && typeof wkRenderControllers==='function') wkRenderControllers();
   if(id==='employees') { renderEmployees(); renderAttendanceDashboard(); renderSalarySlipsTable(); populateAttendanceSettingsUI(); }
   if(id==='marketing') { mktRender(); }
   if(id==='docmanager') renderDocManager();
@@ -7911,6 +7919,7 @@ function renderTabContent(id){
   if(id==='warehouses') renderWarehousesTab();
   if(id==='expenses') renderExpensesTab();
   if(id==='pantry') renderPantryTab();
+  if(id==='workerkhata') wkRender();
   if(id==='bank') renderBankTab();
   if(id==='auditlog') renderAuditLogTab();
   if(id==='aisearch') { populateAiSearchHelp(); }
@@ -7973,7 +7982,7 @@ const MOBILE_MORE_GROUPS = [
     {id:'cheques',label:'Cheques',icon:'🏦'},{id:'salesreturns',label:'Sales Returns',icon:'🔄'},
     {id:'returnreceipts',label:'Return Receipts',icon:'🧾'},{id:'rejections',label:'Rejections',icon:'❌'},
     {id:'bank',label:'Bank',icon:'🏛️'},{id:'expenses',label:'Expenses',icon:'💸'},
-    {id:'pantry',label:'Pantry',icon:'🍵'},{id:'receipts',label:'Receipts',icon:'🧾'}
+    {id:'pantry',label:'Pantry',icon:'🍵'},{id:'workerkhata',label:'Worker Khata',icon:'👷'},{id:'receipts',label:'Receipts',icon:'🧾'}
   ]},
   {label:'System', tabs:[
     {id:'tools',label:'Tools',icon:'🔧'},{id:'auditlog',label:'Audit Log',icon:'📜'},
@@ -12801,6 +12810,7 @@ function init(){
   loadWarehouses();
   loadExpenses();
   loadPantryData();
+  if(typeof wkLoad==='function') wkLoad();
   loadFastBilling();
   loadBankModule();
   loadAuditLog();
@@ -17657,6 +17667,7 @@ function applyUserPermissions(){
     return;
   }
   const allowed = user.permissions||[];
+  if(typeof wkApplyAccess==='function') wkApplyAccess();
   const tabMap = {records:'tab-records',dashboard:'tab-dashboard',ledger:'tab-ledger',fbr:'tab-fbr',
     reports:'tab-reports',parties:'tab-parties',cheques:'tab-cheques',hscodes:'tab-hscodes',
     tools:'tab-tools',settings:'tab-settings',digitalinvoices:'tab-digitalinvoices',commercialbills:'tab-commercialbills',
@@ -31684,5 +31695,264 @@ function mktLineSvg(months, lastIdx, slope, mean){
   s += `<text x="${W-pr}" y="12" text-anchor="end" style="fill:var(--neon5);font-size:10px">- - - trend line</text>`;
   return s + '</svg>';
 }
+</script>
+<script>
+// ==================== WORKER KHATA (v99) ====================
+// Ek worker ka mukammal hisab: Paisa Liya / Shop Kharcha / Ghar Kharcha + Grand Total + Hisab Close.
+// Data key: sau_worker_khata  (safeSetItem -> auto cloud sync, full backup ma bhi shamil)
+const WK_DEF = ()=>({settings:{guestAccess:false,workerName:'Worker'},entries:[],periods:[],carry:0});
+let wkData = WK_DEF();
+let wkSec = 'given', wkEditId = null;
+let wkF = {from:'',to:'',status:'open'};
+const WK_TYPES = {given:'💰 Paisa Liya', shop:'🏪 Shop Kharcha', home:'🏠 Ghar Kharcha'};
+const wkN = n => Number(n||0).toLocaleString('en-PK',{maximumFractionDigits:2});
+const wkD = d => d ? d.split('-').reverse().join('-') : '';
+const wkE = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const wkToday = () => new Date().toISOString().slice(0,10);
+function wkIsAdmin(){ const u=(typeof securityData!=='undefined')&&securityData.currentUser; return !u||u.role==='admin'; }
+function wkUser(){ return (typeof securityData!=='undefined'&&securityData.currentUser)?securityData.currentUser.username:'Admin'; }
+function wkLoad(){
+  try{ const r=localStorage.getItem('sau_worker_khata'); if(r) wkData=Object.assign(WK_DEF(),JSON.parse(r)); }catch(e){}
+  wkApplyAccess();
+}
+function wkSave(){ safeSetItem('sau_worker_khata',JSON.stringify(wkData)); }
+function wkApplyRemote(d){
+  wkData=Object.assign(WK_DEF(),d||{});
+  localStorage.setItem('sau_worker_khata',JSON.stringify(wkData));
+  wkApplyAccess();
+}
+function wkApplyAccess(){
+  const t=document.getElementById('tab-workerkhata');
+  if(t) t.style.display=(wkIsAdmin()||wkData.settings.guestAccess)?'':'none';
+}
+function wkRows(type,status,from,to){
+  return wkData.entries.filter(e=>e.type===type
+    &&(status==='all'||(status==='open'?!e.settled:!!e.settled))
+    &&(!from||e.date>=from)&&(!to||e.date<=to))
+    .sort((a,b)=>a.date===b.date?(a.ts||0)-(b.ts||0):(a.date<b.date?-1:1));
+}
+const wkSum = rows => rows.reduce((s,e)=>s+Number(e.amount||0),0);
+function wkTotals(status,from,to){
+  const g=wkSum(wkRows('given',status,from,to)), s=wkSum(wkRows('shop',status,from,to)), h=wkSum(wkRows('home',status,from,to));
+  const carry = status==='open' ? Number(wkData.carry||0) : 0;
+  return {g,s,h,carry,bal:carry+g-s-h};
+}
+function wkBalText(b){
+  return b>=0 ? `Worker ke paas baqi: <b style="color:var(--success)">${wkN(b)}</b> (wapis lena hai)`
+              : `Worker ko dena hai: <b style="color:#f66">${wkN(-b)}</b> (usne apni jeb se kharch kiya)`;
+}
+function wkRenderControllers(){
+  const box=document.getElementById('wk-ctrl-box'); if(!box) return;
+  const emps=(typeof employees!=='undefined'?employees:[]).filter(e=>e&&e.name);
+  const sel=wkData.settings.controllers||[];
+  box.innerHTML=`<div class="card-title">👷 Worker Khata — kaun control karega?</div>
+   <div style="font-size:12px;color:var(--text3);margin:4px 0 8px">Jin ko tick karenge sirf unhi ke naam Worker Khata ma entry karte waqt aayenge.</div>
+   <div class="flex-gap" style="flex-wrap:wrap">${emps.map(e=>`<label style="display:flex;gap:6px;align-items:center;border:1px solid var(--border2);padding:5px 10px;border-radius:8px"><input type="checkbox" ${sel.includes(e.name)?'checked':''} onchange="wkToggleCtrl(decodeURIComponent('${encodeURIComponent(e.name)}'),this.checked)"> ${wkE(e.name)}</label>`).join('')||'<i>Pehle employees add karein</i>'}</div>`;
+}
+function wkToggleCtrl(name,on){
+  if(!wkIsAdmin()){toast('Sirf admin badal sakta hai','warning');wkRenderControllers();return;}
+  const a=new Set(wkData.settings.controllers||[]); on?a.add(name):a.delete(name);
+  wkData.settings.controllers=[...a]; wkSave();
+}
+function wkSetSec(s){ wkSec=s; wkEditId=null; wkRender(); }
+
+function wkRender(){
+  const root=document.getElementById('wk-root'); if(!root) return;
+  wkApplyAccess();
+  const adm=wkIsAdmin();
+  if(!adm && !wkData.settings.guestAccess){ root.innerHTML='<div class="accent-box">🔒 Yeh tab sirf Admin ke liye hai.</div>'; return; }
+  const navBtn=(id,l)=>`<button class="btn ${wkSec===id?'btn-green':'btn-neon'} btn-sm" onclick="wkSetSec('${id}')">${l}</button>`;
+  let h=`<div class="card-header"><div class="card-title">👷 Worker Khata — ${wkE(wkData.settings.workerName)}</div></div>`;
+  if(adm) h+=`<div class="flex-gap mb-8" style="flex-wrap:wrap;align-items:center;">
+    <input type="text" value="${wkE(wkData.settings.workerName)}" style="width:140px" onchange="wkData.settings.workerName=this.value||'Worker';wkSave();wkRender()" title="Worker ka naam">
+    <label style="font-size:12px;display:flex;gap:6px;align-items:center;"><input type="checkbox" ${wkData.settings.guestAccess?'checked':''} onchange="wkToggleGuest(this.checked)"> User/Guest ko access do (sirf entry add, edit/delete nahi)</label>
+    <button class="btn btn-purple btn-sm" onclick="wkLive()">☁️ Live Sync</button>
+    <button class="btn btn-sm" onclick="wkBackupJson()">💾 JSON Backup</button></div>`;
+  h+=`<div class="flex-gap mb-8" style="flex-wrap:wrap;">${navBtn('given',WK_TYPES.given)}${navBtn('shop',WK_TYPES.shop)}${navBtn('home',WK_TYPES.home)}${navBtn('hisab','🧮 Hisab / Grand Total')}</div>`;
+  h+= WK_TYPES[wkSec] ? wkEntryView(wkSec,adm) : wkHisabView(adm);
+  root.innerHTML=h;
+}
+
+const wkQ = v => (v===''||v==null)?'':wkN(v);
+function wkCtrlOpts(sel){
+  const c=wkData.settings.controllers||[];
+  if(!c.length) return '';
+  return `<div class="form-group"><label>Kaun (Controller) *</label><select id="wk-by">${c.map(n=>`<option ${n===sel?'selected':''}>${wkE(n)}</option>`).join('')}</select></div>`;
+}
+function wkEntryView(type,adm){
+  const ed=wkEditId?wkData.entries.find(e=>e.id===wkEditId):null;
+  const v=ed||{date:wkToday(),desc:'',qty:'',rate:'',amount:'',by:''};
+  const isG=type==='given';
+  const descs=[...new Set(wkData.entries.filter(e=>e.type===type&&e.desc).map(e=>e.desc))].sort();
+  let h=`<datalist id="wk-dl">${descs.map(d=>`<option value="${wkE(d)}">`).join('')}</datalist>
+  <div class="accent-box mb-8"><div class="form-row">
+    <div class="form-group"><label>Date *</label><input type="date" id="wk-date" value="${wkE(v.date)}"></div>
+    ${isG?`<div class="form-group"><label>Amount *</label><input type="number" id="wk-amt" min="0" value="${wkE(v.amount)}" placeholder="10000"></div>
+           <div class="form-group" style="flex:2"><label>Note</label><input type="text" id="wk-desc" value="${wkE(v.desc)}" placeholder="Cash / Easypaisa..."></div>`
+    :`<div class="form-group" style="flex:2"><label>Description / Details *</label><input type="text" id="wk-desc" list="wk-dl" value="${wkE(v.desc)}" oninput="wkAuto(this.value)" placeholder="${type==='shop'?'Bilty, bill, chai patti...':'Sabzi, doodh...'}" autocomplete="off"></div>
+      <div class="form-group"><label>Rate / Amount *</label><input type="number" id="wk-rate" min="0" step="any" value="${wkE(v.amount)}" style="width:130px"></div>`}
+    ${wkCtrlOpts(v.by)}
+  </div>
+  <div class="flex-gap"><button class="btn btn-green" onclick="wkSaveEntry('${type}')">${ed?'✅ Update':'➕ Save'}</button>${ed?'<button class="btn" onclick="wkSetSec(wkSec)">Cancel</button>':''}</div></div>`;
+  const rows=wkRows(type,'open');
+  h+=`<div style="overflow-x:auto"><table class="items-table"><thead><tr><th>Date</th><th>${isG?'Note':'Description'}</th><th>Amount</th><th>Kaun</th>${adm?'<th></th>':''}</tr></thead><tbody>`;
+  h+=rows.map(e=>`<tr><td>${wkD(e.date)}</td><td>${wkE(e.desc)}</td><td><b>${wkN(e.amount)}</b></td><td style="font-size:11px">${wkE(e.by||'')}</td>${adm?`<td><button class="btn btn-sm" onclick="wkEdit('${e.id}')">✏️</button> <button class="btn btn-red btn-sm" onclick="wkDel('${e.id}')">🗑️</button></td>`:''}</tr>`).join('')||`<tr><td colspan="7" style="text-align:center;color:var(--text3)">Abhi koi entry nahi</td></tr>`;
+  h+=`</tbody></table></div><div style="text-align:right;font-size:16px;font-weight:700;margin-top:8px">Total: ${wkN(wkSum(rows))}</div>`;
+  return h;
+}
+function wkAuto(val){
+  const last=[...wkData.entries].reverse().find(e=>e.type===wkSec&&e.desc===val);
+  if(!last) return;
+  const r=document.getElementById('wk-rate');
+  if(r&&!r.value) r.value=last.amount;
+}
+function wkSaveEntry(type){
+  const g=id=>{const el=document.getElementById(id);return el?el.value:'';};
+  const date=g('wk-date'); if(!date){toast('Date lazmi hai','warning');return;}
+  const isG=type==='given', desc=g('wk-desc').trim();
+  if(!isG&&!desc){toast('Description likhein','warning');return;}
+  const num=s=>s===''?'':(parseFloat(s)||0);
+  const qty='', rate='';
+  let amount;
+  amount=parseFloat(g(isG?'wk-amt':'wk-rate'));
+  if(!(amount>0)){toast('Rate / Amount sahi likhein','warning');return;}
+  const by=g('wk-by')||wkUser();
+  const obj={type,date,desc,qty,rate,amount,by};
+  if(wkEditId){
+    if(!wkIsAdmin()) return;
+    const e=wkData.entries.find(x=>x.id===wkEditId); const old=JSON.parse(JSON.stringify(e));
+    Object.assign(e,obj); logAudit('edit','Worker Khata',`${WK_TYPES[type]} edit: ${desc||amount}`,old,e); wkEditId=null;
+  } else {
+    const e=Object.assign({id:'WK'+uid(),ts:Date.now(),settled:null},obj);
+    wkData.entries.push(e); logAudit('add','Worker Khata',`${WK_TYPES[type]}: ${desc} ${amount}`,undefined,e);
+  }
+  wkSave(); toast('Save ho gaya','success'); wkRender();
+}
+function wkEdit(id){ if(!wkIsAdmin()) return; wkEditId=id; wkRender(); window.scrollTo({top:0,behavior:'smooth'}); }
+function wkDel(id){
+  if(!wkIsAdmin()) return;
+  const e=wkData.entries.find(x=>x.id===id); if(!e||!confirm('Yeh line delete karni hai?')) return;
+  wkData.entries=wkData.entries.filter(x=>x.id!==id);
+  logAudit('delete','Worker Khata',`${WK_TYPES[e.type]} delete: ${e.desc||''} ${e.amount}`,e,undefined);
+  wkSave(); wkRender();
+}
+function wkToggleGuest(on){ wkData.settings.guestAccess=!!on; wkSave(); wkApplyAccess(); toast(on?'Guest access ON':'Guest access OFF','info'); }
+
+function wkQtyView(){
+  const m={};
+  wkData.entries.filter(e=>e.track&&e.type!=='given').forEach(e=>{
+    const k=e.type+'|'+e.desc.toLowerCase(); const o=m[k]||(m[k]={desc:e.desc,type:e.type,qty:0,amt:0,last:'',rate:0});
+    o.qty+=Number(e.qty||0); o.amt+=Number(e.amount||0); if(e.date>=o.last){o.last=e.date;o.rate=e.rate;}
+  });
+  const rows=Object.values(m).sort((a,b)=>a.desc.localeCompare(b.desc));
+  return `<div style="font-size:12px;color:var(--text3);margin-bottom:6px">Sirf wohi items jin pe "Qty saman ma add karo" tick tha (open + closed dono).</div>
+  <div style="overflow-x:auto"><table class="items-table"><thead><tr><th>Saman</th><th>Kahan</th><th>Total Qty</th><th>Aakhri Rate</th><th>Aakhri Date</th><th>Total Amount</th></tr></thead><tbody>${
+  rows.map(o=>`<tr><td>${wkE(o.desc)}</td><td>${o.type==='shop'?'Shop':'Ghar'}</td><td><b>${wkN(o.qty)}</b></td><td>${wkN(o.rate)}</td><td>${wkD(o.last)}</td><td>${wkN(o.amt)}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--text3)">Koi qty item nahi</td></tr>'}</tbody></table></div>`;
+}
+
+function wkMiniTable(type,rows){
+  const isG=type==='given';
+  return `<div class="card-title" style="margin:14px 0 6px">${WK_TYPES[type]}</div><div style="overflow-x:auto"><table class="items-table"><thead><tr><th>Date</th><th>${isG?'Note':'Description'}</th><th>Amount</th></tr></thead><tbody>${
+   rows.map(e=>`<tr><td>${wkD(e.date)}</td><td>${wkE(e.desc)}</td><td>${wkN(e.amount)}</td></tr>`).join('')||`<tr><td colspan="5" style="text-align:center;color:var(--text3)">—</td></tr>`}
+   </tbody><tfoot><tr><th colspan="2" style="text-align:right">Total</th><th>${wkN(wkSum(rows))}</th></tr></tfoot></table></div>`;
+}
+function wkHisabView(adm){
+  const {from,to,status}=wkF, t=wkTotals(status,from,to);
+  let h=`<div class="form-row mb-8">
+    <div class="form-group"><label>Date se</label><input type="date" value="${wkF.from}" onchange="wkF.from=this.value;wkRender()"></div>
+    <div class="form-group"><label>Date tak</label><input type="date" value="${wkF.to}" onchange="wkF.to=this.value;wkRender()"></div>
+    <div class="form-group"><label>Konsa data</label><select onchange="wkF.status=this.value;wkRender()">
+      <option value="open" ${status==='open'?'selected':''}>Open (chal raha hisab)</option>
+      <option value="closed" ${status==='closed'?'selected':''}>Closed (purana)</option>
+      <option value="all" ${status==='all'?'selected':''}>Sab</option></select></div></div>`;
+  h+=['given','shop','home'].map(ty=>wkMiniTable(ty,wkRows(ty,status,from,to))).join('');
+  h+=`<div class="accent-box" style="margin-top:14px;font-size:14px;line-height:1.9">
+    ${t.carry?`Pichla baqaya (carry): <b>${wkN(t.carry)}</b><br>`:''}
+    ➕ Total Paisa Liya: <b>${wkN(t.g)}</b><br>➖ Shop Kharcha: <b>${wkN(t.s)}</b><br>➖ Ghar Kharcha: <b>${wkN(t.h)}</b><br>
+    <div style="font-size:17px;margin-top:6px;border-top:1px solid var(--border2);padding-top:6px">🧮 Grand Total: <b>${wkN(t.bal)}</b><br><span style="font-size:13px">${wkBalText(t.bal)}</span></div></div>
+    <div class="flex-gap" style="margin-top:10px;flex-wrap:wrap"><button class="btn btn-purple" onclick="wkPdf()">📄 PDF</button><button class="btn btn-green" onclick="wkExcel()">📊 Excel</button></div>`;
+  if(adm){
+    h+=`<div class="accent-box" style="margin-top:14px"><b>🔒 Hisab Close karo</b><div style="font-size:12px;color:var(--text3);margin:4px 0">Chuni hui date tak ki sab open entries close ho jayengi aur naya hisab shuru hoga. Pehle PDF/Excel download kar lein.</div>
+      <div class="form-row"><div class="form-group"><label>Is date tak close karo</label><input type="date" id="wk-close-to" value="${wkToday()}"></div>
+      <div class="form-group" style="flex:2;font-size:13px"><label style="display:flex;gap:6px;align-items:center"><input type="radio" name="wk-mode" value="carry" checked> Balance agle hisab ma auto chala jaye</label>
+        <label style="display:flex;gap:6px;align-items:center"><input type="radio" name="wk-mode" value="hand"> Hand se le liya / de diya — balance 0 kar do</label></div>
+      <div class="form-group" style="align-self:flex-end"><button class="btn btn-red" onclick="wkClose()">🔒 Close</button></div></div></div>`;
+  }
+  const ps=[...wkData.periods].reverse();
+  if(ps.length) h+=`<div class="card-title" style="margin:14px 0 6px">📚 Close ho chuke hisab</div><div style="overflow-x:auto"><table class="items-table"><thead><tr><th>Date se</th><th>Date tak</th><th>Liya</th><th>Shop</th><th>Ghar</th><th>Balance</th><th>Aage</th><th>Closed by</th></tr></thead><tbody>${
+    ps.map(p=>`<tr><td>${wkD(p.from)}</td><td>${wkD(p.to)}</td><td>${wkN(p.given)}</td><td>${wkN(p.shop)}</td><td>${wkN(p.home)}</td><td><b>${wkN(p.balance)}</b></td><td style="font-size:11px">${p.mode==='hand'?'Hand se 0':'Carry'}</td><td style="font-size:11px">${wkE(p.by)}</td></tr>`).join('')}</tbody></table></div>
+    ${adm?'<button class="btn btn-sm" style="margin-top:6px" onclick="wkReopen()">↩️ Aakhri close wapis kholo</button>':''}`;
+  return h;
+}
+function wkClose(){
+  if(!wkIsAdmin()) return;
+  const to=document.getElementById('wk-close-to').value; if(!to){toast('Date chunein','warning');return;}
+  const open=wkData.entries.filter(e=>!e.settled&&e.date<=to);
+  if(!open.length){toast('Is date tak koi open entry nahi','warning');return;}
+  const t=wkTotals('open','',to);
+  const mode=(document.querySelector('input[name="wk-mode"]:checked')||{}).value||'carry';
+  const msg = mode==='carry' ? `Balance ${wkN(t.bal)} agle hisab ma auto chala jayega.` : `Balance ${wkN(t.bal)} hand se ${t.bal>=0?'le liya':'de diya'} — agla hisab 0 se shuru hoga.`;
+  if(!confirm(`${open.length} entries close hongi.\nGrand Total: ${wkN(t.bal)}\n${msg}\nPakka close karna hai?`)) return;
+  const pid='WP'+uid();
+  open.forEach(e=>e.settled=pid);
+  wkData.periods.push({id:pid,from:open.map(e=>e.date).sort()[0],to,given:t.g,shop:t.s,home:t.h,carryIn:t.carry,balance:t.bal,count:open.length,by:wkUser(),closedAt:new Date().toISOString(),mode});
+  wkData.carry = mode==='carry' ? t.bal : 0;
+  logAudit('close','Worker Khata',`Hisab close till ${to}, balance ${t.bal}, ${mode}`,undefined,wkData.periods[wkData.periods.length-1]);
+  wkSave(); toast('Hisab close ho gaya — naya hisab shuru','success'); wkRender();
+}
+function wkReopen(){
+  if(!wkIsAdmin()||!wkData.periods.length||!confirm('Aakhri close hua hisab wapis open karna hai?')) return;
+  const p=wkData.periods.pop();
+  wkData.entries.forEach(e=>{ if(e.settled===p.id) e.settled=null; });
+  wkData.carry=p.carryIn||0; logAudit('reopen','Worker Khata','Hisab reopen',p,undefined);
+  wkSave(); wkRender();
+}
+function wkLive(){
+  wkSave(); if(typeof scheduleCloudPush==='function') scheduleCloudPush();
+  toast('Data cloud pe live bheja ja raha hai','success');
+}
+function wkBackupJson(){
+  const b=new Blob([JSON.stringify(wkData,null,2)],{type:'application/json'}),a=document.createElement('a');
+  a.href=URL.createObjectURL(b); a.download='WorkerKhata_'+wkToday()+'.json'; a.click(); URL.revokeObjectURL(a.href);
+}
+function wkPdf(){
+  if(!window.jspdf){toast('PDF library load nahi hui','error');return;}
+  const {from,to,status}=wkF, t=wkTotals(status,from,to), doc=new window.jspdf.jsPDF();
+  doc.setFontSize(15); doc.text('Worker Khata - '+wkData.settings.workerName,14,16);
+  doc.setFontSize(9); doc.text(`Period: ${from?wkD(from):'start'} to ${to?wkD(to):'aaj'}  |  ${status}`,14,22);
+  let y=27;
+  [['given','Paisa Liya'],['shop','Shop Kharcha'],['home','Ghar Kharcha']].forEach(([ty,title])=>{
+    const rows=wkRows(ty,status,from,to), isG=ty==='given';
+    doc.autoTable({startY:y,head:[[title],[...['Date',isG?'Note':'Description'],'Amount']],
+      body:rows.map(e=>[wkD(e.date),e.desc||'',wkN(e.amount)]),
+      foot:[[{content:'Total',colSpan:2,styles:{halign:'right'}},wkN(wkSum(rows))]],
+      styles:{fontSize:8},headStyles:{fillColor:[40,60,90]},footStyles:{fillColor:[230,230,230],textColor:0}});
+    y=doc.lastAutoTable.finalY+6;
+  });
+  doc.autoTable({startY:y,body:[...(t.carry?[['Pichla baqaya',wkN(t.carry)]]:[]),['Total Paisa Liya',wkN(t.g)],['Shop Kharcha',wkN(t.s)],['Ghar Kharcha',wkN(t.h)],['GRAND TOTAL',wkN(t.bal)]],
+    styles:{fontSize:10},columnStyles:{1:{halign:'right'}}});
+  doc.save('WorkerKhata_'+wkToday()+'.pdf');
+}
+function wkExcel(){
+  if(!window.XLSX){toast('Excel library load nahi hui','error');return;}
+  const {from,to,status}=wkF, wb=XLSX.utils.book_new(), tot={};
+  [['given','Paisa Liya'],['shop','Shop Kharcha'],['home','Ghar Kharcha']].forEach(([ty,name])=>{
+    const rows=wkRows(ty,status,from,to), isG=ty==='given', n=rows.length;
+    const aoa=[['Date',isG?'Note':'Description','Amount']];
+    rows.forEach((e,i)=>aoa.push([wkD(e.date),e.desc,Number(e.amount)]));
+    const ws=XLSX.utils.aoa_to_sheet(aoa), col='C';
+    ws[col+(n+3)]={t:'n',f:n?`SUM(${col}2:${col}${n+1})`:'0',v:wkSum(rows)};
+    ws['B'+(n+3)]={t:'s',v:'TOTAL'};
+    ws['!ref']=`A1:${col}${n+3}`; ws['!cols']=[{wch:12},{wch:34},{wch:10},{wch:10},{wch:14}];
+    XLSX.utils.book_append_sheet(wb,ws,name); tot[ty]=`'${name}'!${col}${n+3}`;
+  });
+  const t=wkTotals(status,from,to);
+  const s=XLSX.utils.aoa_to_sheet([['Hisab','Amount'],['Pichla baqaya (carry)',t.carry],['Total Paisa Liya',null],['Shop Kharcha',null],['Ghar Kharcha',null],['GRAND TOTAL (Carry + Liya - Shop - Ghar)',null]]);
+  s['B3']={t:'n',f:tot.given,v:t.g}; s['B4']={t:'n',f:tot.shop,v:t.s}; s['B5']={t:'n',f:tot.home,v:t.h};
+  s['B6']={t:'n',f:'B2+B3-B4-B5',v:t.bal}; s['!cols']=[{wch:42},{wch:16}];
+  XLSX.utils.book_append_sheet(wb,s,'Grand Total');
+  XLSX.writeFile(wb,'WorkerKhata_'+wkToday()+'.xlsx');
+}
+wkLoad();
 </script>
 </body></html>
