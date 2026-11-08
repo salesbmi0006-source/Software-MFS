@@ -31762,12 +31762,10 @@ function wkRender(){
   const adm=wkIsAdmin();
   if(!adm && !wkData.settings.guestAccess){ root.innerHTML='<div class="accent-box">🔒 Yeh tab sirf Admin ke liye hai.</div>'; return; }
   const navBtn=(id,l)=>`<button class="btn ${wkSec===id?'btn-green':'btn-neon'} btn-sm" onclick="wkSetSec('${id}')">${l}</button>`;
-  let h=`<div class="card-header"><div class="card-title">👷 Worker Khata — ${wkE(wkData.settings.workerName)}</div></div>`;
+  let h=`<div class="card-header"><div class="card-title">👷 Worker Khata — ${wkE(wkData.settings.workerName)} <small style="font-size:10px;color:var(--text3)">(build v105)</small></div></div>`;
   if(adm) h+=`<div class="flex-gap mb-8" style="flex-wrap:wrap;align-items:center;">
     <input type="text" value="${wkE(wkData.settings.workerName)}" style="width:140px" onchange="wkData.settings.workerName=this.value||'Worker';wkSave();wkRender()" title="Worker ka naam">
-    <label style="font-size:12px;display:flex;gap:6px;align-items:center;"><input type="checkbox" ${wkData.settings.guestAccess?'checked':''} onchange="wkToggleGuest(this.checked)"> User/Guest ko access do (sirf entry add, edit/delete nahi)</label>
-    <button class="btn btn-purple btn-sm" onclick="wkLive()">☁️ Live Sync</button>
-    <button class="btn btn-sm" onclick="wkBackupJson()">💾 JSON Backup</button></div>`;
+    <label style="font-size:12px;display:flex;gap:6px;align-items:center;"><input type="checkbox" ${wkData.settings.guestAccess?'checked':''} onchange="wkToggleGuest(this.checked)"> User/Guest ko access do (sirf entry add, edit/delete nahi)</label></div>`;
   h+=`<div class="flex-gap mb-8" style="flex-wrap:wrap;">${navBtn('given',WK_TYPES.given)}${navBtn('shop',WK_TYPES.shop)}${navBtn('home',WK_TYPES.home)}${navBtn('hisab','🧮 Hisab / Grand Total')}</div>`;
   h+= WK_TYPES[wkSec] ? wkEntryView(wkSec,adm) : wkHisabView(adm);
   root.innerHTML=h;
@@ -31906,14 +31904,6 @@ function wkReopen(){
   wkData.entries.forEach(e=>{ if(e.settled===p.id) e.settled=null; });
   wkData.carry=p.carryIn||0; logAudit('reopen','Worker Khata','Hisab reopen',p,undefined);
   wkSave(); wkRender();
-}
-function wkLive(){
-  wkSave(); if(typeof scheduleCloudPush==='function') scheduleCloudPush();
-  toast('Data cloud pe live bheja ja raha hai','success');
-}
-function wkBackupJson(){
-  const b=new Blob([JSON.stringify(wkData,null,2)],{type:'application/json'}),a=document.createElement('a');
-  a.href=URL.createObjectURL(b); a.download='WorkerKhata_'+wkToday()+'.json'; a.click(); URL.revokeObjectURL(a.href);
 }
 function wkPdf(){
   if(!window.jspdf){toast('PDF library load nahi hui','error');return;}
