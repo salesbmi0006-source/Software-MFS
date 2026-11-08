@@ -31703,7 +31703,7 @@ function mktLineSvg(months, lastIdx, slope, mean){
 const WK_DEF = ()=>({settings:{guestAccess:false,workerName:'Worker'},entries:[],periods:[],carry:0});
 let wkData = WK_DEF();
 let wkSec = 'given', wkEditId = null, wkLastDate = '';
-let wkF = {from:'',to:'',status:'open'};
+let wkF = {from:'',to:'',status:'open',period:''};
 const WK_TYPES = {given:'💰 Paisa Liya', shop:'🏪 Shop Kharcha', home:'🏠 Ghar Kharcha'};
 const wkN = n => Number(n||0).toLocaleString('en-PK',{maximumFractionDigits:2});
 const wkD = d => d ? d.split('-').reverse().join('-') : '';
@@ -31728,13 +31728,14 @@ function wkApplyAccess(){
 function wkRows(type,status,from,to){
   return wkData.entries.filter(e=>e.type===type
     &&(status==='all'||(status==='open'?!e.settled:!!e.settled))
-    &&(!from||e.date>=from)&&(!to||e.date<=to))
+    &&(status!=='closed'||!wkF.period||e.settled===wkF.period)&&(!from||e.date>=from)&&(!to||e.date<=to))
     .sort((a,b)=>a.date===b.date?(a.ts||0)-(b.ts||0):(a.date<b.date?-1:1));
 }
 const wkSum = rows => rows.reduce((s,e)=>s+Number(e.amount||0),0);
 function wkTotals(status,from,to){
   const g=wkSum(wkRows('given',status,from,to)), s=wkSum(wkRows('shop',status,from,to)), h=wkSum(wkRows('home',status,from,to));
-  const carry = status==='open' ? Number(wkData.carry||0) : 0;
+  const vp = (status==='closed'&&wkF.period) ? wkData.periods.find(p=>p.id===wkF.period) : null;
+  const carry = status==='open' ? Number(wkData.carry||0) : (vp ? Number(vp.carryIn||0) : 0);
   return {g,s,h,carry,bal:carry+g-s-h};
 }
 function wkBalText(b){
@@ -31762,12 +31763,12 @@ function wkRender(){
   const adm=wkIsAdmin();
   if(!adm && !wkData.settings.guestAccess){ root.innerHTML='<div class="accent-box">🔒 Yeh tab sirf Admin ke liye hai.</div>'; return; }
   const navBtn=(id,l)=>`<button class="btn ${wkSec===id?'btn-green':'btn-neon'} btn-sm" onclick="wkSetSec('${id}')">${l}</button>`;
-  let h=`<div class="card-header"><div class="card-title">👷 Worker Khata — ${wkE(wkData.settings.workerName)} <small style="font-size:10px;color:var(--text3)">(build v106)</small></div></div>`;
+  let h=`<div class="card-header"><div class="card-title">👷 Worker Khata — ${wkE(wkData.settings.workerName)} <small style="font-size:10px;color:var(--text3)">(build v108)</small></div></div>`;
   if(adm) h+=`<div class="flex-gap mb-8" style="flex-wrap:wrap;align-items:center;">
     <input type="text" value="${wkE(wkData.settings.workerName)}" style="width:140px" onchange="wkData.settings.workerName=this.value||'Worker';wkSave();wkRender()" title="Worker ka naam">
     <label style="font-size:12px;display:flex;gap:6px;align-items:center;"><input type="checkbox" ${wkData.settings.guestAccess?'checked':''} onchange="wkToggleGuest(this.checked)"> User/Guest ko access do (sirf entry add, edit/delete nahi)</label></div>`;
-  h+=`<div class="flex-gap mb-8" style="flex-wrap:wrap;">${navBtn('given',WK_TYPES.given)}${navBtn('shop',WK_TYPES.shop)}${navBtn('home',WK_TYPES.home)}${navBtn('hisab','🧮 Hisab / Grand Total')}</div>`;
-  h+= WK_TYPES[wkSec] ? wkEntryView(wkSec,adm) : wkHisabView(adm);
+  h+=`<div class="flex-gap mb-8" style="flex-wrap:wrap;">${navBtn('given',WK_TYPES.given)}${navBtn('shop',WK_TYPES.shop)}${navBtn('home',WK_TYPES.home)}${adm?navBtn('tali','✅ Live View / Tali'):''}${navBtn('hisab','🧮 Hisab / Grand Total')}</div>`;
+  h+= WK_TYPES[wkSec] ? wkEntryView(wkSec,adm) : wkSec==='tali' ? wkTaliView(adm) : wkHisabView(adm);
   root.innerHTML=h;
 }
 
@@ -31779,7 +31780,7 @@ function wkCtrlOpts(sel){
 }
 function wkEntryView(type,adm){
   const ed=wkEditId?wkData.entries.find(e=>e.id===wkEditId):null;
-  const v=ed||{date:wkLastDate||wkToday(),desc:'',qty:'',rate:'',amount:'',by:''};
+  const v=ed||{date:wkLastDate||wkToday(),desc:type==='given'?'Cash':'',qty:'',rate:'',amount:'',by:''};
   const isG=type==='given';
   const descs=[...new Set(wkData.entries.filter(e=>e.type===type&&e.desc).map(e=>e.desc))].sort();
   let h=`<datalist id="wk-dl">${descs.map(d=>`<option value="${wkE(d)}">`).join('')}</datalist>
@@ -31794,7 +31795,7 @@ function wkEntryView(type,adm){
   <div class="flex-gap"><button class="btn btn-green" onclick="wkSaveEntry('${type}')">${ed?'✅ Update':'➕ Save'}</button>${ed?'<button class="btn" onclick="wkSetSec(wkSec)">Cancel</button>':''}</div></div>`;
   const rows=wkRows(type,'open');
   h+=`<div style="overflow-x:auto"><table class="items-table"><thead><tr><th>Date</th><th>${isG?'Note':'Description'}</th><th>Amount</th><th>Kaun</th>${adm?'<th></th>':''}</tr></thead><tbody>`;
-  h+=rows.map(e=>`<tr><td>${wkD(e.date)}</td><td>${wkE(e.desc)}</td><td><b>${wkN(e.amount)}</b></td><td style="font-size:11px">${wkE(e.by||'')}</td>${adm?`<td><button class="btn btn-sm" onclick="wkEdit('${e.id}')">✏️</button> <button class="btn btn-red btn-sm" onclick="wkDel('${e.id}')">🗑️</button></td>`:''}</tr>`).join('')||`<tr><td colspan="7" style="text-align:center;color:var(--text3)">Abhi koi entry nahi</td></tr>`;
+  h+=rows.map(e=>`<tr><td>${wkD(e.date)}</td><td>${wkE(e.desc)}${e.tc?' 🔒':''}</td><td><b>${wkN(e.amount)}</b></td><td style="font-size:11px">${wkE(e.by||'')}</td>${adm?`<td><button class="btn btn-sm" onclick="wkEdit('${e.id}')">✏️</button> <button class="btn btn-red btn-sm" onclick="wkDel('${e.id}')">🗑️</button></td>`:''}</tr>`).join('')||`<tr><td colspan="7" style="text-align:center;color:var(--text3)">Abhi koi entry nahi</td></tr>`;
   h+=`</tbody></table></div><div style="text-align:right;font-size:16px;font-weight:700;margin-top:8px">Total: ${wkN(wkSum(rows))}</div>`;
   return h;
 }
@@ -31827,10 +31828,13 @@ function wkSaveEntry(type){
   wkLastDate=date; wkSave(); toast('Save ho gaya','success'); wkRender();
   const nf=document.getElementById(isG?'wk-amt':'wk-desc'); if(nf) nf.focus();
 }
-function wkEdit(id){ if(!wkIsAdmin()) return; wkEditId=id; wkRender(); window.scrollTo({top:0,behavior:'smooth'}); }
+function wkEdit(id){ if(!wkIsAdmin()) return;
+  { const x=wkData.entries.find(q=>q.id===id); if(x&&x.tc){toast('Tali close hai — pehle Tali ma reopen karein','warning');return;} } wkEditId=id; wkRender(); window.scrollTo({top:0,behavior:'smooth'}); }
 function wkDel(id){
   if(!wkIsAdmin()) return;
-  const e=wkData.entries.find(x=>x.id===id); if(!e||!confirm('Yeh line delete karni hai?')) return;
+  const e=wkData.entries.find(x=>x.id===id); if(!e) return;
+  if(e.tc){toast('Tali close hai — pehle Tali ma reopen karein','warning');return;}
+  if(!confirm('Yeh line delete karni hai?')) return;
   wkData.entries=wkData.entries.filter(x=>x.id!==id);
   logAudit('delete','Worker Khata',`${WK_TYPES[e.type]} delete: ${e.desc||''} ${e.amount}`,e,undefined);
   wkSave(); wkRender();
@@ -31857,10 +31861,10 @@ function wkMiniTable(type,rows){
 }
 function wkHisabView(adm){
   const {from,to,status}=wkF, t=wkTotals(status,from,to);
-  let h=`<div class="form-row mb-8">
-    <div class="form-group"><label>Date se</label><input type="date" value="${wkF.from}" onchange="wkF.from=this.value;wkRender()"></div>
-    <div class="form-group"><label>Date tak</label><input type="date" value="${wkF.to}" onchange="wkF.to=this.value;wkRender()"></div>
-    <div class="form-group"><label>Konsa data</label><select onchange="wkF.status=this.value;wkRender()">
+  let h=(wkF.period?wkPeriodBanner():'')+`<div class="form-row mb-8">
+    <div class="form-group"><label>Date se</label><input type="date" value="${wkF.from}" onchange="wkF.from=this.value;wkF.period='';wkRender()"></div>
+    <div class="form-group"><label>Date tak</label><input type="date" value="${wkF.to}" onchange="wkF.to=this.value;wkF.period='';wkRender()"></div>
+    <div class="form-group"><label>Konsa data</label><select onchange="wkF.status=this.value;wkF.period='';wkRender()">
       <option value="open" ${status==='open'?'selected':''}>Open (chal raha hisab)</option>
       <option value="closed" ${status==='closed'?'selected':''}>Closed (purana)</option>
       <option value="all" ${status==='all'?'selected':''}>Sab</option></select></div></div>`;
@@ -31878,10 +31882,78 @@ function wkHisabView(adm){
       <div class="form-group" style="align-self:flex-end"><button class="btn btn-red" onclick="wkClose()">🔒 Close</button></div></div></div>`;
   }
   const ps=[...wkData.periods].reverse();
-  if(ps.length) h+=`<div class="card-title" style="margin:14px 0 6px">📚 Close ho chuke hisab</div><div style="overflow-x:auto"><table class="items-table"><thead><tr><th>Date se</th><th>Date tak</th><th>Liya</th><th>Shop</th><th>Ghar</th><th>Balance</th><th>Aage</th><th>Closed by</th></tr></thead><tbody>${
-    ps.map(p=>`<tr><td>${wkD(p.from)}</td><td>${wkD(p.to)}</td><td>${wkN(p.given)}</td><td>${wkN(p.shop)}</td><td>${wkN(p.home)}</td><td><b>${wkN(p.balance)}</b></td><td style="font-size:11px">${p.mode==='hand'?'Hand se 0':'Carry'}</td><td style="font-size:11px">${wkE(p.by)}</td></tr>`).join('')}</tbody></table></div>
+  if(ps.length) h+=`<div class="card-title" style="margin:14px 0 6px">📚 Close ho chuke hisab</div><div style="overflow-x:auto"><table class="items-table"><thead><tr><th>Date se</th><th>Date tak</th><th>Liya</th><th>Shop</th><th>Ghar</th><th>Balance</th><th>Aage</th><th>Closed by</th><th></th></tr></thead><tbody>${
+    ps.map(p=>`<tr><td>${wkD(p.from)}</td><td>${wkD(p.to)}</td><td>${wkN(p.given)}</td><td>${wkN(p.shop)}</td><td>${wkN(p.home)}</td><td><b>${wkN(p.balance)}</b></td><td style="font-size:11px">${p.mode==='hand'?'Hand se 0':'Carry'}</td><td style="font-size:11px">${wkE(p.by)}</td><td><button class="btn btn-neon btn-sm" onclick="wkViewPeriod('${p.id}')">👁️ Dekho</button></td></tr>`).join('')}</tbody></table></div>
     ${adm?'<button class="btn btn-sm" style="margin-top:6px" onclick="wkReopen()">↩️ Aakhri close wapis kholo</button>':''}`;
   return h;
+}
+function wkViewPeriod(id){
+  wkF={from:'',to:'',status:'closed',period:id}; wkRender(); window.scrollTo({top:0,behavior:'smooth'});
+}
+function wkPeriodBanner(){
+  const p=wkData.periods.find(x=>x.id===wkF.period); if(!p) return '';
+  return `<div class="accent-box mb-8">📚 Purana hisab: <b>${wkD(p.from)}</b> se <b>${wkD(p.to)}</b> (${p.count} entries, balance ${wkN(p.balance)}) <button class="btn btn-sm" onclick="wkF={from:'',to:'',status:'open',period:''};wkRender()">⬅️ Chal raha hisab</button></div>`;
+}
+let wkT = {from:'',to:'',type:'all',status:'all'};
+function wkTaliRows(){
+  const {from,to,type,status}=wkT;
+  return wkData.entries.filter(e=>(type==='all'||e.type===type)&&(!from||e.date>=from)&&(!to||e.date<=to)
+    &&(status==='all'||(status==='closed'?!!e.tc:!e.tc)))
+    .sort((a,b)=>a.date===b.date?(a.ts||0)-(b.ts||0):(a.date<b.date?-1:1));
+}
+function wkTaliSum(rows){
+  const r={g:0,s:0,h:0}; rows.forEach(e=>{ r[e.type==='given'?'g':e.type==='shop'?'s':'h']+=Number(e.amount||0); });
+  r.bal=r.g-r.s-r.h; return r;
+}
+function wkTaliView(adm){
+  if(!adm) return '<div class="accent-box">🔒 Tali sirf Admin kar sakta hai.</div>';
+  const rows=wkTaliRows(), chk=rows.filter(e=>e.chk&&!e.tc), unc=rows.filter(e=>!e.chk&&!e.tc), cl=rows.filter(e=>e.tc);
+  const sc=wkTaliSum(chk), su=wkTaliSum(unc);
+  const sel=(k,opts)=>`<select onchange="wkT.${k}=this.value;wkRender()">${opts.map(([v,l])=>`<option value="${v}" ${wkT[k]===v?'selected':''}>${l}</option>`).join('')}</select>`;
+  let h=`<div style="font-size:12px;color:var(--text3);margin-bottom:8px">Worker ke sath ek ek line milayen — jis line ko milaya uske samne ✔ lagayen. Akhir ma "Tali Close" dabane se wo lines close ho jati hain.</div>
+  <div class="form-row mb-8">
+   <div class="form-group"><label>Date se</label><input type="date" value="${wkT.from}" onchange="wkT.from=this.value;wkRender()"></div>
+   <div class="form-group"><label>Date tak</label><input type="date" value="${wkT.to}" onchange="wkT.to=this.value;wkRender()"></div>
+   <div class="form-group"><label>Kiska</label>${sel('type',[['all','Sab'],['given','Paisa Liya'],['shop','Shop'],['home','Ghar']])}</div>
+   <div class="form-group"><label>Status</label>${sel('status',[['all','Sab'],['open','Tali baqi'],['closed','Tali close']])}</div></div>
+  <div class="flex-gap mb-8" style="flex-wrap:wrap"><button class="btn btn-sm" onclick="wkTickAll(true)">☑️ Sab check</button><button class="btn btn-sm" onclick="wkTickAll(false)">⬜ Sab uncheck</button></div>
+  <div style="overflow-x:auto"><table class="items-table"><thead><tr><th style="width:44px">✔</th><th>Date</th><th>Kiska</th><th>Description</th><th>Amount</th><th>Status</th></tr></thead><tbody>${
+  rows.map(e=>{
+    const bg=e.tc?'background:rgba(150,150,150,.12)':e.chk?'background:rgba(60,220,140,.16)':'';
+    const st=e.tc?`🔒 Close ${wkD(e.tc.slice(0,10))} <button class="btn btn-sm" onclick="wkTaliReopen('${e.id}')" title="Tali dobara kholo">↩️</button>`:e.chk?'✔ Check hua':'Baqi';
+    return `<tr style="${bg}"><td><input type="checkbox" style="width:22px;height:22px" ${e.chk||e.tc?'checked':''} ${e.tc?'disabled':''} onchange="wkTick('${e.id}')"></td><td>${wkD(e.date)}</td><td>${e.type==='given'?'💰 Liya':e.type==='shop'?'🏪 Shop':'🏠 Ghar'}</td><td>${wkE(e.desc)}</td><td><b style="color:${e.type==='given'?'var(--success)':'inherit'}">${wkN(e.amount)}</b></td><td style="font-size:12px">${st}</td></tr>`;
+  }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--text3)">Is date/filter ma koi data nahi</td></tr>'}</tbody></table></div>
+  <div class="accent-box" style="margin-top:12px;font-size:14px;line-height:1.8">
+   Total lines: <b>${rows.length}</b> &nbsp;|&nbsp; ✔ Check: <b>${chk.length}</b> &nbsp;|&nbsp; Baqi: <b>${unc.length}</b> &nbsp;|&nbsp; 🔒 Close: <b>${cl.length}</b><br>
+   <b>Check hua:</b> Liya ${wkN(sc.g)} − Shop ${wkN(sc.s)} − Ghar ${wkN(sc.h)} = <b>${wkN(sc.bal)}</b><br>
+   <b>Abhi baqi:</b> Liya ${wkN(su.g)} − Shop ${wkN(su.s)} − Ghar ${wkN(su.h)} = <b>${wkN(su.bal)}</b></div>
+  <div style="margin-top:10px"><button class="btn btn-red" onclick="wkTaliClose()">✅ Tali Close karo (${chk.length} lines)</button></div>`;
+  return h;
+}
+function wkKeepScroll(fn){ const y=window.scrollY; fn(); wkRender(); window.scrollTo(0,y); }
+function wkTick(id){
+  if(!wkIsAdmin()) return;
+  const e=wkData.entries.find(x=>x.id===id); if(!e||e.tc) return;
+  e.chk=!e.chk; wkSave(); wkKeepScroll(()=>{});
+}
+function wkTickAll(on){
+  if(!wkIsAdmin()) return;
+  wkTaliRows().forEach(e=>{ if(!e.tc) e.chk=on; }); wkSave(); wkKeepScroll(()=>{});
+}
+function wkTaliClose(){
+  if(!wkIsAdmin()) return;
+  const rows=wkTaliRows(), chk=rows.filter(e=>e.chk&&!e.tc), unc=rows.filter(e=>!e.chk&&!e.tc);
+  if(!chk.length){toast('Pehle koi line check karein','warning');return;}
+  if(!confirm(`${chk.length} check ki hui lines Tali close hongi.`+(unc.length?`\n${unc.length} lines abhi check nahi hain — wo close nahi hongi.`:'')+'\nPakka?')) return;
+  const now=new Date().toISOString();
+  chk.forEach(e=>{ e.tc=now; e.tcBy=wkUser(); });
+  logAudit('close','Worker Khata',`Tali close: ${chk.length} lines`,undefined,{lines:chk.length});
+  wkSave(); toast('Tali close ho gayi','success'); wkRender();
+}
+function wkTaliReopen(id){
+  if(!wkIsAdmin()) return;
+  const e=wkData.entries.find(x=>x.id===id); if(!e||!confirm('Is line ki Tali dobara kholni hai?')) return;
+  e.tc=null; wkSave(); wkKeepScroll(()=>{});
 }
 function wkClose(){
   if(!wkIsAdmin()) return;
@@ -31908,20 +31980,39 @@ function wkReopen(){
 }
 function wkPdf(){
   if(!window.jspdf){toast('PDF library load nahi hui','error');return;}
-  const {from,to,status}=wkF, t=wkTotals(status,from,to), doc=new window.jspdf.jsPDF();
-  doc.setFontSize(15); doc.text('Worker Khata - '+wkData.settings.workerName,14,16);
-  doc.setFontSize(9); doc.text(`Period: ${from?wkD(from):'start'} to ${to?wkD(to):'aaj'}  |  ${status}`,14,22);
-  let y=27;
+  const {from,to,status}=wkF, t=wkTotals(status,from,to);
+  const doc=new window.jspdf.jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const pH=doc.internal.pageSize.getHeight();
+  const per=wkF.period?wkData.periods.find(p=>p.id===wkF.period):null;
+  doc.setFontSize(18); doc.setFont(undefined,'bold'); doc.text('Worker Khata - '+wkData.settings.workerName,14,16);
+  doc.setFont(undefined,'normal'); doc.setFontSize(11);
+  doc.text(per?`Hisab: ${wkD(per.from)} to ${wkD(per.to)} (closed)`:`Period: ${from?wkD(from):'shuru'} to ${to?wkD(to):'aaj'}  |  ${status==='open'?'Chal raha hisab':status==='closed'?'Closed hisab':'Sab data'}`,14,23);
+  let y=30;
   [['given','Paisa Liya'],['shop','Shop Kharcha'],['home','Ghar Kharcha']].forEach(([ty,title])=>{
     const rows=wkRows(ty,status,from,to), isG=ty==='given';
-    doc.autoTable({startY:y,head:[[title],[...['Date',isG?'Note':'Description'],'Amount']],
-      body:rows.map(e=>[wkD(e.date),e.desc||'',wkN(e.amount)]),
-      foot:[[{content:'Total',colSpan:2,styles:{halign:'right'}},wkN(wkSum(rows))]],
-      styles:{fontSize:8},headStyles:{fillColor:[40,60,90]},footStyles:{fillColor:[230,230,230],textColor:0}});
-    y=doc.lastAutoTable.finalY+6;
+    if(y>pH-60){doc.addPage();y=18;}
+    doc.setFontSize(14); doc.setFont(undefined,'bold'); doc.text(title,14,y+4); doc.setFont(undefined,'normal');
+    doc.autoTable({startY:y+7,theme:'grid',margin:{left:14,right:14,bottom:16},
+      head:[['Date',isG?'Note':'Description','Amount']],
+      body:rows.length?rows.map(e=>[wkD(e.date),e.desc||'',wkN(e.amount)]):[['','Koi entry nahi','']],
+      foot:[['','Total',wkN(wkSum(rows))]],
+      styles:{fontSize:11,cellPadding:2.5,overflow:'linebreak',textColor:20},
+      headStyles:{fillColor:[40,60,90],textColor:255,fontSize:11},
+      footStyles:{fillColor:[225,225,225],textColor:0,fontStyle:'bold',fontSize:12},
+      columnStyles:{0:{cellWidth:30},2:{cellWidth:40,halign:'right'}},
+      didParseCell:d=>{ if(d.column.index===2) d.cell.styles.halign='right'; }});
+    y=doc.lastAutoTable.finalY+10;
   });
-  doc.autoTable({startY:y,body:[...(t.carry?[['Pichla baqaya',wkN(t.carry)]]:[]),['Total Paisa Liya',wkN(t.g)],['Shop Kharcha',wkN(t.s)],['Ghar Kharcha',wkN(t.h)],['GRAND TOTAL',wkN(t.bal)]],
-    styles:{fontSize:10},columnStyles:{1:{halign:'right'}}});
+  if(y>pH-60){doc.addPage();y=18;}
+  doc.setFontSize(14); doc.setFont(undefined,'bold'); doc.text('Grand Total',14,y+4); doc.setFont(undefined,'normal');
+  const sb=[...(t.carry?[['Pichla baqaya (carry)',wkN(t.carry)]]:[]),['Total Paisa Liya',wkN(t.g)],['Shop Kharcha (-)',wkN(t.s)],['Ghar Kharcha (-)',wkN(t.h)],['GRAND TOTAL',wkN(t.bal)]];
+  doc.autoTable({startY:y+7,theme:'grid',margin:{left:14,right:14,bottom:16},body:sb,
+    styles:{fontSize:12,cellPadding:3,textColor:20},columnStyles:{1:{cellWidth:50,halign:'right'}},
+    didParseCell:d=>{ if(d.row.index===sb.length-1){d.cell.styles.fontStyle='bold';d.cell.styles.fillColor=[225,225,225];d.cell.styles.fontSize=13;} }});
+  doc.setFontSize(12);
+  doc.text(t.bal>=0?`Worker ke paas baqi: ${wkN(t.bal)} (wapis lena hai)`:`Worker ko dena hai: ${wkN(-t.bal)}`,14,doc.lastAutoTable.finalY+9);
+  const n=doc.internal.getNumberOfPages();
+  for(let i=1;i<=n;i++){doc.setPage(i);doc.setFontSize(9);doc.setTextColor(120);doc.text(`Page ${i}/${n}`,doc.internal.pageSize.getWidth()-14,pH-8,{align:'right'});doc.setTextColor(0);}
   doc.save('WorkerKhata_'+wkToday()+'.pdf');
 }
 function wkExcel(){
