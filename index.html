@@ -2621,7 +2621,12 @@ tr.lg-partial td:first-child{box-shadow:inset 4px 0 0 #f5a623;}
     <div class="form-row">
       <div class="form-group"><label>Month</label><input type="month" id="mf-month" onchange="showMonthlyFine()"></div>
       <div class="form-group"><label>Worker</label><select id="mf-emp"></select></div>
-      <div class="form-group"><label>Thermal Width</label><select id="mf-width"><option value="80">80 mm</option><option value="58">58 mm</option></select></div>
+      <div class="form-group"><label>Thermal Width</label><select id="mf-width" onchange="mfSavePrefs()"><option value="80">80 mm</option><option value="58">58 mm</option></select></div>
+      <div class="form-group"><label>Thermal Text Size</label><select id="mf-fs" onchange="mfSavePrefs()">
+        <option value="12">12 — Chhota</option><option value="14">14 — Normal</option><option value="16">16 — Bara</option>
+        <option value="18">18 — Bara+</option><option value="20">20 — Extra Bara</option><option value="24">24 — Bohat Bara</option><option value="28">28 — Max</option></select></div>
+      <div class="form-group"><label>Text Style</label><select id="mf-bold" onchange="mfSavePrefs()">
+        <option value="900">Extra Bold</option><option value="700">Bold</option><option value="400">Normal</option></select></div>
     </div>
     <div class="flex-gap" style="flex-wrap:wrap;">
       <button class="btn btn-neon btn-sm" onclick="showMonthlyFine()">👁️ Show</button>
@@ -18827,6 +18832,7 @@ function populateTimeReportUI(){
     const k = ms.value;
     ms.innerHTML = '<option value="all">— All Active Workers —</option>' + mfActiveEmployees().map(e=>`<option value="${escH(e.id)}">${escH(e.name)}</option>`).join('');
     if(k) ms.value = k;
+    if(!ms.dataset.prefs){ mfLoadPrefs(); ms.dataset.prefs='1'; }
     const mm = document.getElementById('mf-month');
     if(mm && !mm.value) mm.value = localDateStr().slice(0,7);
   }
@@ -18987,6 +18993,15 @@ function printTimeReportThermal(){
 }
 
 // ==================== MONTHLY FINE REPORT (active workers, fine rows only) ====================
+function mfSavePrefs(){
+  try{ localStorage.setItem('mfThermalPrefs', JSON.stringify({w:document.getElementById('mf-width').value, fs:document.getElementById('mf-fs').value, b:document.getElementById('mf-bold').value})); }catch(e){}
+}
+function mfLoadPrefs(){
+  let p = {w:'80', fs:'18', b:'900'};
+  try{ const x = JSON.parse(localStorage.getItem('mfThermalPrefs')||'null'); if(x) p = Object.assign(p,x); }catch(e){}
+  const set = (id,v)=>{ const el=document.getElementById(id); if(el) el.value=v; };
+  set('mf-width',p.w); set('mf-fs',p.fs); set('mf-bold',p.b);
+}
 function mfActiveEmployees(){ return employees.filter(e=>e.status!=='terminated' && e.status!=='resigned'); }
 function mfEntryFine(a){
   if(!settings.fineEnabled) return 0;
@@ -19108,30 +19123,40 @@ function printMonthlyFineA4(){
 function printMonthlyFineThermal(){
   const rep = buildMonthlyFine(); if(!rep) return;
   const w = parseInt(document.getElementById('mf-width').value)||80;
-  const fs = w<=58 ? 10 : 11;
+  const fs = parseInt(document.getElementById('mf-fs').value)||18;
+  const fw = document.getElementById('mf-bold').value || '900';
   const short = d => { const x = new Date(d+'T00:00:00'); return String(x.getDate()).padStart(2,'0')+'-'+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][x.getMonth()]; };
+  // Agar text bara hone ki wajah se 4 columns paper mein nahi samate, to har entry 2 line mein chhapti hai.
+  const charsPerLine = ((w-4)*3.78)/(fs*0.6);
+  const stacked = charsPerLine < 34;
+  const rowHtml = r => {
+    const tm = r.absent ? 'ABSENT' : (r.checkIn ? fmtT12(r.checkIn).replace(' ','') : '-');
+    const lt = r.absent ? '' : (r.lateMin ? fmtDur(r.lateMin) : '');
+    if(stacked) return `<div style="display:flex;justify-content:space-between;margin-top:5px;font-size:${fs+1}px;"><span>${short(r.date)}</span><span>${fmt(r.fine)}</span></div>
+      <div style="font-size:${fs-1}px;">${tm}${lt?' &bull; Late '+lt:''}</div>`;
+    return `<tr><td>${short(r.date)}</td><td>${tm}</td><td>${lt||'-'}</td><td style="text-align:right;">${fmt(r.fine)}</td></tr>`;
+  };
   const blocks = rep.data.map(({emp,list,total})=>`
-    <div style="border-top:1px dashed #000;padding-top:4px;margin-top:6px;">
-      <div style="font-weight:bold;font-size:${fs+1}px;">${escH(emp.name)}</div>
-      <table><tr><th>Date</th><th>Time</th><th>Late</th><th style="text-align:right;">Fine</th></tr>
-      ${list.map(r=>`<tr><td>${short(r.date)}</td><td>${r.absent?'ABSENT':(r.checkIn?fmtT12(r.checkIn).replace(' ',''):'-')}</td><td>${r.absent?'-':(r.lateMin?fmtDur(r.lateMin):'-')}</td><td style="text-align:right;">${fmt(r.fine)}</td></tr>`).join('')}</table>
-      <div style="font-weight:bold;margin-top:3px;">Days: ${list.length} | TOTAL: ${rep.cur} ${fmt(total)}</div>
+    <div style="border-top:2px dashed #000;padding-top:5px;margin-top:8px;">
+      <div style="font-size:${fs+3}px;">${escH(emp.name)}</div>
+      ${stacked ? list.map(rowHtml).join('') : `<table><tr><th>Date</th><th>Time</th><th>Late</th><th style="text-align:right;">Fine</th></tr>${list.map(rowHtml).join('')}</table>`}
+      <div style="margin-top:5px;font-size:${fs+1}px;">Days: ${list.length}<br>TOTAL: ${rep.cur} ${fmt(total)}</div>
     </div>`).join('');
-  const html = `<div style="width:${w}mm;font-family:Arial,sans-serif;font-size:${fs}px;font-weight:bold;padding:2mm;box-sizing:border-box;">
-    <div style="text-align:center;font-size:${fs+3}px;">${escH(settings.companyName||'SAU CORPORATION')}</div>
-    <div style="text-align:center;margin:3px 0;">FINE REPORT</div>
-    <div style="text-align:center;font-size:${fs-1}px;">${escH(rep.label)}</div>
+  const html = `<div style="width:${w}mm;font-family:Arial,sans-serif;font-size:${fs}px;font-weight:${fw};line-height:1.25;padding:2mm;box-sizing:border-box;">
+    <div style="text-align:center;font-size:${fs+5}px;">${escH(settings.companyName||'SAU CORPORATION')}</div>
+    <div style="text-align:center;margin:4px 0;font-size:${fs+2}px;">FINE REPORT</div>
+    <div style="text-align:center;font-size:${fs+1}px;">${escH(rep.label)}</div>
     ${blocks}
-    <div style="border-top:2px solid #000;margin-top:6px;padding-top:4px;">GRAND TOTAL FINE:<br>${rep.cur} ${fmt(rep.grand)}</div>
-    <div style="text-align:center;font-size:${fs-2}px;margin-top:8px;">Printed: ${new Date().toLocaleString('en-PK')}</div>
+    <div style="border-top:3px solid #000;margin-top:10px;padding-top:5px;font-size:${fs+4}px;">GRAND TOTAL FINE:<br>${rep.cur} ${fmt(rep.grand)}</div>
+    <div style="text-align:center;font-size:${Math.max(fs-3,9)}px;margin-top:10px;">Printed: ${new Date().toLocaleString('en-PK')}</div>
   </div>`;
   const win = window.open('','_blank');
   if(!win){ toast('Popup blocked — browser mein popups allow karein','warning'); return; }
   win.document.write(`<!DOCTYPE html><html><head><title>Fine Report</title><style>
     @page{size:${w}mm auto;margin:0;}
-    html,body{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    html,body{margin:0;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     table{width:100%;border-collapse:collapse;table-layout:auto;}
-    td,th{padding:1px 2px;text-align:left;font-size:${fs}px;}
+    td,th{padding:2px 2px;text-align:left;font-size:${fs}px;font-weight:${fw};}
   </style></head><body>${html}</body></html>`);
   win.document.close();
   setTimeout(()=>win.print(),300);
