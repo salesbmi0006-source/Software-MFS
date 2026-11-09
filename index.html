@@ -2613,6 +2613,24 @@ tr.lg-partial td:first-child{box-shadow:inset 4px 0 0 #f5a623;}
     </div>
     <div id="tr-output" style="margin-top:12px;overflow-x:auto;"></div>
   </div>
+  <div class="card" id="monthly-fine-card">
+    <div class="card-header">
+      <div class="card-title">💸 Monthly Fine Report (Late / Fine Only)</div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Month select karein — sirf wo active workers aur wo dates dikhengi jin par late/fine laga hai (date, time, late by, fine). Har worker ka alag total, aur last mein Grand Total. Salary se koi link nahi.</div>
+    <div class="form-row">
+      <div class="form-group"><label>Month</label><input type="month" id="mf-month" onchange="showMonthlyFine()"></div>
+      <div class="form-group"><label>Worker</label><select id="mf-emp"></select></div>
+      <div class="form-group"><label>Thermal Width</label><select id="mf-width"><option value="80">80 mm</option><option value="58">58 mm</option></select></div>
+    </div>
+    <div class="flex-gap" style="flex-wrap:wrap;">
+      <button class="btn btn-neon btn-sm" onclick="showMonthlyFine()">👁️ Show</button>
+      <button class="btn btn-purple btn-sm" onclick="downloadMonthlyFinePDF()">📄 PDF (A4)</button>
+      <button class="btn btn-sm" style="background:var(--bg3);border:1px solid var(--neon);color:var(--neon);" onclick="printMonthlyFineA4()">🖨️ Print A4</button>
+      <button class="btn btn-green btn-sm" onclick="printMonthlyFineThermal()">🧾 Thermal Print</button>
+    </div>
+    <div id="mf-output" style="margin-top:12px;overflow-x:auto;"></div>
+  </div>
   <div class="card">
     <div class="card-header">
       <div class="card-title">🧾 Monthly Salary Slips</div>
@@ -18804,6 +18822,14 @@ function populateTimeReportUI(){
   sel.innerHTML = '<option value="all">— All Employees —</option>' + employees.map(e=>`<option value="${escH(e.id)}">${escH(e.name)}</option>`).join('');
   if(keep) sel.value = keep;
   if(!document.getElementById('tr-from').value) setTrRange('month');
+  const ms = document.getElementById('mf-emp');
+  if(ms){
+    const k = ms.value;
+    ms.innerHTML = '<option value="all">— All Active Workers —</option>' + mfActiveEmployees().map(e=>`<option value="${escH(e.id)}">${escH(e.name)}</option>`).join('');
+    if(k) ms.value = k;
+    const mm = document.getElementById('mf-month');
+    if(mm && !mm.value) mm.value = localDateStr().slice(0,7);
+  }
 }
 function setTrRange(k){
   const now = new Date(); let a, b;
@@ -18828,6 +18854,7 @@ function buildTimeReport(mode){
   const data = [];
   employees.forEach(emp=>{
     if(empId!=='all' && emp.id!==empId) return;
+    if(empId==='all' && (emp.status==='terminated' || emp.status==='resigned')) return;
     const rows = (emp.attendance||[]).filter(a=>a.date && a.date>=from && a.date<=to).sort((x,y)=>x.date<y.date?-1:1);
     const t = {came:0, late:0, absent:0, leave:0, lateMin:0, fine:0};
     let list = rows.map(a=>{
@@ -18950,6 +18977,157 @@ function printTimeReportThermal(){
   const win = window.open('','_blank');
   if(!win){ toast('Popup blocked — browser mein popups allow karein','warning'); return; }
   win.document.write(`<!DOCTYPE html><html><head><title>${mode==='fine'?'Fine Report':'Time Record'}</title><style>
+    @page{size:${w}mm auto;margin:0;}
+    html,body{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    table{width:100%;border-collapse:collapse;table-layout:auto;}
+    td,th{padding:1px 2px;text-align:left;font-size:${fs}px;}
+  </style></head><body>${html}</body></html>`);
+  win.document.close();
+  setTimeout(()=>win.print(),300);
+}
+
+// ==================== MONTHLY FINE REPORT (active workers, fine rows only) ====================
+function mfActiveEmployees(){ return employees.filter(e=>e.status!=='terminated' && e.status!=='resigned'); }
+function mfEntryFine(a){
+  if(!settings.fineEnabled) return 0;
+  if(a.type==='absent') return parseFloat(settings.fineAbsentAmount)||0;
+  if(a.fine!==undefined) return a.fine||0;
+  if(a.type==='late' && settings.fineLateType==='fixed') return parseFloat(settings.fineLateAmount)||0;
+  return 0;
+}
+function mfMonthLabel(m){
+  const [y,mo] = m.split('-').map(Number);
+  return ['January','February','March','April','May','June','July','August','September','October','November','December'][mo-1]+' '+y;
+}
+function buildMonthlyFine(){
+  const month = document.getElementById('mf-month').value;
+  if(!month){ toast('Month select karein','warning'); return null; }
+  const empId = document.getElementById('mf-emp').value;
+  const [y,mo] = month.split('-').map(Number);
+  const from = month+'-01', to = month+'-'+String(new Date(y,mo,0).getDate()).padStart(2,'0');
+  const cur = settings.currency||'PKR';
+  const data = []; let grand = 0, grandDays = 0;
+  mfActiveEmployees().forEach(emp=>{
+    if(empId!=='all' && emp.id!==empId) return;
+    const list = (emp.attendance||[]).filter(a=>a.date && a.date>=from && a.date<=to)
+      .sort((a,b)=>a.date<b.date?-1:1)
+      .map(a=>({date:a.date, absent:a.type==='absent', checkIn:a.checkIn||'', lateMin:a.lateMin||0, fine:mfEntryFine(a)}))
+      .filter(r=>r.fine>0);
+    if(!list.length) return;
+    const total = list.reduce((s,r)=>s+r.fine,0);
+    grand += total; grandDays += list.length;
+    data.push({emp, list, total});
+  });
+  if(!data.length){ toast(mfMonthLabel(month)+' mein koi fine nahi','warning'); return null; }
+  return {data, month, label:mfMonthLabel(month), cur, grand, grandDays};
+}
+function mfRow(r){
+  return [r.date, trDayName(r.date), r.absent?'ABSENT':(r.checkIn?fmtT12(r.checkIn):'-'), r.absent?'-':(r.lateMin?fmtDur(r.lateMin):'-'), fmt(r.fine)];
+}
+function mfHead(cur){ return ['Date','Day','Time (Check-In)','Late By','Fine ('+cur+')']; }
+
+function showMonthlyFine(){
+  const out = document.getElementById('mf-output');
+  const rep = buildMonthlyFine(); if(!rep){ out.innerHTML=''; return; }
+  out.innerHTML = `<div style="font-weight:700;margin-bottom:6px;">Fine Report — ${escH(rep.label)}</div>` +
+    rep.data.map(({emp,list,total})=>`<div class="accent-box" style="margin-bottom:10px;">
+      <div style="font-weight:700;margin-bottom:4px;">${escH(emp.name)}${emp.designation?' <span style="font-weight:400;color:var(--text3);font-size:11px;">('+escH(emp.designation)+')</span>':''}</div>
+      <table class="items-table"><thead><tr>${mfHead(rep.cur).map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+      <tbody>${list.map(r=>`<tr>${mfRow(r).map(c=>`<td>${escH(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>
+      <div style="font-size:12px;margin-top:4px;font-weight:700;">Fine days: ${list.length} &nbsp;|&nbsp; Total: ${rep.cur} ${fmt(total)}</div>
+    </div>`).join('') +
+    (rep.data.length>1 ? `<div class="accent-box"><div style="font-weight:700;margin-bottom:4px;">Summary</div>
+      <table class="items-table"><thead><tr><th>Worker</th><th>Fine Days</th><th>Total Fine (${rep.cur})</th></tr></thead><tbody>
+      ${rep.data.map(d=>`<tr><td>${escH(d.emp.name)}</td><td>${d.list.length}</td><td>${fmt(d.total)}</td></tr>`).join('')}
+      </tbody></table></div>` : '') +
+    `<div style="font-weight:800;font-size:14px;margin-top:8px;">GRAND TOTAL FINE: ${rep.cur} ${fmt(rep.grand)}</div>`;
+}
+
+function downloadMonthlyFinePDF(){
+  const rep = buildMonthlyFine(); if(!rep) return;
+  const doc = new jspdf.jsPDF();
+  const title = 'Fine Report — '+rep.label;
+  let y = pdfHeader(doc, title);
+  rep.data.forEach(({emp,list,total})=>{
+    if(y > 240){ doc.addPage(); y = pdfHeader(doc, title); }
+    doc.setFontSize(11); doc.setFont(undefined,'bold');
+    doc.text(emp.name+(emp.designation?' ('+emp.designation+')':''), 14, y); y += 4;
+    doc.autoTable({startY:y, head:[mfHead(rep.cur)], body:list.map(mfRow), styles:{fontSize:9}, headStyles:{fillColor:[20,20,40]}});
+    y = doc.lastAutoTable.finalY + 5;
+    doc.setFontSize(9); doc.setFont(undefined,'bold');
+    doc.text(`Fine days: ${list.length}  |  Total: ${rep.cur} ${fmt(total)}`, 14, y); y += 10;
+  });
+  if(y > 220){ doc.addPage(); y = 20; }
+  doc.setFontSize(11); doc.setFont(undefined,'bold');
+  doc.text('Summary', 14, y); y += 3;
+  doc.autoTable({
+    startY:y, head:[['Worker','Fine Days','Total Fine ('+rep.cur+')']],
+    body:rep.data.map(d=>[d.emp.name, String(d.list.length), fmt(d.total)]),
+    foot:[['GRAND TOTAL', String(rep.grandDays), rep.cur+' '+fmt(rep.grand)]],
+    styles:{fontSize:10}, headStyles:{fillColor:[20,20,40]}, footStyles:{fillColor:[230,230,230], textColor:[0,0,0], fontStyle:'bold'}
+  });
+  stampBrandLogoOnAllPages(doc);
+  doc.save(`Fine_Report_${rep.month}.pdf`);
+  toast('PDF generated','success');
+}
+
+function printMonthlyFineA4(){
+  const rep = buildMonthlyFine(); if(!rep) return;
+  const blocks = rep.data.map(({emp,list,total})=>`
+    <h3>${escH(emp.name)}${emp.designation?' <small>('+escH(emp.designation)+')</small>':''}</h3>
+    <table><thead><tr>${mfHead(rep.cur).map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${list.map(r=>`<tr>${mfRow(r).map((c,i)=>`<td${i===4?' class="r"':''}>${escH(c)}</td>`).join('')}</tr>`).join('')}</tbody>
+    <tfoot><tr><td colspan="4">Fine days: ${list.length} — Total</td><td class="r">${rep.cur} ${fmt(total)}</td></tr></tfoot></table>`).join('');
+  const summary = `<h3>Summary</h3><table><thead><tr><th>Worker</th><th>Fine Days</th><th class="r">Total Fine (${rep.cur})</th></tr></thead><tbody>
+    ${rep.data.map(d=>`<tr><td>${escH(d.emp.name)}</td><td>${d.list.length}</td><td class="r">${fmt(d.total)}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td>GRAND TOTAL</td><td>${rep.grandDays}</td><td class="r">${rep.cur} ${fmt(rep.grand)}</td></tr></tfoot></table>`;
+  const win = window.open('','_blank');
+  if(!win){ toast('Popup blocked — browser mein popups allow karein','warning'); return; }
+  win.document.write(`<!DOCTYPE html><html><head><title>Fine Report ${rep.month}</title><style>
+    @page{size:A4;margin:12mm;}
+    body{font-family:Arial,sans-serif;color:#000;font-size:12px;margin:0;}
+    h2{margin:0;text-align:center;} .sub{text-align:center;margin:2px 0 10px;font-size:13px;}
+    h3{margin:14px 0 4px;font-size:13px;} small{font-weight:normal;color:#444;}
+    table{width:100%;border-collapse:collapse;page-break-inside:auto;} tr{page-break-inside:avoid;}
+    th,td{border:1px solid #444;padding:4px 6px;text-align:left;} th{background:#e8e8e8;}
+    tfoot td{font-weight:bold;background:#f2f2f2;} .r{text-align:right;}
+    .grand{margin-top:14px;font-size:15px;font-weight:bold;text-align:right;border-top:2px solid #000;padding-top:6px;}
+    .foot{margin-top:10px;font-size:10px;text-align:center;color:#555;}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  </style></head><body>
+    <h2>${escH(settings.companyName||'SAU CORPORATION')}</h2>
+    <div class="sub"><b>FINE REPORT</b> — ${escH(rep.label)}</div>
+    ${blocks}${rep.data.length>1?summary:''}
+    <div class="grand">GRAND TOTAL FINE: ${rep.cur} ${fmt(rep.grand)}</div>
+    <div class="foot">Printed: ${new Date().toLocaleString('en-PK')}</div>
+  </body></html>`);
+  win.document.close();
+  setTimeout(()=>win.print(),300);
+}
+
+function printMonthlyFineThermal(){
+  const rep = buildMonthlyFine(); if(!rep) return;
+  const w = parseInt(document.getElementById('mf-width').value)||80;
+  const fs = w<=58 ? 10 : 11;
+  const short = d => { const x = new Date(d+'T00:00:00'); return String(x.getDate()).padStart(2,'0')+'-'+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][x.getMonth()]; };
+  const blocks = rep.data.map(({emp,list,total})=>`
+    <div style="border-top:1px dashed #000;padding-top:4px;margin-top:6px;">
+      <div style="font-weight:bold;font-size:${fs+1}px;">${escH(emp.name)}</div>
+      <table><tr><th>Date</th><th>Time</th><th>Late</th><th style="text-align:right;">Fine</th></tr>
+      ${list.map(r=>`<tr><td>${short(r.date)}</td><td>${r.absent?'ABSENT':(r.checkIn?fmtT12(r.checkIn).replace(' ',''):'-')}</td><td>${r.absent?'-':(r.lateMin?fmtDur(r.lateMin):'-')}</td><td style="text-align:right;">${fmt(r.fine)}</td></tr>`).join('')}</table>
+      <div style="font-weight:bold;margin-top:3px;">Days: ${list.length} | TOTAL: ${rep.cur} ${fmt(total)}</div>
+    </div>`).join('');
+  const html = `<div style="width:${w}mm;font-family:Arial,sans-serif;font-size:${fs}px;font-weight:bold;padding:2mm;box-sizing:border-box;">
+    <div style="text-align:center;font-size:${fs+3}px;">${escH(settings.companyName||'SAU CORPORATION')}</div>
+    <div style="text-align:center;margin:3px 0;">FINE REPORT</div>
+    <div style="text-align:center;font-size:${fs-1}px;">${escH(rep.label)}</div>
+    ${blocks}
+    <div style="border-top:2px solid #000;margin-top:6px;padding-top:4px;">GRAND TOTAL FINE:<br>${rep.cur} ${fmt(rep.grand)}</div>
+    <div style="text-align:center;font-size:${fs-2}px;margin-top:8px;">Printed: ${new Date().toLocaleString('en-PK')}</div>
+  </div>`;
+  const win = window.open('','_blank');
+  if(!win){ toast('Popup blocked — browser mein popups allow karein','warning'); return; }
+  win.document.write(`<!DOCTYPE html><html><head><title>Fine Report</title><style>
     @page{size:${w}mm auto;margin:0;}
     html,body{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     table{width:100%;border-collapse:collapse;table-layout:auto;}
