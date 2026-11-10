@@ -3768,112 +3768,79 @@ tr.lg-partial td:first-child{box-shadow:inset 4px 0 0 #f5a623;}
   <iframe id="receiptsFrame" style="width:100%;min-height:80vh;border:1px solid var(--border2);border-radius:var(--radius2);background:#fff;"></iframe>
 </div>
 
-<!-- ====== BANK MODULE TAB (Module 15) ====== -->
+<!-- ====== BANK DETAILS TAB (Module 15) — sirf bank details, print + logos ====== -->
 <div class="tab-panel" id="panel-bank">
   <div class="card">
     <div class="card-header">
-      <div class="card-title">🏛️ Bank Accounts</div>
+      <div class="card-title">🏛️ Bank Accounts — Details</div>
       <div class="flex-gap">
-        <button class="btn btn-neon btn-sm" onclick="openBankTransferModal()">🔁 Transfer</button>
-        <button class="btn btn-green btn-sm" onclick="openBankAccountModal()">➕ Add Account</button>
+        <button class="btn btn-green btn-sm" onclick="openBankAccountModal()">➕ Add Bank Account</button>
       </div>
     </div>
-    <div id="bank-accounts-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;"></div>
+    <div id="bank-chips" class="flex-gap" style="flex-wrap:wrap;margin-bottom:10px;"></div>
+    <div class="form-group" style="margin-bottom:12px;"><input type="text" id="bank-search" placeholder="🔍 Search — bank / account title / account no / IBAN" oninput="bankSearch=this.value;renderBankTab()"></div>
+    <div id="bank-accounts-grid"></div>
   </div>
+
   <div class="card">
-    <div class="card-header">
-      <div class="card-title" id="bank-statement-title">📄 Statement</div>
-      <div class="flex-gap">
-        <button class="btn btn-neon btn-sm" onclick="exportBankStatementPDF()" id="bank-export-pdf-btn" style="display:none;">📄 Export Statement PDF</button>
-        <button class="btn btn-neon btn-sm" onclick="openBankTxModal()" id="bank-add-tx-btn" style="display:none;">➕ Add Transaction</button>
-      </div>
+    <div class="card-header"><div class="card-title">🧾 Thermal Printer Settings</div></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Yeh settings sirf Thermal print par lagti hain (auto save). A4 Half print ka size fixed hai — A4 ka upar wala aadha hissa, neeche kaatne ki lakeer.</div>
+    <div class="form-row">
+      <div class="form-group"><label>Paper Width</label><select id="bk-width" onchange="bankPrefsSave()"><option value="80">80 mm</option><option value="58">58 mm</option></select></div>
+      <div class="form-group"><label>Text Size</label><select id="bk-fs" onchange="bankPrefsSave()">
+        <option value="10">10 — Bohat Chhota</option><option value="12">12 — Chhota</option><option value="14">14 — Normal</option><option value="16">16 — Bara</option>
+        <option value="18">18 — Bara+</option><option value="20">20 — Extra Bara</option><option value="24">24 — Bohat Bara</option><option value="28">28 — Max</option></select></div>
+      <div class="form-group"><label>Text Style</label><select id="bk-bold" onchange="bankPrefsSave()">
+        <option value="900">Extra Bold</option><option value="700">Bold</option><option value="400">Normal</option></select></div>
+      <div class="form-group"><label>Bank Logo</label><select id="bk-logo" onchange="bankPrefsSave()"><option value="1">Print karo</option><option value="0">Na karo</option></select></div>
+      <div class="form-group"><label>Logo Size</label><select id="bk-logosize" onchange="bankPrefsSave()">
+        <option value="32">Chhota</option><option value="48">Normal</option><option value="64">Bara</option><option value="80">Extra Bara</option></select></div>
     </div>
-    <div id="bank-statement-body"><div style="color:var(--text3);font-size:12px;">Select a bank account above to view its statement.</div></div>
   </div>
 </div>
 
-<!-- ADD BANK ACCOUNT MODAL -->
+<!-- ADD / EDIT BANK ACCOUNT MODAL -->
 <div class="modal-overlay" id="bankAccountModal">
 <div class="modal">
   <div class="modal-header"><h3 id="bankAccModalTitle">➕ Add Bank Account</h3><button class="close-btn" onclick="closeModal('bankAccountModal')">✕</button></div>
   <div class="modal-body">
-    <input type="hidden" id="ba-edit-idx" value="-1">
-    <div class="form-row">
-      <div class="form-group">
-        <label>Bank Name *</label>
-        <select id="ba-bank">
-          <option value="Meezan Bank">Meezan Bank</option>
-          <option value="HBL">HBL</option>
-          <option value="UBL">UBL</option>
-          <option value="MCB">MCB</option>
-          <option value="Allied Bank">Allied Bank</option>
-          <option value="Bank Alfalah">Bank Alfalah</option>
-          <option value="Other">Other</option>
-        </select>
+    <input type="hidden" id="ba-edit-id" value="">
+    <div class="form-group">
+      <label>Account Type *</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:6px;padding:6px 14px;border:1px solid var(--border2);border-radius:20px;cursor:pointer;"><input type="radio" name="ba-type" id="ba-type-business" value="business" checked> 💼 Business</label>
+        <label style="display:flex;align-items:center;gap:6px;padding:6px 14px;border:1px solid var(--border2);border-radius:20px;cursor:pointer;"><input type="radio" name="ba-type" id="ba-type-personal" value="personal"> 👤 Personal</label>
       </div>
-      <div class="form-group"><label>Account Title</label><input type="text" id="ba-title" placeholder="e.g. SAU Corporation"></div>
+    </div>
+    <div class="form-group">
+      <label>Bank Name * <span style="font-weight:400;color:var(--text3);">(list se chunein ya khud likhein — logo khud lag jayega)</span></label>
+      <input type="text" id="ba-bank" list="ba-bank-list" placeholder="e.g. HBL, Meezan Bank, UBL..." autocomplete="off" oninput="bankUpdateModalLogo()">
+      <datalist id="ba-bank-list"></datalist>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap;">
+        <div id="ba-logo-prev" style="min-height:44px;display:flex;align-items:center;"></div>
+        <div style="flex:1;min-width:160px;">
+          <div id="ba-logo-hint" style="font-size:11px;color:var(--text3);"></div>
+          <div class="flex-gap" style="margin-top:4px;">
+            <button type="button" class="btn btn-xs btn-neon" onclick="document.getElementById('ba-logo-file').click()">🖼️ Official Logo Upload</button>
+            <button type="button" class="btn btn-xs btn-red" onclick="bankRemoveSavedLogo()">✖ Saved Logo Hatao</button>
+          </div>
+          <input type="file" id="ba-logo-file" accept="image/*" style="display:none;" onchange="bankLogoUpload(this)">
+        </div>
+      </div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Account Number</label><input type="text" id="ba-accno" placeholder="Account / IBAN number"></div>
-      <div class="form-group"><label>Opening Balance</label><input type="number" step="0.01" id="ba-opening" value="0"></div>
+      <div class="form-group"><label>Account Title *</label><input type="text" id="ba-title" placeholder="e.g. SAU Corporation"></div>
+      <div class="form-group"><label>Account Number</label><input type="text" id="ba-accno" placeholder="e.g. 0123-4567890-01"></div>
+    </div>
+    <div class="form-group"><label>IBAN Number</label><input type="text" id="ba-iban" placeholder="PK00 ABCD 0000 0000 0000 0000" oninput="this.value=this.value.toUpperCase()" style="letter-spacing:1px;"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Branch Code</label><input type="text" id="ba-branchcode" placeholder="e.g. 0123"></div>
+      <div class="form-group"><label>Branch Name <span style="font-weight:400;color:var(--text3);">(optional)</span></label><input type="text" id="ba-branchname" placeholder="e.g. Jaranwala Road, Faisalabad"></div>
     </div>
   </div>
   <div class="modal-footer">
     <button class="btn btn-green" onclick="saveBankAccount()">💾 Save</button>
     <button class="btn btn-neon" onclick="closeModal('bankAccountModal')">Cancel</button>
-  </div>
-</div>
-</div>
-
-<!-- ADD BANK TRANSACTION MODAL -->
-<div class="modal-overlay" id="bankTxModal">
-<div class="modal">
-  <div class="modal-header"><h3>➕ Add Transaction</h3><button class="close-btn" onclick="closeModal('bankTxModal')">✕</button></div>
-  <div class="modal-body">
-    <input type="hidden" id="bt-account-id">
-    <div class="form-row">
-      <div class="form-group"><label>Date</label><input type="date" id="bt-date"></div>
-      <div class="form-group">
-        <label>Type *</label>
-        <select id="bt-type">
-          <option value="deposit">💵 Deposit</option>
-          <option value="withdrawal">📤 Withdrawal</option>
-          <option value="cheque_in">🏦 Cheque In</option>
-          <option value="cheque_out">🏦 Cheque Out</option>
-        </select>
-      </div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label>Amount *</label><input type="number" step="0.01" id="bt-amount" placeholder="0.00"></div>
-      <div class="form-group"><label>Ref / Cheque No</label><input type="text" id="bt-ref" placeholder="Reference number"></div>
-    </div>
-    <div class="form-group"><label>Notes</label><input type="text" id="bt-notes" placeholder="Optional note"></div>
-  </div>
-  <div class="modal-footer">
-    <button class="btn btn-green" onclick="saveBankTx()">💾 Save</button>
-    <button class="btn btn-neon" onclick="closeModal('bankTxModal')">Cancel</button>
-  </div>
-</div>
-</div>
-
-<!-- BANK TRANSFER MODAL -->
-<div class="modal-overlay" id="bankTransferModal">
-<div class="modal">
-  <div class="modal-header"><h3>🔁 Transfer Between Accounts</h3><button class="close-btn" onclick="closeModal('bankTransferModal')">✕</button></div>
-  <div class="modal-body">
-    <div class="form-row">
-      <div class="form-group"><label>From Account *</label><select id="bt-from"></select></div>
-      <div class="form-group"><label>To Account *</label><select id="bt-to"></select></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label>Amount *</label><input type="number" step="0.01" id="bt-transfer-amount" placeholder="0.00"></div>
-      <div class="form-group"><label>Date</label><input type="date" id="bt-transfer-date"></div>
-    </div>
-    <div class="form-group"><label>Notes</label><input type="text" id="bt-transfer-notes" placeholder="Optional note"></div>
-  </div>
-  <div class="modal-footer">
-    <button class="btn btn-green" onclick="saveBankTransfer()">💾 Transfer</button>
-    <button class="btn btn-neon" onclick="closeModal('bankTransferModal')">Cancel</button>
   </div>
 </div>
 </div>
@@ -6190,7 +6157,7 @@ async function buildFullBackupData(){
     digitalInvoices: diWithPdf,
     partyContacts, invoiceSendStatus, hsStockData, fbrStockData:(typeof fbsData!=='undefined'?fbsData:null), rateLists, partyDispatchData,
     savedQuotations, quotSettings, rrSettings, employees, mktData, crmData, followUpData:{v:2, entries:(typeof followUps!=='undefined'?followUps:[]), cashParties:(typeof fuCash!=='undefined'?fuCash:[])}, emailHistory, emailTemplates, autoNumberSettings,
-    stockItems, stockMovements, salesReturns, returnReceipts, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, workerKhata:(typeof wkData!=='undefined'?wkData:null), bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
+    stockItems, stockMovements, salesReturns, returnReceipts, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, workerKhata:(typeof wkData!=='undefined'?wkData:null), bankAccounts, bankLogos, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     fbCustomers, fbBills, fbQuotations, fbLedger, fbSettings, fbDescriptions, fbStockItems, fbStockMovements,
     documentManager: docsWithBlob,
     securityData: (typeof securityData!=='undefined'?securityData:null),
@@ -6378,7 +6345,7 @@ function buildCloudSyncData(){
     db, cheques, ledgerData, fbrParties, descMaster, settings, partyOpeningBalances, ledgerGroupsJson: JSON.stringify(ledgerGroups),
     partyContacts, invoiceSendStatus, hsStockData, fbrStockData:(typeof fbsData!=='undefined'?fbsData:null), rateLists, partyDispatchData,
     savedQuotations, quotSettings, rrSettings, employees, mktData, crmData, followUpData:{v:2, entries:(typeof followUps!=='undefined'?followUps:[]), cashParties:(typeof fuCash!=='undefined'?fuCash:[])}, emailHistory, emailTemplates, autoNumberSettings,
-    stockItems, stockMovements, salesReturns, returnReceipts, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, workerKhata:(typeof wkData!=='undefined'?wkData:null), bankAccounts, bankTransactions, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
+    stockItems, stockMovements, salesReturns, returnReceipts, purchaseOrders, partyPaymentTerms, visitLogs, warehousesList, expenses, pantryItems, pantryExpenses, workerKhata:(typeof wkData!=='undefined'?wkData:null), bankAccounts, bankLogos, auditLog, sendLog, envelopeDispatches, salarySlips, receiptDB: JSON.parse(localStorage.getItem("receiptDB")||"[]"), receiptSettings: JSON.parse(localStorage.getItem("receiptSettings")||"null"),
     fbCustomers, fbBills, fbQuotations, fbLedger, fbSettings, fbDescriptions, fbStockItems, fbStockMovements,
     securityData: (typeof securityData!=='undefined'?securityData:null),
     updatedAt: new Date().toISOString(),
@@ -7150,7 +7117,7 @@ async function applyRestoredBackupData(data){
   if(data.fbStockItems) { fbStockItems = data.fbStockItems; saveFbStockItems(); }
   if(data.fbStockMovements) { fbStockMovements = data.fbStockMovements; saveFbStockMovements(); }
   if(data.bankAccounts) { bankAccounts = data.bankAccounts; saveBankAccounts(); }
-  if(data.bankTransactions) { bankTransactions = data.bankTransactions; saveBankTransactions(); }
+  if(data.bankLogos) { bankLogos = data.bankLogos; saveBankLogos(); }
   if(data.auditLog && data.auditLog.length){
     const existingIds = new Set(auditLog.map(a=>a.id));
     data.auditLog.forEach(a=>{ if(!existingIds.has(a.id)) auditLog.push(a); });
@@ -7405,7 +7372,7 @@ const DZ_RESTORE_HANDLERS = {
   salesreturn: d=>{ salesReturns.push(d); if(typeof saveSalesReturns==='function') saveSalesReturns(); if(typeof renderSalesReturnsTab==='function') renderSalesReturnsTab(); },
   po:        d=>{ purchaseOrders.push(d); if(typeof savePurchaseOrders==='function') savePurchaseOrders(); if(typeof renderPOTab==='function') renderPOTab(); },
   expense:   d=>{ expenses.push(d); if(typeof saveExpenses==='function') saveExpenses(); if(typeof renderExpensesTab==='function') renderExpensesTab(); },
-  banktx:    d=>{ bankTransactions.push(d); if(typeof saveBankTransactions==='function') saveBankTransactions(); if(typeof renderBankTab==='function') renderBankTab(); },
+  bankacc:   d=>{ bankAccounts.push(d); saveBankAccounts(); if(typeof renderBankTab==='function') renderBankTab(); },
   sendlog:   d=>{ sendLog.push(d); if(typeof saveSendLog==='function') saveSendLog(); if(typeof renderSendLogReport==='function') renderSendLogReport(); }
 };
 function renderDzTrashList(){
@@ -24967,169 +24934,391 @@ function renderPantryTab(){
   renderPantryHistory();
 }
 
-// ==================== MODULE 15: BANK MODULE ====================
-let bankAccounts = []; // {id, bankName, title, accNo, opening}
-let bankTransactions = []; // {id, accountId, date, type, amount, ref, notes}
-let selectedBankAccountId = null;
+// ==================== MODULE 15: BANK DETAILS (directory + print) ====================
+// Sirf bank ki details: Bank, Type (Personal/Business), Title, Account No, IBAN, Branch Code/Name.
+// Print: Thermal (width / text size / bold settings) aur A4 Half. Pakistani banks ke logos.
+let bankAccounts = []; // {id, bankName, accType:'personal'|'business', title, accNo, iban, branchCode, branchName}
+let bankLogos = {};    // {bankKey: dataURL} — ek baar logo save, us bank ke har account par lagta hai
+let bankPrefs = {width:'80', fs:'14', bold:'900', showLogo:'1', logoSize:'48'};
+let bankFilter = 'all';
+let bankSearch = '';
+
+// Pakistani banks — a = naam ke alias (matching), d = website (logo ke liye), c = badge ka rang, s = chhota naam
+const PK_BANKS = [
+  {k:'meezan',   n:'Meezan Bank',                    d:'meezanbank.com',      c:'#5b2a86', s:'MBL',   a:['meezan','meezan bank','mbl']},
+  {k:'hbl',      n:'HBL',                            d:'hbl.com',             c:'#00796b', s:'HBL',   a:['hbl','habib bank','habib bank limited']},
+  {k:'ubl',      n:'UBL',                            d:'ubl.com.pk',          c:'#0d47a1', s:'UBL',   a:['ubl','united bank','united bank limited']},
+  {k:'mcb',      n:'MCB Bank',                       d:'mcb.com.pk',          c:'#00693e', s:'MCB',   a:['mcb','mcb bank','muslim commercial bank']},
+  {k:'mcbislamic',n:'MCB Islamic Bank',              d:'mcbislamicbank.com',  c:'#2e7d32', s:'MIB',   a:['mcb islamic','mcb islamic bank']},
+  {k:'abl',      n:'Allied Bank',                    d:'abl.com',             c:'#0b5394', s:'ABL',   a:['abl','allied','allied bank']},
+  {k:'alfalah',  n:'Bank Alfalah',                   d:'bankalfalah.com',     c:'#c62828', s:'BAF',   a:['alfalah','bank alfalah','baf']},
+  {k:'askari',   n:'Askari Bank',                    d:'askaribank.com',      c:'#1b5e20', s:'AKBL',  a:['askari','askari bank','akbl']},
+  {k:'bahl',     n:'Bank Al Habib',                  d:'bankalhabib.com',     c:'#9c2b2b', s:'BAHL',  a:['bank al habib','al habib','bahl']},
+  {k:'faysal',   n:'Faysal Bank',                    d:'faysalbank.com',      c:'#0a3d8f', s:'FBL',   a:['faysal','faysal bank','fbl']},
+  {k:'hmb',      n:'Habib Metropolitan Bank',        d:'habibmetro.com',      c:'#004d40', s:'HMB',   a:['habib metropolitan','habib metropolitan bank','habib metro','hmb']},
+  {k:'scb',      n:'Standard Chartered',             d:'sc.com',              c:'#0473ea', s:'SCB',   a:['standard chartered','standard chartered bank','scb','stanchart']},
+  {k:'jsbank',   n:'JS Bank',                        d:'jsbl.com',            c:'#e65100', s:'JSB',   a:['js bank','jsbl','js']},
+  {k:'soneri',   n:'Soneri Bank',                    d:'soneribank.com',      c:'#b8860b', s:'SNB',   a:['soneri','soneri bank']},
+  {k:'bop',      n:'Bank of Punjab',                 d:'bop.com.pk',          c:'#1b5e20', s:'BOP',   a:['bop','bank of punjab','the bank of punjab','punjab bank']},
+  {k:'nbp',      n:'National Bank of Pakistan',      d:'nbp.com.pk',          c:'#0d47a1', s:'NBP',   a:['nbp','national bank','national bank of pakistan']},
+  {k:'silk',     n:'Silkbank',                       d:'silkbank.com.pk',     c:'#6a1b9a', s:'SILK',  a:['silk','silkbank','silk bank']},
+  {k:'bankislami',n:'BankIslami',                    d:'bankislami.com.pk',   c:'#2e7d32', s:'BIPL',  a:['bankislami','bank islami','bipl']},
+  {k:'dib',      n:'Dubai Islamic Bank',             d:'dibpak.com',          c:'#1a237e', s:'DIB',   a:['dubai islamic','dubai islamic bank','dib']},
+  {k:'albaraka', n:'Al Baraka Bank',                 d:'albaraka.com.pk',     c:'#00695c', s:'ABP',   a:['al baraka','albaraka','al baraka bank','baraka']},
+  {k:'sindh',    n:'Sindh Bank',                     d:'sindhbankltd.com',    c:'#1565c0', s:'SB',    a:['sindh bank','sindh']},
+  {k:'bok',      n:'Bank of Khyber',                 d:'bok.com.pk',          c:'#2e7d32', s:'BOK',   a:['bok','bank of khyber','the bank of khyber','khyber bank']},
+  {k:'fwb',      n:'First Women Bank',               d:'fwbl.com.pk',         c:'#ad1457', s:'FWB',   a:['first women','first women bank','fwbl']},
+  {k:'ztbl',     n:'Zarai Taraqiati Bank (ZTBL)',    d:'ztbl.com.pk',         c:'#33691e', s:'ZTBL',  a:['ztbl','zarai taraqiati','zarai taraqiati bank']},
+  {k:'easypaisa',n:'Easypaisa',                      d:'easypaisa.com.pk',    c:'#00a651', s:'EP',    a:['easypaisa','easy paisa','telenor microfinance','telenor bank']},
+  {k:'jazzcash', n:'JazzCash',                       d:'jazzcash.com.pk',     c:'#d32f2f', s:'JC',    a:['jazzcash','jazz cash','mobilink microfinance','mobilink bank']},
+  {k:'ubank',    n:'U Microfinance Bank',            d:'ubank.com.pk',        c:'#e65100', s:'UMB',   a:['u microfinance','u bank','ubank','u paisa','upaisa']},
+  {k:'khushhali',n:'Khushhali Microfinance Bank',    d:'khushhalibank.com.pk',c:'#1b5e20', s:'KMBL',  a:['khushhali','khushhali bank','khushhali microfinance']},
+  {k:'apna',     n:'Apna Microfinance Bank',         d:'apnabank.com.pk',     c:'#00838f', s:'APNA',  a:['apna','apna bank','apna microfinance']},
+  {k:'nayapay',  n:'NayaPay',                        d:'nayapay.com',         c:'#ff6f00', s:'NP',    a:['nayapay','naya pay']},
+  {k:'sadapay',  n:'SadaPay',                        d:'sadapay.pk',          c:'#00bfa5', s:'SP',    a:['sadapay','sada pay']}
+];
+
 function loadBankModule(){
-  const a = localStorage.getItem('sau_bank_accounts');
-  bankAccounts = a ? JSON.parse(a) : [];
-  const t = localStorage.getItem('sau_bank_transactions');
-  bankTransactions = t ? JSON.parse(t) : [];
+  try{ const a = localStorage.getItem('sau_bank_accounts'); bankAccounts = a ? JSON.parse(a) : []; }catch(e){ bankAccounts = []; }
+  try{ const l = localStorage.getItem('sau_bank_logos'); bankLogos = l ? JSON.parse(l) : {}; }catch(e){ bankLogos = {}; }
+  try{ const p = JSON.parse(localStorage.getItem('sau_bank_prefs')||'null'); if(p) bankPrefs = Object.assign({width:'80', fs:'14', bold:'900', showLogo:'1', logoSize:'48'}, p); }catch(e){}
+  // purane records (sirf title/accNo/opening wale) ko naye format mein le aao
+  let changed = false;
+  bankAccounts.forEach(a=>{
+    if(!a.accType){ a.accType = 'business'; changed = true; }
+    if(a.iban === undefined){
+      const raw = String(a.accNo||'').replace(/\s+/g,'').toUpperCase();
+      if(/^PK\d{2}[A-Z0-9]{20}$/.test(raw)){ a.iban = raw; a.accNo = ''; } else a.iban = '';
+      changed = true;
+    }
+    if(a.branchCode === undefined){ a.branchCode = ''; a.branchName = ''; changed = true; }
+  });
+  if(changed) saveBankAccounts();
 }
 function saveBankAccounts(){ safeSetItem('sau_bank_accounts', JSON.stringify(bankAccounts)); }
-function saveBankTransactions(){ safeSetItem('sau_bank_transactions', JSON.stringify(bankTransactions)); }
-function getBankBalance(accountId){
-  const acc = bankAccounts.find(a=>a.id===accountId);
-  if(!acc) return 0;
-  let bal = acc.opening||0;
-  bankTransactions.filter(t=>t.accountId===accountId).forEach(t=>{
-    if(t.type==='deposit'||t.type==='cheque_in'||t.type==='transfer_in') bal += t.amount;
-    else bal -= t.amount;
-  });
-  return bal;
+function saveBankLogos(){ safeSetItem('sau_bank_logos', JSON.stringify(bankLogos)); }
+
+// ---------- helpers ----------
+function bankAttr(x){ return escH(x).replace(/"/g,'&quot;'); }
+function bankNorm(x){
+  return String(x||'').toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9 ]+/g,' ')
+    .replace(/\b(limited|ltd|pvt|private|pakistan)\b/g,' ').replace(/\s+/g,' ').trim();
 }
-function openBankAccountModal(idx){
-  document.getElementById('ba-edit-idx').value = idx!==undefined ? idx : -1;
-  document.getElementById('bankAccModalTitle').textContent = idx!==undefined ? '✏️ Edit Account' : '➕ Add Bank Account';
-  document.getElementById('ba-bank').value='Meezan Bank'; document.getElementById('ba-title').value='';
-  document.getElementById('ba-accno').value=''; document.getElementById('ba-opening').value=0;
-  if(idx!==undefined && bankAccounts[idx]){
-    const a = bankAccounts[idx];
-    document.getElementById('ba-bank').value=a.bankName;
-    document.getElementById('ba-title').value=a.title;
-    document.getElementById('ba-accno').value=a.accNo;
-    document.getElementById('ba-opening').value=a.opening;
+function bankFind(name){
+  const n = bankNorm(name); if(!n) return null;
+  const padded = ' '+n+' ';
+  let best = null, score = 0;
+  PK_BANKS.forEach(b=>b.a.forEach(al=>{
+    const A = bankNorm(al); if(!A) return;
+    let sc = 0;
+    if(n === A) sc = 1000 + A.length;
+    else if(padded.includes(' '+A+' ')) sc = A.length;
+    if(sc > score){ score = sc; best = b; }
+  }));
+  return best;
+}
+function bankLogoKey(name){ const b = bankFind(name); return b ? b.k : 'c:'+bankNorm(name); }
+function bankLogoSrc(name){
+  const key = bankLogoKey(name);
+  if(bankLogos[key]) return bankLogos[key];
+  const b = bankFind(name);
+  return b ? 'https://www.google.com/s2/favicons?domain='+encodeURIComponent(b.d)+'&sz=128' : '';
+}
+function bankIbanFmt(i){ return String(i||'').replace(/\s+/g,'').replace(/(.{4})/g,'$1 ').trim(); }
+function bankInitials(name){
+  const b = bankFind(name); if(b) return b.s;
+  const w = bankNorm(name).split(' ').filter(Boolean);
+  return (w.length>1 ? w.map(x=>x[0]).join('') : (w[0]||'?').slice(0,3)).toUpperCase().slice(0,4);
+}
+// Jab logo na mile to rangeen badge (naam ke harf) — asli logo nahi, sirf placeholder
+function bankBadgeHtml(name, h, mono){
+  const b = bankFind(name);
+  const bg = mono ? '#000' : (b ? b.c : '#455a64');
+  const txt = bankInitials(name);
+  return `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:${h}px;height:${h}px;padding:0 8px;box-sizing:border-box;border-radius:8px;background:${bg};color:#fff;font-weight:800;font-size:${Math.max(10,Math.round(h*0.34))}px;letter-spacing:.5px;font-family:Arial,sans-serif;flex:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escH(txt)}</span>`;
+}
+function bankLogoHtml(name, h){
+  const src = bankLogoSrc(name);
+  if(!src) return bankBadgeHtml(name, h, false);
+  return `<span style="display:inline-flex;align-items:center;justify-content:center;height:${h}px;min-width:${h}px;max-width:${Math.round(h*2.4)}px;padding:3px 6px;box-sizing:border-box;background:#fff;border-radius:8px;flex:none;"><img src="${bankAttr(src)}" data-n="${bankAttr(name)}" style="height:100%;width:auto;max-width:100%;object-fit:contain;" onerror="this.parentNode.outerHTML=bankBadgeHtml(this.dataset.n,${h},false)"></span>`;
+}
+function bankLoadImg(src){
+  return new Promise(res=>{
+    if(!src) return res(false);
+    const im = new Image(); let done = false;
+    const fin = v=>{ if(!done){ done = true; res(v); } };
+    im.onload = ()=>fin(true); im.onerror = ()=>fin(false); im.src = src;
+    setTimeout(()=>fin(false), 3000);
+  });
+}
+// Print ke liye logo: chal raha ho to image, warna badge. thermal mein black&white.
+async function bankPrintLogoHtml(name, h, mono){
+  const src = bankLogoSrc(name);
+  if(src && await bankLoadImg(src)){
+    return `<img src="${bankAttr(src)}" style="height:${h}px;max-width:100%;object-fit:contain;${mono?'filter:grayscale(1) contrast(1.6);':''}-webkit-print-color-adjust:exact;print-color-adjust:exact;">`;
   }
+  return bankBadgeHtml(name, h, mono);
+}
+// Online favicon mil jaye to usay device mein save kar lo (offline print ke liye) — CORS ijazat de to
+async function bankTryCacheLogo(name){
+  try{
+    const key = bankLogoKey(name);
+    if(bankLogos[key]) return;
+    const b = bankFind(name); if(!b) return;
+    const r = await fetch('https://www.google.com/s2/favicons?domain='+encodeURIComponent(b.d)+'&sz=128');
+    if(!r.ok) return;
+    const blob = await r.blob();
+    const data = await new Promise((ok,no)=>{ const fr = new FileReader(); fr.onload = ()=>ok(fr.result); fr.onerror = no; fr.readAsDataURL(blob); });
+    if(typeof data === 'string' && data.startsWith('data:image') && data.length < 200000){
+      bankLogos[key] = data; saveBankLogos(); renderBankTab();
+    }
+  }catch(e){ /* CORS / offline — koi masla nahi, online URL se kaam chalta rahega */ }
+}
+
+// ---------- Add / Edit ----------
+function bankFillDatalist(){
+  const dl = document.getElementById('ba-bank-list');
+  if(dl && !dl.children.length) dl.innerHTML = PK_BANKS.map(b=>`<option value="${bankAttr(b.n)}"></option>`).join('');
+}
+function bankUpdateModalLogo(){
+  const name = document.getElementById('ba-bank').value.trim();
+  const prev = document.getElementById('ba-logo-prev');
+  const hint = document.getElementById('ba-logo-hint');
+  if(!name){ prev.innerHTML = ''; hint.textContent = 'Bank ka naam likhte hi logo yahan dikhega.'; return; }
+  prev.innerHTML = bankLogoHtml(name, 44);
+  const b = bankFind(name), saved = !!bankLogos[bankLogoKey(name)];
+  if(b) hint.innerHTML = `✅ <b>${escH(b.n)}</b> pehchan liya — ` + (saved ? 'logo save hai.' : 'logo online se aayega. Behtar quality ke liye official logo upload karein.');
+  else hint.textContent = 'Is naam ka logo list mein nahi — apna official logo upload karein (ek baar upload se is bank ke har account par lagega).';
+}
+function openBankAccountModal(id){
+  bankFillDatalist();
+  const a = id ? bankAccounts.find(x=>x.id===id) : null;
+  document.getElementById('bankAccModalTitle').textContent = a ? '✏️ Edit Bank Account' : '➕ Add Bank Account';
+  document.getElementById('ba-edit-id').value = a ? a.id : '';
+  document.getElementById('ba-bank').value = a ? a.bankName : '';
+  document.getElementById('ba-title').value = a ? (a.title||'') : '';
+  document.getElementById('ba-accno').value = a ? (a.accNo||'') : '';
+  document.getElementById('ba-iban').value = a ? bankIbanFmt(a.iban) : '';
+  document.getElementById('ba-branchcode').value = a ? (a.branchCode||'') : '';
+  document.getElementById('ba-branchname').value = a ? (a.branchName||'') : '';
+  const isP = a && a.accType === 'personal';
+  document.getElementById('ba-type-personal').checked = !!isP;
+  document.getElementById('ba-type-business').checked = !isP;
+  document.getElementById('ba-logo-file').value = '';
+  bankUpdateModalLogo();
   openModal('bankAccountModal');
 }
-function saveBankAccount(){
-  const idx = parseInt(document.getElementById('ba-edit-idx').value);
-  const title = document.getElementById('ba-title').value.trim();
-  if(!title){ toast('Account title required','warning'); return; }
-  const acc = {
-    id:(idx>=0 && bankAccounts[idx])?bankAccounts[idx].id:'BA'+Date.now(),
-    bankName:document.getElementById('ba-bank').value, title,
-    accNo:document.getElementById('ba-accno').value.trim(),
-    opening:parseFloat(document.getElementById('ba-opening').value)||0
+function bankLogoUpload(inp){
+  const f = inp.files && inp.files[0]; if(!f) return;
+  const name = document.getElementById('ba-bank').value.trim();
+  if(!name){ toast('Pehle Bank Name likhein, phir logo upload karein','warning'); inp.value = ''; return; }
+  const fr = new FileReader();
+  fr.onload = ()=>{
+    const im = new Image();
+    im.onload = ()=>{
+      try{
+        const MAXW = 420, MAXH = 200;
+        const sc = Math.min(1, MAXW/im.width, MAXH/im.height);
+        const cv = document.createElement('canvas');
+        cv.width = Math.max(1, Math.round(im.width*sc)); cv.height = Math.max(1, Math.round(im.height*sc));
+        cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
+        bankLogos[bankLogoKey(name)] = cv.toDataURL('image/png');
+        saveBankLogos();
+        bankUpdateModalLogo(); renderBankTab();
+        toast('Logo save ho gaya — is bank ke har account par lagega','success');
+      }catch(e){ toast('Logo process nahi ho saka','error'); }
+    };
+    im.onerror = ()=>toast('Yeh file image nahi lag rahi','error');
+    im.src = fr.result;
   };
-  if(idx>=0) bankAccounts[idx]=acc; else bankAccounts.push(acc);
+  fr.readAsDataURL(f);
+  inp.value = '';
+}
+function bankRemoveSavedLogo(){
+  const name = document.getElementById('ba-bank').value.trim(); if(!name) return;
+  const key = bankLogoKey(name);
+  if(!bankLogos[key]){ toast('Is bank ka koi saved logo nahi','info'); return; }
+  delete bankLogos[key]; saveBankLogos(); bankUpdateModalLogo(); renderBankTab();
+  toast('Saved logo hata diya','success');
+}
+function saveBankAccount(){
+  const editId = document.getElementById('ba-edit-id').value;
+  let bankName = document.getElementById('ba-bank').value.trim();
+  const title = document.getElementById('ba-title').value.trim();
+  const accNo = document.getElementById('ba-accno').value.trim();
+  const iban = document.getElementById('ba-iban').value.replace(/\s+/g,'').toUpperCase();
+  if(!bankName){ toast('Bank Name zaroori hai','warning'); return; }
+  if(!title){ toast('Account Title zaroori hai','warning'); return; }
+  if(!accNo && !iban){ toast('Account Number ya IBAN likhein','warning'); return; }
+  if(iban && !/^PK\d{2}[A-Z]{4}\d{16}$/.test(iban)){
+    if(!confirm('IBAN ka format Pakistani IBAN (24 characters: PK + 2 ank + 4 harf + 16 ank) se match nahi karta.\n\nPhir bhi save karein?')) return;
+  }
+  const dup = bankAccounts.find(x=>x.id!==editId && ((iban && x.iban===iban) || (accNo && x.accNo===accNo && bankNorm(x.bankName)===bankNorm(bankName))));
+  if(dup && !confirm('Yeh account pehle se maujood hai ('+dup.title+' — '+dup.bankName+'). Phir bhi save karein?')) return;
+  const m = bankFind(bankName);
+  // sirf lowercase/UPPERCASE short naam ko sahi naam bana do ("hbl" -> "HBL", "allied" -> "Allied Bank"); mixed-case jo likha wahi rahega
+  if(m && m.a.map(bankNorm).includes(bankNorm(bankName)) && (bankName===bankName.toLowerCase() || bankName===bankName.toUpperCase())) bankName = m.n;
+  const old = editId ? bankAccounts.find(x=>x.id===editId) : null;
+  const acc = Object.assign({}, old||{}, {
+    id: old ? old.id : 'BA'+Date.now(),
+    bankName, title, accNo, iban,
+    accType: document.getElementById('ba-type-personal').checked ? 'personal' : 'business',
+    branchCode: document.getElementById('ba-branchcode').value.trim(),
+    branchName: document.getElementById('ba-branchname').value.trim()
+  });
+  if(old) bankAccounts[bankAccounts.indexOf(old)] = acc; else bankAccounts.push(acc);
   saveBankAccounts();
-  logAudit(idx>=0?'edit':'create','Bank',`Account ${acc.title} (${acc.bankName}) saved`, undefined, acc);
+  logAudit(old?'edit':'create','Bank',`Account ${acc.title} (${acc.bankName}) saved`, old||undefined, acc);
   renderBankTab();
   closeModal('bankAccountModal');
   toast('Bank account saved','success');
+  bankTryCacheLogo(bankName);
 }
 function deleteBankAccount(id){
-  if(!confirm('Delete this bank account? Its transaction history will remain but be unlinked.')) return;
-  bankAccounts = bankAccounts.filter(a=>a.id!==id);
-  if(selectedBankAccountId===id) selectedBankAccountId=null;
+  const a = bankAccounts.find(x=>x.id===id); if(!a) return;
+  if(!confirm('Yeh bank account delete karein?\n\n'+a.bankName+' — '+a.title+'\n(Trash mein chala jayega, wahan se restore ho sakta hai.)')) return;
+  dzCapture('bankacc','🏛️ Bank',`${a.bankName} — ${a.title}`, a);
+  bankAccounts = bankAccounts.filter(x=>x.id!==id);
   saveBankAccounts();
+  logAudit('delete','Bank',`Account ${a.title} (${a.bankName}) deleted`, a, undefined);
   renderBankTab();
+  toast('Bank account deleted','success');
 }
-function selectBankAccount(id){
-  selectedBankAccountId = id;
-  renderBankTab();
+
+// ---------- Tab render ----------
+function bankChip(key, label, n){
+  const on = bankFilter === key;
+  return `<button class="btn btn-sm ${on?'btn-neon':''}" style="${on?'':'opacity:.65;border:1px solid var(--border2);background:transparent;color:var(--text);'}" onclick="bankFilter='${key}';renderBankTab()">${label} (${n})</button>`;
 }
-function openBankTxModal(){
-  if(!selectedBankAccountId){ toast('Select an account first','warning'); return; }
-  document.getElementById('bt-account-id').value = selectedBankAccountId;
-  document.getElementById('bt-date').value = new Date().toISOString().slice(0,10);
-  document.getElementById('bt-amount').value=''; document.getElementById('bt-ref').value=''; document.getElementById('bt-notes').value='';
-  openModal('bankTxModal');
-}
-function saveBankTx(){
-  const accountId = document.getElementById('bt-account-id').value;
-  const amount = parseFloat(document.getElementById('bt-amount').value)||0;
-  if(!amount){ toast('Enter amount','warning'); return; }
-  bankTransactions.push({
-    id:'BT'+Date.now(), accountId, date:document.getElementById('bt-date').value,
-    type:document.getElementById('bt-type').value, amount,
-    ref:document.getElementById('bt-ref').value.trim(), notes:document.getElementById('bt-notes').value.trim()
-  });
-  saveBankTransactions();
-  logAudit('create','Bank',`Transaction (${document.getElementById('bt-type').value}) of ${amount} on account`, undefined, undefined);
-  renderBankTab();
-  closeModal('bankTxModal');
-  toast('Transaction added','success');
-}
-function deleteBankTx(id){
-  if(!confirm('Delete this transaction?')) return;
-  { const tx = bankTransactions.find(t=>t.id===id); if(tx) dzCapture('banktx','🏛️ Bank',`${tx.type||''} ${tx.amount||''}`, tx); }
-  bankTransactions = bankTransactions.filter(t=>t.id!==id);
-  saveBankTransactions();
-  renderBankTab();
-}
-function openBankTransferModal(){
-  const fromSel = document.getElementById('bt-from'), toSel = document.getElementById('bt-to');
-  const opts = bankAccounts.map(a=>`<option value="${a.id}">${a.title} (${a.bankName})</option>`).join('');
-  fromSel.innerHTML = opts; toSel.innerHTML = opts;
-  document.getElementById('bt-transfer-amount').value='';
-  document.getElementById('bt-transfer-date').value = new Date().toISOString().slice(0,10);
-  document.getElementById('bt-transfer-notes').value='';
-  openModal('bankTransferModal');
-}
-function saveBankTransfer(){
-  const from = document.getElementById('bt-from').value, to = document.getElementById('bt-to').value;
-  const amount = parseFloat(document.getElementById('bt-transfer-amount').value)||0;
-  const date = document.getElementById('bt-transfer-date').value;
-  const notes = document.getElementById('bt-transfer-notes').value.trim();
-  if(from===to){ toast('From and To accounts must differ','warning'); return; }
-  if(!amount){ toast('Enter amount','warning'); return; }
-  const ts = Date.now();
-  bankTransactions.push({id:'BT'+ts+'a', accountId:from, date, type:'transfer_out', amount, ref:'', notes:'Transfer out'+(notes?(' — '+notes):'')});
-  bankTransactions.push({id:'BT'+ts+'b', accountId:to, date, type:'transfer_in', amount, ref:'', notes:'Transfer in'+(notes?(' — '+notes):'')});
-  saveBankTransactions();
-  renderBankTab();
-  closeModal('bankTransferModal');
-  toast('Transfer completed','success');
+function bankCardHtml(a){
+  const isP = a.accType === 'personal';
+  const col = isP ? 'var(--neon2)' : 'var(--neon4)';
+  const badge = `<span style="border:1px solid ${col};color:${col};padding:1px 9px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap;">${isP?'👤 Personal':'💼 Business'}</span>`;
+  const row = (l,v,mono)=> v ? `<div style="display:flex;gap:8px;font-size:12px;margin-top:3px;"><span style="color:var(--text3);min-width:78px;">${l}</span><span style="color:var(--text);font-weight:600;word-break:break-all;${mono?'font-family:monospace;letter-spacing:.5px;':''}">${escH(v)}</span></div>` : '';
+  return `<div style="background:var(--card2);border:1px solid var(--border);border-left:4px solid ${col};border-radius:10px;padding:12px;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      ${bankLogoHtml(a.bankName, 44)}
+      <div style="flex:1;min-width:0;"><div style="font-weight:800;color:var(--neon);font-size:14px;">${escH(a.bankName)}</div>${badge}</div>
+    </div>
+    <div style="font-weight:700;font-size:14px;margin:10px 0 4px;">${escH(a.title)}</div>
+    ${row('Account No', a.accNo, true)}${row('IBAN', bankIbanFmt(a.iban), true)}${row('Branch Code', a.branchCode)}${row('Branch', a.branchName)}
+    <div class="flex-gap" style="margin-top:10px;flex-wrap:wrap;">
+      <button class="btn btn-xs btn-green" onclick="bankPrintThermal('${a.id}')">🧾 Thermal</button>
+      <button class="btn btn-xs btn-purple" onclick="bankPrintA4Half('${a.id}')">📄 A4 Half</button>
+      <button class="btn btn-xs btn-neon" onclick="bankCopyDetails('${a.id}')">📋 Copy</button>
+      <button class="btn btn-xs btn-neon" onclick="openBankAccountModal('${a.id}')">✏️ Edit</button>
+      <button class="btn btn-xs btn-red" onclick="deleteBankAccount('${a.id}')">🗑️</button>
+    </div>
+  </div>`;
 }
 function renderBankTab(){
-  const cur = settings.currency||'PKR';
+  bankPrefsFill();
+  const nB = bankAccounts.filter(a=>a.accType!=='personal').length, nP = bankAccounts.length - nB;
+  const chips = document.getElementById('bank-chips');
+  if(chips) chips.innerHTML = bankChip('all','All',bankAccounts.length) + bankChip('business','💼 Business',nB) + bankChip('personal','👤 Personal',nP);
   const grid = document.getElementById('bank-accounts-grid');
-  if(grid){
-    grid.innerHTML = bankAccounts.map(a=>{
-      const bal = getBankBalance(a.id);
-      const active = selectedBankAccountId===a.id;
-      return `<div class="accent-box" style="cursor:pointer;${active?'border:2px solid var(--neon);':''}" onclick="selectBankAccount('${a.id}')">
-        <div style="font-weight:700;color:var(--neon2);">${a.bankName}</div>
-        <div style="font-size:12px;color:var(--text2);">${a.title} ${a.accNo?('— '+a.accNo):''}</div>
-        <div style="font-size:18px;font-weight:700;margin-top:6px;color:${bal>=0?'var(--success)':'var(--neon3)'};">${cur} ${fmt(bal)}</div>
-        <button class="btn btn-xs btn-red" style="margin-top:6px;" onclick="event.stopPropagation();deleteBankAccount('${a.id}')">🗑️ Remove</button>
-      </div>`;
-    }).join('') || '<div style="color:var(--text3);font-size:12px;">No bank accounts added yet.</div>';
-  }
-  const titleEl = document.getElementById('bank-statement-title');
-  const btnEl = document.getElementById('bank-add-tx-btn');
-  const pdfBtnEl = document.getElementById('bank-export-pdf-btn');
-  const bodyEl = document.getElementById('bank-statement-body');
-  if(!selectedBankAccountId){
-    if(titleEl) titleEl.textContent='📄 Statement';
-    if(btnEl) btnEl.style.display='none';
-    if(pdfBtnEl) pdfBtnEl.style.display='none';
-    if(bodyEl) bodyEl.innerHTML = '<div style="color:var(--text3);font-size:12px;">Select a bank account above to view its statement.</div>';
+  if(!grid) return;
+  const q = bankNorm(bankSearch), qd = String(bankSearch||'').toLowerCase().replace(/\s+/g,'');
+  const match = a => !q && !qd ? true : (bankNorm([a.bankName,a.title,a.branchName].join(' ')).includes(q) || [a.accNo,a.iban,a.branchCode].join(' ').toLowerCase().replace(/\s+/g,'').includes(qd));
+  const list = bankAccounts.filter(a=>match(a) && (bankFilter==='all' || (bankFilter==='personal') === (a.accType==='personal')));
+  if(!list.length){
+    grid.innerHTML = `<div style="color:var(--text3);font-size:12px;padding:8px 0;">${bankAccounts.length ? 'Koi account match nahi hua.' : 'Abhi koi bank account add nahi hua. Upar "➕ Add Bank Account" dabayein.'}</div>`;
     return;
   }
-  const acc = bankAccounts.find(a=>a.id===selectedBankAccountId);
-  if(!acc){ selectedBankAccountId=null; return; }
-  if(titleEl) titleEl.textContent = `📄 Statement — ${acc.title} (${acc.bankName})`;
-  if(btnEl) btnEl.style.display='';
-  if(pdfBtnEl) pdfBtnEl.style.display='';
-  const txs = bankTransactions.filter(t=>t.accountId===selectedBankAccountId).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-  let running = acc.opening||0;
-  const TX_LABELS = {deposit:'💵 Deposit', withdrawal:'📤 Withdrawal', cheque_in:'🏦 Cheque In', cheque_out:'🏦 Cheque Out', transfer_in:'🔁 Transfer In', transfer_out:'🔁 Transfer Out'};
-  const rows = txs.map(t=>{
-    const isCredit = ['deposit','cheque_in','transfer_in'].includes(t.type);
-    running += isCredit ? t.amount : -t.amount;
-    return `<tr>
-      <td>${t.date}</td><td>${TX_LABELS[t.type]||t.type}</td><td>${t.ref||'-'}</td>
-      <td style="color:${isCredit?'var(--success)':'var(--text3)'};">${isCredit?'+':''}${!isCredit?'-':''}${cur} ${fmt(t.amount)}</td>
-      <td>${cur} ${fmt(running)}</td><td>${t.notes||'-'}</td>
-      <td><button class="btn btn-xs btn-red" onclick="deleteBankTx('${t.id}')">🗑️</button></td>
-    </tr>`;
-  }).join('');
-  if(bodyEl) bodyEl.innerHTML = `<div style="overflow-x:auto;"><table class="items-table"><thead><tr><th>Date</th><th>Type</th><th>Ref</th><th>Amount</th><th>Balance</th><th>Notes</th><th></th></tr></thead>
-    <tbody><tr><td colspan="4" style="font-style:italic;color:var(--text3);">Opening Balance</td><td>${cur} ${fmt(acc.opening||0)}</td><td colspan="2"></td></tr>${rows || '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:16px;">No transactions yet</td></tr>'}</tbody></table></div>`;
+  const section = (title, arr, col)=> arr.length ? `<div style="font-weight:800;font-size:13px;color:${col};margin:6px 0 8px;">${title} <span style="color:var(--text3);font-weight:600;">(${arr.length})</span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:14px;">${arr.map(bankCardHtml).join('')}</div>` : '';
+  const biz = list.filter(a=>a.accType!=='personal'), per = list.filter(a=>a.accType==='personal');
+  grid.innerHTML = section('💼 BUSINESS ACCOUNTS', biz, 'var(--neon4)') + section('👤 PERSONAL ACCOUNTS', per, 'var(--neon2)');
+}
+
+// ---------- Thermal settings ----------
+function bankPrefsFill(){
+  const set = (id,v)=>{ const e = document.getElementById(id); if(e) e.value = v; };
+  set('bk-width', bankPrefs.width); set('bk-fs', bankPrefs.fs); set('bk-bold', bankPrefs.bold);
+  set('bk-logo', bankPrefs.showLogo); set('bk-logosize', bankPrefs.logoSize);
+}
+function bankPrefsSave(){
+  const get = id=>{ const e = document.getElementById(id); return e ? e.value : ''; };
+  bankPrefs = {width:get('bk-width')||'80', fs:get('bk-fs')||'14', bold:get('bk-bold')||'900', showLogo:get('bk-logo')||'1', logoSize:get('bk-logosize')||'48'};
+  safeSetItem('sau_bank_prefs', JSON.stringify(bankPrefs));
+  toast('Thermal settings save ho gayi','success');
+}
+
+// ---------- Copy ----------
+function bankDetailLines(a){
+  return [
+    ['Bank', a.bankName], ['Account Type', a.accType==='personal'?'Personal':'Business'], ['Account Title', a.title],
+    ['Account No', a.accNo], ['IBAN', bankIbanFmt(a.iban)], ['Branch Code', a.branchCode], ['Branch', a.branchName]
+  ].filter(r=>r[1]);
+}
+function bankCopyDetails(id){
+  const a = bankAccounts.find(x=>x.id===id); if(!a) return;
+  const text = bankDetailLines(a).map(r=>r[0]+': '+r[1]).join('\n');
+  const fallback = ()=>{ const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); try{ document.execCommand('copy'); toast('Details copy ho gayi','success'); }catch(e){ toast('Copy nahi ho saka','error'); } t.remove(); };
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(()=>toast('Details copy ho gayi','success'), fallback); else fallback();
+}
+
+// ---------- Print ----------
+function bankOpenPrint(title, css, body){
+  const win = window.open('','_blank');
+  if(!win){ toast('Popup blocked — browser mein popups allow karein','warning'); return; }
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escH(title)}</title><style>${css}</style></head><body>${body}</body></html>`);
+  win.document.close();
+  setTimeout(()=>{ try{ win.focus(); win.print(); }catch(e){} }, 350);
+}
+async function bankPrintThermal(id){
+  const a = bankAccounts.find(x=>x.id===id); if(!a) return;
+  const w = parseInt(bankPrefs.width)||80, fs = parseInt(bankPrefs.fs)||14, fw = bankPrefs.bold||'900';
+  const lh = parseInt(bankPrefs.logoSize)||48;
+  const logo = bankPrefs.showLogo==='1' ? await bankPrintLogoHtml(a.bankName, lh, true) : '';
+  const isP = a.accType==='personal';
+  const rows = [['Account Title', a.title], ['Account No', a.accNo], ['IBAN', bankIbanFmt(a.iban)], ['Branch Code', a.branchCode], ['Branch', a.branchName]]
+    .filter(r=>r[1]).map(r=>`<div class="r"><div class="l">${r[0]}</div><div class="v">${escH(r[1])}</div></div>`).join('');
+  const body = `<div class="w">
+    ${logo?`<div class="c" style="margin-bottom:4px;">${logo}</div>`:''}
+    <div class="c bn">${escH(a.bankName)}</div>
+    <div class="c tp">[ ${isP?'PERSONAL':'BUSINESS'} ACCOUNT ]</div>
+    <div class="sep"></div>
+    ${rows}
+    <div class="sep"></div>
+    <div class="c sm">Printed: ${new Date().toLocaleString('en-PK')}</div>
+  </div>`;
+  const css = `@page{size:${w}mm auto;margin:0;}
+    html,body{margin:0;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .w{width:${w}mm;box-sizing:border-box;padding:2mm 2mm 8mm;font-family:Arial,sans-serif;font-size:${fs}px;font-weight:${fw};line-height:1.25;}
+    .c{text-align:center;} .bn{font-size:${fs+5}px;} .tp{font-size:${fs}px;margin-top:2px;}
+    .sep{border-top:2px dashed #000;margin:6px 0;}
+    .r{margin-bottom:6px;} .l{font-size:${Math.max(fs-3,8)}px;text-transform:uppercase;letter-spacing:.4px;}
+    .v{font-size:${fs+2}px;word-break:break-all;} .sm{font-size:${Math.max(fs-4,8)}px;}`;
+  logAudit('print','Bank',`Thermal print: ${a.title} (${a.bankName})`, undefined, undefined);
+  bankOpenPrint('Bank Details — '+a.bankName, css, body);
+}
+async function bankPrintA4Half(id){
+  const a = bankAccounts.find(x=>x.id===id); if(!a) return;
+  const logo = await bankPrintLogoHtml(a.bankName, 72, false);
+  const isP = a.accType==='personal';
+  const col = isP ? '#6d28d9' : '#047857';
+  const rows = [['Account Title', a.title], ['Account Number', a.accNo], ['IBAN', bankIbanFmt(a.iban)], ['Branch Code', a.branchCode], ['Branch Name', a.branchName]]
+    .filter(r=>r[1]).map(r=>`<tr><td class="l">${r[0]}</td><td class="v">${escH(r[1])}</td></tr>`).join('');
+  const body = `<div class="sheet">
+    <div class="top"><div>${logo}</div>
+      <div class="hd"><div class="bn">${escH(a.bankName)}</div><span class="tp">${isP?'PERSONAL ACCOUNT':'BUSINESS ACCOUNT'}</span></div></div>
+    <div class="ttl">BANK ACCOUNT DETAILS</div>
+    <table>${rows}</table>
+    <div class="ft">Printed: ${new Date().toLocaleString('en-PK')}</div>
+  </div>`;
+  const css = `@page{size:A4 portrait;margin:0;}
+    html,body{margin:0;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .sheet{width:210mm;height:148.5mm;box-sizing:border-box;padding:12mm 16mm 8mm;position:relative;border-bottom:1.5px dashed #888;font-family:Arial,sans-serif;overflow:hidden;}
+    .top{display:flex;align-items:center;gap:16px;border-bottom:3px solid ${col};padding-bottom:8px;}
+    .hd{flex:1;} .bn{font-size:28px;font-weight:800;line-height:1.1;}
+    .tp{display:inline-block;margin-top:5px;padding:2px 12px;border:2px solid ${col};color:${col};border-radius:14px;font-size:12px;font-weight:800;letter-spacing:.8px;}
+    .ttl{font-size:12px;letter-spacing:2px;color:#666;font-weight:700;margin:8px 0 4px;}
+    table{width:100%;border-collapse:collapse;} td{padding:6px 0;border-bottom:1px solid #ddd;vertical-align:top;}
+    .l{width:42mm;font-size:14px;color:#444;font-weight:600;} .v{font-size:21px;font-weight:800;word-break:break-all;}
+    .ft{position:absolute;left:16mm;right:16mm;bottom:6mm;font-size:10px;color:#888;display:flex;justify-content:space-between;}`;
+  logAudit('print','Bank',`A4 half print: ${a.title} (${a.bankName})`, undefined, undefined);
+  bankOpenPrint('Bank Details — '+a.bankName, css, body);
 }
 
 // ==================== MODULE 16: AUDIT LOG ====================
@@ -26602,28 +26791,6 @@ function exportWarehouseMatrixPDF(){
   stampBrandLogoOnAllPages(doc);
   doc.save('Warehouse_Stock_Report.pdf');
   logAudit('download','PDF Export','Warehouse matrix PDF exported', undefined, undefined);
-  toast('PDF generated','success');
-}
-function exportBankStatementPDF(){
-  if(!selectedBankAccountId){ toast('Select an account first','warning'); return; }
-  const acc = bankAccounts.find(a=>a.id===selectedBankAccountId);
-  if(!acc) return;
-  const cur = settings.currency||'PKR';
-  const doc = new jspdf.jsPDF();
-  let y = pdfHeader(doc, `Bank Statement — ${acc.title} (${acc.bankName})`);
-  const txs = bankTransactions.filter(t=>t.accountId===selectedBankAccountId).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-  let running = acc.opening||0;
-  const TX_LABELS2 = {deposit:'Deposit', withdrawal:'Withdrawal', cheque_in:'Cheque In', cheque_out:'Cheque Out', transfer_in:'Transfer In', transfer_out:'Transfer Out'};
-  const body = [['Opening','-','-',fmt(acc.opening||0),fmt(running)]];
-  txs.forEach(t=>{
-    const isCredit = ['deposit','cheque_in','transfer_in'].includes(t.type);
-    running += isCredit? t.amount : -t.amount;
-    body.push([t.date, TX_LABELS2[t.type]||t.type, t.ref||'-', (isCredit?'+':'-')+fmt(t.amount), fmt(running)]);
-  });
-  doc.autoTable({startY:y, head:[['Date','Type','Ref','Amount','Balance']], body, styles:{fontSize:8}, headStyles:{fillColor:[20,20,40]}});
-  stampBrandLogoOnAllPages(doc);
-  doc.save(`Bank_Statement_${acc.title.replace(/[^a-zA-Z0-9]/g,'_')}.pdf`);
-  logAudit('download','PDF Export',`Bank statement PDF exported for ${acc.title}`, undefined, undefined);
   toast('PDF generated','success');
 }
 function exportAuditLogPDF(){
