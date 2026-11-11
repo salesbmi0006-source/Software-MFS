@@ -3774,6 +3774,7 @@ tr.lg-partial td:first-child{box-shadow:inset 4px 0 0 #f5a623;}
     <div class="card-header">
       <div class="card-title">🏛️ Bank Accounts — Details</div>
       <div class="flex-gap">
+        <button class="btn btn-sm btn-neon" title="Thermal Printer Settings" onclick="openModal('bankThermalModal')" style="font-size:16px;padding:4px 10px;">⚙️</button>
         <button class="btn btn-green btn-sm" onclick="openBankAccountModal()">➕ Add Bank Account</button>
       </div>
     </div>
@@ -3782,8 +3783,13 @@ tr.lg-partial td:first-child{box-shadow:inset 4px 0 0 #f5a623;}
     <div id="bank-accounts-grid"></div>
   </div>
 
-  <div class="card">
-    <div class="card-header"><div class="card-title">🧾 Thermal Printer Settings</div></div>
+</div>
+
+<!-- THERMAL SETTINGS MODAL -->
+<div class="modal-overlay" id="bankThermalModal">
+<div class="modal">
+  <div class="modal-header"><h3>🧾 Thermal Printer Settings</h3><button class="close-btn" onclick="closeModal('bankThermalModal')">✕</button></div>
+  <div class="modal-body">
     <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Yeh settings sirf Thermal print par lagti hain (auto save). A4 Half print ka size fixed hai — A4 ka upar wala aadha hissa, neeche kaatne ki lakeer.</div>
     <div class="form-row">
       <div class="form-group"><label>Paper Width</label><select id="bk-width" onchange="bankPrefsSave()"><option value="80">80 mm</option><option value="58">58 mm</option></select></div>
@@ -3797,6 +3803,55 @@ tr.lg-partial td:first-child{box-shadow:inset 4px 0 0 #f5a623;}
         <option value="32">Chhota</option><option value="48">Normal</option><option value="64">Bara</option><option value="80">Extra Bara</option></select></div>
     </div>
   </div>
+  <div class="modal-footer"><button class="btn btn-neon" onclick="closeModal('bankThermalModal')">Close</button></div>
+</div>
+</div>
+
+<!-- BANK AUTHORIZATION LETTER MODAL -->
+<div class="modal-overlay" id="bankLetterModal">
+<div class="modal">
+  <div class="modal-header"><h3 id="bl-title">📝 Authorization Letter</h3><button class="close-btn" onclick="closeModal('bankLetterModal')">✕</button></div>
+  <div class="modal-body">
+    <input type="hidden" id="bl-id">
+    <div class="form-group"><label>Letter Type</label>
+      <select id="bl-type" onchange="blTypeChange()"><option value="statement">Bank Statement (Personal)</option><option value="cert">Bank Maintenance Certificate (Business)</option></select></div>
+    <div id="bl-range-wrap">
+      <div class="form-row">
+        <div class="form-group"><label>Statement From</label><input type="date" id="bl-from"></div>
+        <div class="form-group"><label>Statement To</label><input type="date" id="bl-to"></div>
+      </div>
+      <div class="flex-gap" style="margin-bottom:10px;flex-wrap:wrap;">
+        <button type="button" class="btn btn-xs btn-neon" onclick="blMonths(3)">3 Mahine</button>
+        <button type="button" class="btn btn-xs btn-neon" onclick="blMonths(6)">6 Mahine</button>
+        <button type="button" class="btn btn-xs btn-neon" onclick="blMonths(9)">9 Mahine</button>
+        <button type="button" class="btn btn-xs btn-neon" onclick="blMonths(12)">12 Mahine</button>
+        <button type="button" class="btn btn-xs btn-purple" onclick="blMonths(0)">Pichla FY (1 Jul – 30 Jun)</button>
+      </div>
+    </div>
+    <div class="form-group"><label>Letter Date</label>
+      <select id="bl-datemode"><option value="blank">Khali line (Date:______)</option><option value="today">Aaj ki date</option></select></div>
+    <div class="form-group"><label>Authorized Person</label>
+      <select id="bl-authmode" onchange="blAuthChange()"><option value="def">Default (fix)</option><option value="new">Change karna hai</option></select>
+      <div id="bl-auth-def" style="font-size:12px;margin-top:6px;font-weight:700;"></div>
+      <div id="bl-auth-new" style="display:none;margin-top:6px;">
+        <div class="form-row">
+          <div class="form-group"><label>Name</label><input type="text" id="bl-aname" placeholder="Naya naam"></div>
+          <div class="form-group"><label>CNIC</label><input type="text" id="bl-acnic" placeholder="33102-1234567-1"></div>
+        </div>
+        <label style="font-size:12px;"><input type="checkbox" id="bl-asave"> Isay naya default bana do</label>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Signature Name</label><input type="text" id="bl-signer"></div>
+      <div class="form-group"><label>Footer Address (Business)</label><input type="text" id="bl-addr"></div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-purple" onclick="blPrint()">🖨️ Print A4</button>
+    <button class="btn btn-green" onclick="blPdf()">📄 PDF (1 page)</button>
+    <button class="btn btn-neon" onclick="closeModal('bankLetterModal')">Cancel</button>
+  </div>
+</div>
 </div>
 
 <!-- ADD / EDIT BANK ACCOUNT MODAL -->
@@ -25205,6 +25260,7 @@ function bankCardHtml(a){
     <div class="flex-gap" style="margin-top:10px;flex-wrap:wrap;">
       <button class="btn btn-xs btn-green" onclick="bankPrintThermal('${a.id}')">🧾 Thermal</button>
       <button class="btn btn-xs btn-purple" onclick="bankPrintA4Half('${a.id}')">📄 A4 Half</button>
+      <button class="btn btn-xs btn-green" onclick="blOpen('${a.id}')">📝 Letter A4</button>
       <button class="btn btn-xs btn-neon" onclick="bankCopyDetails('${a.id}')">📋 Copy</button>
       <button class="btn btn-xs btn-neon" onclick="openBankAccountModal('${a.id}')">✏️ Edit</button>
       <button class="btn btn-xs btn-red" onclick="deleteBankAccount('${a.id}')">🗑️</button>
@@ -25319,6 +25375,111 @@ async function bankPrintA4Half(id){
     .ft{position:absolute;left:16mm;right:16mm;bottom:6mm;font-size:10px;color:#888;display:flex;justify-content:space-between;}`;
   logAudit('print','Bank',`A4 half print: ${a.title} (${a.bankName})`, undefined, undefined);
   bankOpenPrint('Bank Details — '+a.bankName, css, body);
+}
+
+
+// ---------- Authorization Letter (Statement / Maintenance Certificate) ----------
+const BL_DEF = {name:'Muhammad Faisal', cnic:'33102-3197541-9', signer:'Syed Asim Umair', addr:'Faisalabad Address: 167 B Mehar Sadiq Market Railway Road Faisalabad Ph. 014:2635091, 2626383'};
+let blPrefs = Object.assign({}, BL_DEF);
+try{ const _p = JSON.parse(localStorage.getItem('sau_bank_letter_prefs')||'null'); if(_p) blPrefs = Object.assign({}, BL_DEF, _p); }catch(e){}
+function blISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function blFmt(iso){
+  if(!iso) return '';
+  const d = new Date(iso+'T00:00:00'), n = d.getDate();
+  const o = (n%10===1&&n!==11)?'st':(n%10===2&&n!==12)?'nd':(n%10===3&&n!==13)?'rd':'th';
+  return n+o+' '+d.toLocaleString('en-GB',{month:'long'})+' '+d.getFullYear();
+}
+function blMonths(n){
+  const t = new Date(); let f, to = t;
+  if(n===0){ const y = t.getMonth()>=6 ? t.getFullYear()-1 : t.getFullYear()-2; f = new Date(y,6,1); to = new Date(y+1,5,30); }
+  else { f = new Date(t.getFullYear(), t.getMonth()-n, 1); f.setDate(Math.min(t.getDate(), new Date(f.getFullYear(), f.getMonth()+1, 0).getDate())); }
+  document.getElementById('bl-from').value = blISO(f); document.getElementById('bl-to').value = blISO(to);
+}
+function blTypeChange(){ document.getElementById('bl-range-wrap').style.display = document.getElementById('bl-type').value==='statement' ? '' : 'none'; }
+function blAuthChange(){ document.getElementById('bl-auth-new').style.display = document.getElementById('bl-authmode').value==='new' ? '' : 'none'; }
+function blOpen(id){
+  const a = bankAccounts.find(x=>x.id===id); if(!a) return;
+  const isP = a.accType==='personal';
+  document.getElementById('bl-id').value = id;
+  document.getElementById('bl-title').textContent = '📝 Authorization Letter — '+a.bankName;
+  document.getElementById('bl-type').value = isP ? 'statement' : 'cert';
+  document.getElementById('bl-authmode').value = 'def';
+  document.getElementById('bl-aname').value = ''; document.getElementById('bl-acnic').value = ''; document.getElementById('bl-asave').checked = false;
+  document.getElementById('bl-auth-def').textContent = 'Mr. '+blPrefs.name+' — CNIC # '+blPrefs.cnic;
+  document.getElementById('bl-signer').value = isP ? a.title : blPrefs.signer;
+  document.getElementById('bl-addr').value = blPrefs.addr;
+  document.getElementById('bl-datemode').value = 'blank';
+  blMonths(0); blTypeChange(); blAuthChange();
+  openModal('bankLetterModal');
+}
+function blData(){
+  const a = bankAccounts.find(x=>x.id===document.getElementById('bl-id').value); if(!a) return null;
+  const g = id=>document.getElementById(id).value.trim();
+  const type = g('bl-type'), isNew = g('bl-authmode')==='new';
+  let name = blPrefs.name, cnic = blPrefs.cnic;
+  if(isNew){
+    name = g('bl-aname'); cnic = g('bl-acnic');
+    if(!name || !cnic){ toast('Naya Name aur CNIC dono likhein','warning'); return null; }
+    if(document.getElementById('bl-asave').checked){ blPrefs.name = name; blPrefs.cnic = cnic; }
+  }
+  const signer = g('bl-signer'), addr = g('bl-addr');
+  if(!document.getElementById('bl-id').value) return null;
+  if(signer !== a.title && a.accType!=='personal') blPrefs.signer = signer;
+  blPrefs.addr = addr;
+  safeSetItem('sau_bank_letter_prefs', JSON.stringify(blPrefs));
+  const from = g('bl-from'), to = g('bl-to');
+  if(type==='statement' && (!from || !to || from>to)){ toast('Statement ki sahi From / To date chunein','warning'); return null; }
+  const isP = a.accType==='personal', acc = a.accNo || a.iban;
+  const what = type==='statement' ? 'Bank Statement' : 'Bank Maintenance Certificate';
+  const rng = type==='statement' ? ' from Date: '+blFmt(from)+' to Date: '+blFmt(to)+',' : '';
+  return {
+    head: isP ? '' : a.title, bank: isP ? a.bankName : a.bankName.toUpperCase(), what, signer, addr: isP ? '' : addr,
+    date: g('bl-datemode')==='today' ? new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '',
+    body: 'I do hereby authorize Mr. '+name+', CNIC # '+cnic+' to receive my '+what+rng+' of '+a.bankName+' A/C title: '+a.title+' & A/C # '+acc+'.',
+    log: a.title+' ('+a.bankName+')'
+  };
+}
+function blPrint(){
+  const d = blData(); if(!d) return;
+  const body = `<div class="pg">
+    ${d.head?`<div class="hd">${escH(d.head)}</div>`:'<div style="height:14mm"></div>'}
+    <div class="bk">${escH(d.bank)}</div>
+    <div class="sb">Subject: Authorization to Collect ${d.what}:</div>
+    <div class="dt">Date:${d.date?' '+escH(d.date):'______________'}</div>
+    <div class="p">Dear Sir,</div>
+    <div class="p tx">${escH(d.body)}</div>
+    <div class="p tx">I will appreciate your support in this case.</div>
+    <div class="p" style="margin-top:12mm;">Thanks,</div>
+    <div class="p">${escH(d.signer)}</div>
+    ${d.addr?`<div class="ft">${escH(d.addr)}</div>`:''}
+  </div>`;
+  const css = `@page{size:A4 portrait;margin:0;} html,body{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .pg{width:210mm;height:296mm;box-sizing:border-box;padding:18mm 20mm;position:relative;overflow:hidden;font-family:Calibri,Arial,sans-serif;font-weight:700;font-size:12pt;color:#000;page-break-after:avoid;}
+    .hd{text-align:center;font-family:Arial,sans-serif;font-size:34pt;color:#00b050;margin-bottom:8mm;} .bk{text-align:center;font-size:11pt;margin-bottom:8mm;}
+    .sb{margin-bottom:6mm;} .dt{text-align:right;margin-bottom:8mm;} .p{margin-bottom:6mm;} .tx{font-size:11pt;line-height:1.5;}
+    .ft{position:absolute;left:20mm;right:20mm;bottom:14mm;border-top:1px solid #00b050;padding-top:3mm;text-align:center;color:#00b050;font-size:9.5pt;}`;
+  logAudit('print','Bank',`Authorization letter print: ${d.log}`, undefined, undefined);
+  closeModal('bankLetterModal');
+  bankOpenPrint('Authorization Letter — '+d.what, css, body);
+}
+function blPdf(){
+  const d = blData(); if(!d) return;
+  const doc = new jspdf.jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const L = 20, W = 170; let y = 30;
+  doc.setFont('helvetica','bold');
+  if(d.head){ doc.setFontSize(32); doc.setTextColor(0,176,80); doc.text(d.head, 105, y, {align:'center'}); y += 16; } else y += 6;
+  doc.setTextColor(0,0,0); doc.setFontSize(11);
+  doc.text(d.bank, 105, y, {align:'center'}); y += 14;
+  doc.setFontSize(12); doc.text('Subject: Authorization to Collect '+d.what+':', L, y); y += 13;
+  doc.text('Date:'+(d.date?' '+d.date:'______________'), L+W, y, {align:'right'}); y += 13;
+  doc.text('Dear Sir,', L, y); y += 11;
+  doc.setFontSize(11);
+  [d.body, 'I will appreciate your support in this case.'].forEach(t=>{ const ls = doc.splitTextToSize(t, W); doc.text(ls, L, y); y += ls.length*6 + 6; });
+  y += 8; doc.setFontSize(12); doc.text('Thanks,', L, y); y += 10; doc.text(d.signer, L, y);
+  if(d.addr){ doc.setDrawColor(0,176,80); doc.line(L, 270, L+W, 270); doc.setTextColor(0,176,80); doc.setFontSize(9); doc.text(doc.splitTextToSize(d.addr, W), 105, 277, {align:'center'}); }
+  logAudit('download','Bank',`Authorization letter PDF: ${d.log}`, undefined, undefined);
+  doc.save('Authorization_'+d.what.replace(/\s+/g,'_')+'_'+d.log.replace(/[^\w]+/g,'_')+'.pdf');
+  closeModal('bankLetterModal');
 }
 
 // ==================== MODULE 16: AUDIT LOG ====================
