@@ -425,6 +425,17 @@ tr.lg-partial td:first-child{box-shadow:inset 4px 0 0 #f5a623;}
 .fbs-warnbox{border-left:3px solid var(--neon5);background:rgba(255,187,0,.09);}
 .fbs-okbox{border-left:3px solid var(--neon4);background:rgba(0,255,157,.08);}
 .fbs-ul{margin:6px 0 0 18px;padding:0;} .fbs-ul li{margin-bottom:3px;}
+/* v112: header/number alignment, group dividers, tax split view */
+.fbs-tbl th.n{text-align:right;} .fbs-tbl th.c{text-align:center;}
+.fbs-tbl td.n{min-width:92px;} .fbs-tbl td.n.q,.fbs-tbl th.n.q{min-width:72px;}
+.fbs-tbl th.fbs-gs,.fbs-tbl td.fbs-gs{border-left:2px solid var(--border2);}
+.fbs-tbl th.fbs-g1h,.fbs-tbl th.fbs-g2h,.fbs-tbl th.fbs-g3h,.fbs-tbl th.fbs-g4h{text-align:center;}
+.fbs-tbl tr.fbs-grp td{background:var(--bg3);font-weight:800;border-top:2px solid var(--border2);}
+.fbs-tbl tr.fbs-subrow td{font-size:11.5px;}
+.fbs-tbl tr.fbs-subrow td.fbs-hs{opacity:.55;font-weight:600;}
+.fbs-tbl tfoot tr.fbs-uomrow td{font-weight:600;font-size:11px;color:var(--text2);}
+.fbs-taxchip{display:inline-block;padding:1px 8px;border-radius:12px;font-size:11px;font-weight:800;background:rgba(255,187,0,.15);color:var(--neon5);border:1px solid rgba(255,187,0,.4);}
+
 
 /* ===== FOLLOW UP MODULE ===== */
 .fu-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700;white-space:nowrap;}
@@ -1325,7 +1336,11 @@ tr.lg-partial td:first-child{box-shadow:inset 4px 0 0 #f5a623;}
 
   <!-- 2. Report -->
   <div class="card">
-    <div class="card-header"><div class="card-title" id="fbs-report-title">📊 Stock Report</div></div>
+    <div class="card-header"><div class="card-title" id="fbs-report-title">📊 Stock Report</div>
+      <div class="flex-gap">
+        <button class="btn btn-sm btn-green" id="fbs-view-flat" onclick="fbsSetView('flat')" title="Har HS code + Tax % ki alag line">📋 Normal View</button>
+        <button class="btn btn-sm btn-neon" id="fbs-view-grp" onclick="fbsSetView('grp')" title="Ek HS code ki 18% + 25% ka total aur dono ka alag hisaab">🔀 HS-wise Total (18% + 25%)</button>
+      </div></div>
     <div id="fbs-report"></div>
     <div class="flex-gap" style="margin-top:14px;">
       <button class="btn btn-green" id="fbs-save-btn" onclick="fbsSaveCalc()">🧮 Save &amp; Calculate</button>
@@ -1334,6 +1349,9 @@ tr.lg-partial td:first-child{box-shadow:inset 4px 0 0 #f5a623;}
     </div>
     <div id="fbs-check" style="margin-top:12px;"></div>
   </div>
+
+  <!-- 2b. Detail (sale/purchase records of one HS code) -->
+  <div id="fbs-detail"></div>
 
   <!-- 3. Purchase -->
   <div class="card">
@@ -7109,7 +7127,7 @@ async function applyRestoredBackupData(data){
   if(data.partyContacts) partyContacts = data.partyContacts;
   if(data.invoiceSendStatus) invoiceSendStatus = data.invoiceSendStatus;
   if(data.hsStockData) hsStockData = data.hsStockData;
-  if(data.fbrStockData && Array.isArray(data.fbrStockData.master)){ fbsData = data.fbrStockData; saveFbsData(); }
+  if(data.fbrStockData && Array.isArray(data.fbrStockData.master)){ fbsData = data.fbrStockData; fbsEnsureSplit(); saveFbsData(); }
   if(data.rateLists) rateLists = data.rateLists;
   if(data.partyDispatchData) partyDispatchData = data.partyDispatchData;
   if(data.savedQuotations) savedQuotations = data.savedQuotations;
@@ -16937,7 +16955,7 @@ function formatHsCodeInput(el){
 //    and its closing automatically becomes next month's opening.
 // Storage key: sau_fbr_stock  (included in JSON backup + cloud sync as `fbrStockData`).
 var fbsData = null;
-var fbsUi = {month:'', selPur:null, editPur:null, check:null, banner:null};
+var fbsUi = {month:'', selPur:null, editPur:null, check:null, banner:null, view:'flat', detail:null};
 
 function fbsDefault(){ return {v:1, seeded:false, seedStart:'', master:[], purchases:[], months:{}}; }
 function fbsEl(id){ return document.getElementById(id); }
@@ -16981,7 +16999,7 @@ function fbsSeedMaster(){
     ['0710.2900','Nos, Pcs',18],['3919.9020','KG',18],['8504.1000','Nos, Pcs',18],['8506.1000','Nos, Pcs',18],
     ['8536.6990','Nos, Pcs',18],['8536.9090','Nos, Pcs',18],['8539.3120','Nos, Pcs',18],['8539.3190','Nos, Pcs',18],
     ['8539.3900','Nos, Pcs',18],['8539.5210','Nos, Pcs',18],['8539.5220','Nos, Pcs',18],['8544.4990','Meter',18],
-    ['9405.1190','Nos, Pcs',25],['9405.4200','Nos, Pcs',18],['9405.9900','Nos, Pcs',18],['9405.9900','KG',18]
+    ['9405.1190','Nos, Pcs',25],['9405.1190','Nos, Pcs',18],['9405.4200','Nos, Pcs',18],['9405.9900','Nos, Pcs',18],['9405.9900','KG',18]
   ];
   const start = fbsEarliestInvMonth() || fbsNowMonth();
   const t=Date.now();
@@ -16994,7 +17012,27 @@ function loadFbsData(){
   try{ const raw=localStorage.getItem('sau_fbr_stock'); if(raw) d=JSON.parse(raw); }catch(e){}
   fbsData=(d&&typeof d==='object'&&Array.isArray(d.master))?d:fbsDefault();
   fbsData.purchases=fbsData.purchases||[]; fbsData.months=fbsData.months||{};
-  if(!fbsData.seeded){ fbsSeedMaster(); saveFbsData(); }
+  if(!fbsData.seeded){ fbsSeedMaster(); fbsData.split1190=true; saveFbsData(); }
+  fbsEnsureSplit();
+}
+// v112: 9405.1190 is used at BOTH 25% and 18% — make sure both rates exist as separate lines.
+// Runs once on existing data (adds the missing rate, starting next unsaved month so saved months stay untouched).
+function fbsEnsureSplit(){
+  try{
+    if(!fbsData||fbsData.split1190) return;
+    fbsData.split1190=true;
+    const rows=fbsData.master.filter(x=>fbsHsDigits(x.hs)==='94051190');
+    if(!rows.length){ saveFbsData(); return; }
+    const has=t=>rows.some(x=>fbsNum(x.tax)===t);
+    const base=rows[0], last=fbsLastSaved();
+    const add=t=>{
+      const start=last?fbsNextMonth(last):fbsStartOf(base);
+      fbsData.master.splice(fbsData.master.indexOf(base)+1,0,{id:fbsUid(),hs:base.hs,uom:base.uom,tax:t,startMonth:start,openQty:0,openAmt:0,addedAt:Date.now()});
+    };
+    if(!has(18)) add(18);
+    if(!has(25)) add(25);
+    saveFbsData();
+  }catch(e){ console.error('fbsEnsureSplit',e); }
 }
 function saveFbsData(){
   try{ safeSetItem('sau_fbr_stock', JSON.stringify(fbsData)); }catch(e){ console.error('fbs save',e); }
@@ -17003,7 +17041,17 @@ function fbsStockReset(){ fbsData=fbsDefault(); fbsUi.month=''; }
 function fbsLastSaved(){ let last=''; Object.keys(fbsData.months).forEach(m=>{ if(fbsData.months[m].saved && m>last) last=m; }); return last; }
 
 // ---------- sales from DC records (invoice month) ----------
-function fbsLiveSales(month){
+// v112: an HS code can exist at several Tax % (e.g. 9405.1190 at 18% and 25%). A DC line goes to the
+// row with the same HS + UOM + Tax %; only if there is no such row does it fall back to UOM (then a warning shows).
+function fbsPickItem(cands, uom, tax){
+  const hasTax = tax!==undefined && tax!==null && tax!=='';
+  let pick=null, uomMiss=false;
+  if(hasTax) pick=cands.find(c=>fbsUomKey(c.uom)===fbsUomKey(uom)&&fbsNum(c.tax)===fbsNum(tax));
+  if(!pick) pick=cands.find(c=>fbsUomKey(c.uom)===fbsUomKey(uom));
+  if(!pick){ uomMiss=true; pick=(hasTax&&cands.find(c=>fbsNum(c.tax)===fbsNum(tax)))||cands[0]; }
+  return {pick:pick, uomMiss:uomMiss};
+}
+function fbsLiveSales(month, collect){
   const byHs={};
   fbsData.master.forEach(it=>{ const k=fbsHsDigits(it.hs); (byHs[k]=byHs[k]||[]).push(it); });
   const map={}, issues={missing:[],unknown:[],uom:[],tax:[]};
@@ -17019,11 +17067,12 @@ function fbsLiveSales(month){
       const all=byHs[hsD]||[];
       const cands=all.filter(c=>fbsStartOf(c)<=month);
       if(!cands.length){ ref.notStarted=all.length>0; issues.unknown.push(ref); return; }
-      let pick=cands.find(c=>fbsUomKey(c.uom)===fbsUomKey(it.uom));
-      if(!pick){ pick=cands[0]; issues.uom.push(Object.assign({},ref,{masterUom:pick.uom})); }
+      const pk=fbsPickItem(cands, it.uom, it.tax), pick=pk.pick;
+      if(pk.uomMiss) issues.uom.push(Object.assign({},ref,{masterUom:pick.uom}));
       if(it.tax!==undefined && it.tax!=='' && fbsNum(it.tax)!==fbsNum(pick.tax)) issues.tax.push(Object.assign({},ref,{masterTax:pick.tax}));
       const s=map[pick.id]||(map[pick.id]={qty:0,amt:0});
       s.qty+=q; s.amt+=q*rate;
+      if(collect){ (s.lines=s.lines||[]).push({dcNo:ref.dcNo, invNo:ref.invNo, party:ref.party, desc:ref.desc, qty:q, rate:rate, amt:q*rate}); }
     });
   });
   return {map:map, issues:issues};
@@ -17107,7 +17156,7 @@ function fbsValidate(month, chainIn){
 // ---------- actions ----------
 function fbsSetMonth(m){
   if(!/^\d{4}-\d{2}$/.test(m||'')) return;
-  fbsUi.month=m; fbsUi.check=null; fbsUi.banner=null; fbsUi.editPur=null; fbsUi.selPur=null;
+  fbsUi.month=m; fbsUi.check=null; fbsUi.banner=null; fbsUi.editPur=null; fbsUi.selPur=null; fbsUi.detail=null;
   fbsClearPurForm(true);
   renderFbsTab();
 }
@@ -17199,7 +17248,7 @@ function fbsAddItem(){
   if(!/^\d{4}-\d{2}$/.test(start)){ toast('Start Month select karein','warning'); return; }
   const last=fbsLastSaved();
   if(last && start<=last){ toast('Start Month '+fbsMonthLabel(fbsNextMonth(last))+' ya us ke baad ka rakhein (pehle ke mahine saved hain)','error'); return; }
-  if(fbsData.master.some(x=>fbsHsDigits(x.hs)===fbsHsDigits(hs)&&fbsUomKey(x.uom)===fbsUomKey(uom))){ toast('Ye HS Code + UOM pehle se list mein hai','error'); return; }
+  if(fbsData.master.some(x=>fbsHsDigits(x.hs)===fbsHsDigits(hs)&&fbsUomKey(x.uom)===fbsUomKey(uom)&&fbsNum(x.tax)===tax)){ toast('Ye HS Code + UOM + Tax % pehle se list mein hai','error'); return; }
   const it={id:fbsUid(), hs:hs, uom:uom, tax:tax, startMonth:start, openQty:0, openAmt:0, addedAt:Date.now()};
   fbsData.master.unshift(it);   // newest on top
   saveFbsData(); fbsAudit('create','FBR Stock HS code added: '+hs+' '+uom+' '+tax+'%');
@@ -17227,7 +17276,7 @@ function fbsSaveItemEdit(){
   if(!uom){ toast('UOM likhein','warning'); return; }
   if(tax<0||tax>100){ toast('Tax % sahi likhein','warning'); return; }
   if(!/^\d{4}-\d{2}$/.test(start||'')){ toast('Start Month select karein','warning'); return; }
-  if(fbsData.master.some(x=>x.id!==id&&fbsHsDigits(x.hs)===fbsHsDigits(hs)&&fbsUomKey(x.uom)===fbsUomKey(uom))){ toast('Ye HS Code + UOM pehle se list mein hai','error'); return; }
+  if(fbsData.master.some(x=>x.id!==id&&fbsHsDigits(x.hs)===fbsHsDigits(hs)&&fbsUomKey(x.uom)===fbsUomKey(uom)&&fbsNum(x.tax)===tax)){ toast('Ye HS Code + UOM + Tax % pehle se list mein hai','error'); return; }
   const last=fbsLastSaved();
   const locked=!!last && last>=fbsStartOf(it);
   if(!locked && last && start<=last){ toast('Start Month '+fbsMonthLabel(fbsNextMonth(last))+' ya baad ka rakhein','error'); return; }
@@ -17282,7 +17331,7 @@ function fbsAddPurchase(){
     const d=fbsHsDigits(fbsEl('fbs-p-hs').value);
     const c=fbsActiveItems(m).filter(x=>fbsHsDigits(x.hs)===d);
     if(c.length===1) id=c[0].id;
-    else if(c.length>1){ toast('Is HS code ke 2 UOM hain — list se select karein','warning'); return; }
+    else if(c.length>1){ toast('Is HS code ke 2 rate/UOM hain (jaise 18% aur 25%) — list se select karein','warning'); return; }
   }
   if(!id){ toast('HS code suggestion list se select karein','warning'); return; }
   const qty=fbsNum(fbsEl('fbs-p-qty').value), amt=fbsNum(fbsEl('fbs-p-amt').value);
@@ -17342,6 +17391,7 @@ function renderFbsTab(){
     fbsRenderStartNote(chain,last);
     fbsRenderDash(cur,month);
     fbsRenderReport(cur,month,saved);
+    fbsRenderDetail(cur,month);
     fbsEl('fbs-save-btn').style.display=saved?'none':'inline-flex';
     fbsEl('fbs-unlock-btn').style.display=saved?'inline-flex':'none';
     fbsRenderCheck(cur,month,chain);
@@ -17377,38 +17427,117 @@ function fbsRenderDash(cur,month){
     +'<div class="card"><div class="card-header"><div class="card-title">📈 Closing Qty by UOM &amp; Closing Amount (Top HS)</div></div>'
     +'<div style="margin-bottom:10px;">'+chips+'</div>'+(bars||'<div style="color:var(--text3);font-size:12px;">Closing amount abhi koi nahi.</div>')+'</div>';
 }
+function fbsSetView(v){ fbsUi.view=(v==='grp')?'grp':'flat'; renderFbsTab(); }
+function fbsGroupKey(it){ return fbsHsDigits(it.hs)+'|'+fbsUomKey(it.uom); }
+function fbsShowDetail(mode,key){
+  fbsUi.detail={mode:mode,key:key}; renderFbsTab();
+  const e=fbsEl('fbs-detail'); if(e&&e.scrollIntoView) e.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function fbsCloseDetail(){ fbsUi.detail=null; renderFbsTab(); }
+function fbsTotals(rows){
+  const t={oA:0,oQ:0,pA:0,pQ:0,sA:0,sQ:0,cA:0,cQ:0};
+  rows.forEach(r=>{ t.oA+=r.openAmt; t.oQ+=r.openQty; t.pA+=r.purAmt; t.pQ+=r.purQty; t.sA+=r.saleAmt; t.sQ+=r.saleQty; t.cA+=r.closeAmt; t.cQ+=r.closeQty; });
+  return t;
+}
+// the 8 number cells: each Amount sits directly above/below its own Qty, under its group heading
+function fbsNumTds(t,opt){
+  opt=opt||{};
+  const nA=t.cA<-0.005, nQ=t.cQ<-0.0005;
+  return '<td class="n fbs-g1 fbs-gs">'+(opt.openA!=null?opt.openA:fbsFmtAmt(t.oA))+'</td><td class="n q fbs-g1">'+(opt.openQ!=null?opt.openQ:fbsFmtQty(t.oQ))+'</td>'
+    +'<td class="n fbs-g2 fbs-gs">'+fbsFmtAmt(t.pA)+(opt.badge||'')+'</td><td class="n q fbs-g2">'+fbsFmtQty(t.pQ)+'</td>'
+    +'<td class="n fbs-g3 fbs-gs">'+fbsFmtAmt(t.sA)+'</td><td class="n q fbs-g3">'+fbsFmtQty(t.sQ)+'</td>'
+    +'<td class="n fbs-g4 fbs-gs '+(nA?'fbs-neg':'fbs-pos')+'">'+fbsFmtAmt(t.cA)+'</td><td class="n q fbs-g4 '+(nQ?'fbs-neg':'fbs-pos')+'">'+fbsFmtQty(t.cQ)+'</td>';
+}
+function fbsItemRow(r,idx,month,saved,sub){
+  const it=r.item, editOpen=(month===fbsStartOf(it))&&!saved;
+  const negQ=r.closeQty<-0.0005, negA=r.closeAmt<-0.005;
+  const openA=editOpen?'<input type="number" step="any" value="'+fbsNum(it.openAmt)+'" onchange="fbsSetOpening(\''+it.id+'\',\'openAmt\',this.value)" class="fbs-in">':null;
+  const openQ=editOpen?'<input type="number" step="any" value="'+fbsNum(it.openQty)+'" onchange="fbsSetOpening(\''+it.id+'\',\'openQty\',this.value)" class="fbs-in fbs-in-s">':null;
+  const badge=r.purCount>1?' <span class="badge badge-ready" title="'+r.purCount+' purchase entries">×'+r.purCount+'</span>':'';
+  const ctl=sub?'<td class="fbs-ctl" style="text-align:center;color:var(--text3);">↳</td>'
+    :'<td class="fbs-ctl"><button class="btn btn-xs btn-neon" title="Upar" onclick="fbsMoveItem(\''+it.id+'\',-1)">▲</button><button class="btn btn-xs btn-neon" title="Neeche" onclick="fbsMoveItem(\''+it.id+'\',1)">▼</button><button class="btn btn-xs btn-neon" title="Sab se oper" onclick="fbsMoveTop(\''+it.id+'\')">⤒</button></td>';
+  return '<tr class="'+((negQ||negA)?'fbs-rowneg':'')+(sub?' fbs-subrow':'')+'">'+ctl
+    +'<td style="text-align:center;color:var(--text3);">'+idx+'</td>'
+    +'<td class="fbs-hs">'+fbsEsc(it.hs)+'</td><td>'+fbsEsc(it.uom)+'</td>'
+    +'<td style="text-align:center;"><span class="fbs-taxchip">'+fbsNum(it.tax)+'%</span></td>'
+    +fbsNumTds(fbsTotals([r]),{openA:openA,openQ:openQ,badge:badge})
+    +'<td class="fbs-ctl"><button class="btn btn-xs btn-yellow" onclick="fbsEditItem(\''+it.id+'\')" title="HS code edit">✏️</button> <button class="btn btn-xs btn-neon" onclick="fbsShowDetail(\'item\',\''+it.id+'\')" title="Is HS code ki sale/purchase details">🔍</button></td></tr>';
+}
 function fbsRenderReport(cur,month,saved){
   const wrap=fbsEl('fbs-report');
   fbsEl('fbs-report-title').textContent='📊 '+fbsMonthLabel(month)+' — Stock Report';
+  const grp=(fbsUi.view==='grp');
+  const vf=fbsEl('fbs-view-flat'), vg=fbsEl('fbs-view-grp');
+  if(vf) vf.className='btn btn-sm '+(grp?'btn-neon':'btn-green');
+  if(vg) vg.className='btn btn-sm '+(grp?'btn-green':'btn-neon');
   if(!cur||!cur.rows.length){ wrap.innerHTML='<div style="color:var(--text3);padding:10px;">Is mahine ke liye koi HS code active nahi.</div>'; return; }
-  let tO=0,tP=0,tS=0,tC=0;
-  const body=cur.rows.map((r,i)=>{
-    const it=r.item;
-    tO+=r.openAmt; tP+=r.purAmt; tS+=r.saleAmt; tC+=r.closeAmt;
-    const editOpen=(month===fbsStartOf(it))&&!saved;
-    const negQ=r.closeQty<-0.0005, negA=r.closeAmt<-0.005;
-    const openA=editOpen?'<input type="number" step="any" value="'+fbsNum(it.openAmt)+'" onchange="fbsSetOpening(\''+it.id+'\',\'openAmt\',this.value)" class="fbs-in">':fbsFmtAmt(r.openAmt);
-    const openQ=editOpen?'<input type="number" step="any" value="'+fbsNum(it.openQty)+'" onchange="fbsSetOpening(\''+it.id+'\',\'openQty\',this.value)" class="fbs-in fbs-in-s">':fbsFmtQty(r.openQty);
-    const badge=r.purCount>1?' <span class="badge badge-ready" title="'+r.purCount+' purchase entries">×'+r.purCount+'</span>':'';
-    return '<tr'+((negQ||negA)?' class="fbs-rowneg"':'')+'>'
-      +'<td class="fbs-ctl"><button class="btn btn-xs btn-neon" title="Upar" onclick="fbsMoveItem(\''+it.id+'\',-1)">▲</button><button class="btn btn-xs btn-neon" title="Neeche" onclick="fbsMoveItem(\''+it.id+'\',1)">▼</button><button class="btn btn-xs btn-neon" title="Sab se oper" onclick="fbsMoveTop(\''+it.id+'\')">⤒</button></td>'
-      +'<td style="text-align:center;color:var(--text3);">'+(i+1)+'</td>'
-      +'<td class="fbs-hs">'+fbsEsc(it.hs)+'</td>'
-      +'<td>'+fbsEsc(it.uom)+'</td>'
-      +'<td style="text-align:center;">'+fbsNum(it.tax)+'%</td>'
-      +'<td class="n fbs-g1">'+openA+'</td><td class="n fbs-g1">'+openQ+'</td>'
-      +'<td class="n fbs-g2">'+fbsFmtAmt(r.purAmt)+badge+'</td><td class="n fbs-g2">'+fbsFmtQty(r.purQty)+'</td>'
-      +'<td class="n fbs-g3">'+fbsFmtAmt(r.saleAmt)+'</td><td class="n fbs-g3">'+fbsFmtQty(r.saleQty)+'</td>'
-      +'<td class="n fbs-g4 '+(negA?'fbs-neg':'fbs-pos')+'">'+fbsFmtAmt(r.closeAmt)+'</td><td class="n fbs-g4 '+(negQ?'fbs-neg':'fbs-pos')+'">'+fbsFmtQty(r.closeQty)+'</td>'
-      +'<td><button class="btn btn-xs btn-yellow" onclick="fbsEditItem(\''+it.id+'\')" title="HS code edit">✏️</button></td>'
-      +'</tr>';
-  }).join('');
+  let body='';
+  if(!grp){
+    body=cur.rows.map((r,i)=>fbsItemRow(r,i+1,month,saved,false)).join('');
+  } else {
+    const order=[], gm={};
+    cur.rows.forEach(r=>{ const k=fbsGroupKey(r.item); if(!gm[k]){ gm[k]=[]; order.push(k); } gm[k].push(r); });
+    order.forEach((k,gi)=>{
+      const rows=gm[k];
+      if(rows.length===1){ body+=fbsItemRow(rows[0],gi+1,month,saved,false); return; }
+      const it0=rows[0].item;
+      const chips=rows.map(r=>'<span class="fbs-taxchip">'+fbsNum(r.item.tax)+'%</span>').join(' ');
+      body+='<tr class="fbs-grp"><td class="fbs-ctl" style="text-align:center;color:var(--neon5);">Σ</td><td style="text-align:center;color:var(--text3);">'+(gi+1)+'</td>'
+        +'<td class="fbs-hs">'+fbsEsc(it0.hs)+'</td><td>'+fbsEsc(it0.uom)+'</td><td style="text-align:center;">'+chips+'</td>'
+        +fbsNumTds(fbsTotals(rows),{})
+        +'<td class="fbs-ctl"><button class="btn btn-xs btn-neon" onclick="fbsShowDetail(\'group\',\''+k+'\')" title="Is HS code ki 18%/25% ki poori details">🔍</button></td></tr>';
+      rows.forEach(r=>{ body+=fbsItemRow(r,'',month,saved,true); });
+    });
+  }
+  const T=fbsTotals(cur.rows);
+  // Qty of different UOMs (Nos / KG / Meter) should not be mixed blindly — show UOM-wise lines under the grand total
+  const uoms=[], um={};
+  cur.rows.forEach(r=>{ const k=fbsUomKey(r.item.uom); if(!um[k]){ um[k]={label:r.item.uom,rows:[]}; uoms.push(k); } um[k].rows.push(r); });
+  let uomRows='';
+  if(uoms.length>1) uomRows=uoms.map(k=>'<tr class="fbs-uomrow"><td colspan="5" style="text-align:right;">↳ '+fbsEsc(um[k].label)+' only</td>'+fbsNumTds(fbsTotals(um[k].rows),{})+'<td></td></tr>').join('');
   wrap.innerHTML='<div class="tbl-wrap"><table class="fbs-tbl no-mobile-card"><thead>'
-    +'<tr><th colspan="5"></th><th colspan="2" class="fbs-g1h">Opening Balance</th><th colspan="2" class="fbs-g2h">+ Purchase</th><th colspan="2" class="fbs-g3h">− Sale</th><th colspan="2" class="fbs-g4h">Closing Balance</th><th></th></tr>'
-    +'<tr><th>Move</th><th>#</th><th style="text-align:center;">HS Code</th><th>UOM</th><th>Tax %</th><th>Amount</th><th>Qty</th><th>Amount</th><th>Qty</th><th>Amount</th><th>Qty</th><th>Amount</th><th>Qty</th><th></th></tr>'
+    +'<tr><th colspan="5"></th><th colspan="2" class="fbs-g1h fbs-gs">Opening Balance</th><th colspan="2" class="fbs-g2h fbs-gs">+ Purchase</th><th colspan="2" class="fbs-g3h fbs-gs">− Sale</th><th colspan="2" class="fbs-g4h fbs-gs">Closing Balance</th><th></th></tr>'
+    +'<tr><th>Move</th><th class="c">#</th><th class="c">HS Code</th><th>UOM</th><th class="c">Tax %</th>'
+    +'<th class="n fbs-gs">Amount</th><th class="n q">Qty</th><th class="n fbs-gs">Amount</th><th class="n q">Qty</th><th class="n fbs-gs">Amount</th><th class="n q">Qty</th><th class="n fbs-gs">Amount</th><th class="n q">Qty</th><th></th></tr>'
     +'</thead><tbody>'+body+'</tbody>'
-    +'<tfoot><tr><td colspan="5" style="text-align:right;font-weight:800;">TOTAL</td><td class="n">'+fbsFmtAmt(tO)+'</td><td></td><td class="n">'+fbsFmtAmt(tP)+'</td><td></td><td class="n">'+fbsFmtAmt(tS)+'</td><td></td><td class="n">'+fbsFmtAmt(tC)+'</td><td></td><td></td></tr></tfoot></table></div>'
-    +'<div style="font-size:11px;color:var(--text3);margin-top:6px;">Sale = is mahine ki invoiced DC (basic amount, tax ke baghair). Purchase = neeche ki alag alag entries ka total. '+(saved?'🔒 Mahina saved hai.':'Opening sirf pehle (start) mahine mein edit hoti hai; baad ke mahinon mein pichle mahine ki Closing khud aati hai.')+'</div>';
+    +'<tfoot><tr><td colspan="5" style="text-align:right;font-weight:800;">TOTAL (Amount &amp; Qty)</td>'+fbsNumTds(T,{})+'<td></td></tr>'+uomRows+'</tfoot></table></div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-top:6px;">Sale = is mahine ki invoiced DC (basic amount, tax ke baghair). Purchase = neeche ki alag alag entries ka total. '
+    +(uoms.length>1?'Total Qty mein alag UOM (Nos/KG/Meter) mil jate hain — UOM-wise Qty upar ki "only" lines mein hai. ':'')
+    +(grp?'<b>Σ line</b> = us HS code ke sab Tax % ka total; neeche ki lines har Tax % ka alag hisaab. 🔍 dabayein to sale/purchase ki poori details aayengi. ':'🔍 dabayein to us HS code ki sale/purchase details aayengi. ')
+    +(saved?'🔒 Mahina saved hai.':'Opening sirf pehle (start) mahine mein edit hoti hai; baad ke mahinon mein pichle mahine ki Closing khud aati hai.')+'</div>';
+}
+function fbsRenderDetail(cur,month){
+  const box=fbsEl('fbs-detail'); if(!box) return;
+  const d=fbsUi.detail;
+  if(!d||!cur){ box.innerHTML=''; return; }
+  const items=cur.rows.filter(r=>d.mode==='item'?r.item.id===d.key:fbsGroupKey(r.item)===d.key);
+  if(!items.length){ box.innerHTML=''; return; }
+  const ids={}; items.forEach(r=>{ ids[r.item.id]=r; });
+  const it0=items[0].item;
+  const rateTxt=items.map(r=>fbsNum(r.item.tax)+'%').join(' + ');
+  const th='<thead><tr><th class="c">Tax %</th><th class="n fbs-gs">Opening Amt</th><th class="n q">Qty</th><th class="n fbs-gs">+ Purchase Amt</th><th class="n q">Qty</th><th class="n fbs-gs">− Sale Amt</th><th class="n q">Qty</th><th class="n fbs-gs">Closing Amt</th><th class="n q">Qty</th></tr></thead>';
+  let sum=items.map(r=>'<tr><td style="text-align:center;"><span class="fbs-taxchip">'+fbsNum(r.item.tax)+'%</span></td>'+fbsNumTds(fbsTotals([r]),{})+'</tr>').join('');
+  if(items.length>1) sum+='<tr class="fbs-grp"><td style="text-align:center;">TOTAL</td>'+fbsNumTds(fbsTotals(items),{})+'</tr>';
+  // sale lines (live from DC records)
+  const live=fbsLiveSales(month,true).map;
+  const sl=[]; items.forEach(r=>{ ((live[r.item.id]||{}).lines||[]).forEach(l=>sl.push(Object.assign({bucket:fbsNum(r.item.tax)},l))); });
+  sl.sort((a,b)=>(a.bucket-b.bucket)||String(a.dcNo).localeCompare(String(b.dcNo)));
+  let sq=0,sa=0;
+  const saleRows=sl.map(l=>{ sq+=l.qty; sa+=l.amt; return '<tr><td style="text-align:center;"><span class="fbs-taxchip">'+l.bucket+'%</span></td><td>'+fbsEsc(l.dcNo)+'</td><td>'+fbsEsc(l.invNo)+'</td><td>'+fbsEsc(l.party)+'</td><td>'+fbsEsc(l.desc)+'</td><td class="n">'+fbsFmtQty(l.qty)+'</td><td class="n">'+fbsFmtAmt(l.rate)+'</td><td class="n">'+fbsFmtAmt(l.amt)+'</td></tr>'; }).join('');
+  const saleTbl=sl.length?'<div class="tbl-wrap"><table class="fbs-tbl no-mobile-card"><thead><tr><th class="c">Tax %</th><th>DC No</th><th>Invoice</th><th>Party</th><th>Description</th><th class="n">Qty</th><th class="n">Rate</th><th class="n">Amount</th></tr></thead><tbody>'+saleRows+'</tbody><tfoot><tr><td colspan="5" style="text-align:right;font-weight:800;">TOTAL SALE</td><td class="n">'+fbsFmtQty(sq)+'</td><td></td><td class="n">'+fbsFmtAmt(sa)+'</td></tr></tfoot></table></div>'
+    :'<div style="color:var(--text3);font-size:12px;padding:6px;">Is mahine is HS code ki koi sale nahi.</div>';
+  // purchase lines
+  const pl=fbsData.purchases.filter(p=>p.month===month&&ids[p.itemId]).sort((a,b)=>(fbsNum(ids[a.itemId].item.tax)-fbsNum(ids[b.itemId].item.tax))||((a.ts||0)-(b.ts||0)));
+  let pq=0,pa=0;
+  const purRows=pl.map(p=>{ pq+=fbsNum(p.qty); pa+=fbsNum(p.amt); return '<tr><td style="text-align:center;"><span class="fbs-taxchip">'+fbsNum(ids[p.itemId].item.tax)+'%</span></td><td>'+fbsEsc(p.date||'')+'</td><td class="n">'+fbsFmtQty(p.qty)+'</td><td class="n">'+fbsFmtAmt(p.amt)+'</td><td>'+fbsEsc(p.note||'')+'</td></tr>'; }).join('');
+  const purTbl=pl.length?'<div class="tbl-wrap"><table class="fbs-tbl no-mobile-card"><thead><tr><th class="c">Tax %</th><th>Date</th><th class="n">Qty</th><th class="n">Amount</th><th>Note</th></tr></thead><tbody>'+purRows+'</tbody><tfoot><tr><td colspan="2" style="text-align:right;font-weight:800;">TOTAL PURCHASE</td><td class="n">'+fbsFmtQty(pq)+'</td><td class="n">'+fbsFmtAmt(pa)+'</td><td></td></tr></tfoot></table></div>'
+    :'<div style="color:var(--text3);font-size:12px;padding:6px;">Is mahine is HS code ki koi purchase entry nahi.</div>';
+  box.innerHTML='<div class="card"><div class="card-header"><div class="card-title">🔍 '+fbsEsc(it0.hs)+' ('+fbsEsc(it0.uom)+') — '+rateTxt+' · '+fbsMonthLabel(month)+'</div>'
+    +'<button class="btn btn-red btn-sm" onclick="fbsCloseDetail()">✖ Close</button></div>'
+    +'<div style="font-weight:700;color:var(--neon);margin:4px 0;">📊 Tax % wise Hisaab (Opening + Purchase − Sale = Closing / Baqi)</div>'
+    +'<div class="tbl-wrap"><table class="fbs-tbl no-mobile-card">'+th+'<tbody>'+sum+'</tbody></table></div>'
+    +'<div style="font-weight:700;color:var(--neon5);margin:14px 0 4px;">− Sale Records (DC / Invoice)</div>'+saleTbl
+    +'<div style="font-weight:700;color:var(--neon4);margin:14px 0 4px;">🛒 Purchase Records</div>'+purTbl+'</div>';
 }
 function fbsIssueLines(arr,cls,max){
   const sh=arr.slice(0,max).map(x=>'<li>'+fbsEsc(x.t)+(x.go?' <button class="btn btn-xs btn-neon" onclick="fbsSetMonth(\''+x.go+'\')">Open '+fbsMonthLabel(x.go)+'</button>':'')+'</li>').join('');
@@ -17489,6 +17618,8 @@ function fbsExportCsv(){
   const q=s=>'"'+String(s==null?'':s).replace(/"/g,'""')+'"';
   const lines=[['HS Code','UOM','Tax %','Opening Amount','Opening Qty','Purchase Amount','Purchase Qty','Sale Amount','Sale Qty','Closing Amount','Closing Qty'].map(q).join(',')];
   v.cur.rows.forEach(r=>lines.push([r.item.hs,r.item.uom,r.item.tax,r.openAmt.toFixed(2),r.openQty,r.purAmt.toFixed(2),r.purQty,r.saleAmt.toFixed(2),r.saleQty,r.closeAmt.toFixed(2),r.closeQty].map(q).join(',')));
+  const T=fbsTotals(v.cur.rows);
+  lines.push(['TOTAL','','',T.oA.toFixed(2),T.oQ,T.pA.toFixed(2),T.pQ,T.sA.toFixed(2),T.sQ,T.cA.toFixed(2),T.cQ].map(q).join(','));
   const blob=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='FBR_Stock_Report_'+v.m+'.csv'; a.click(); URL.revokeObjectURL(a.href);
   toast('CSV download ho gayi','success');
@@ -17506,7 +17637,7 @@ function fbsExportPdf(){
     return [r.item.hs,r.item.uom,fbsNum(r.item.tax)+'%',fbsFmtAmt(r.openAmt),fbsFmtQty(r.openQty),fbsFmtAmt(r.purAmt),fbsFmtQty(r.purQty),fbsFmtAmt(r.saleAmt),fbsFmtQty(r.saleQty),fbsFmtAmt(r.closeAmt),fbsFmtQty(r.closeQty)]; });
   doc.autoTable({startY:68, theme:'grid', styles:{fontSize:8,cellPadding:3}, headStyles:{fillColor:[30,30,70]},
     head:[['HS Code','UOM','Tax','Opening Amt','Opening Qty','Purchase Amt','Purchase Qty','Sale Amt','Sale Qty','Closing Amt','Closing Qty']],
-    body:body, foot:[['TOTAL','','',fbsFmtAmt(tO),'',fbsFmtAmt(tP),'',fbsFmtAmt(tS),'',fbsFmtAmt(tC),'']], footStyles:{fillColor:[230,230,240],textColor:[0,0,0]},
+    body:body, foot:[(function(){ const T=fbsTotals(v.cur.rows); return ['TOTAL','','',fbsFmtAmt(tO),fbsFmtQty(T.oQ),fbsFmtAmt(tP),fbsFmtQty(T.pQ),fbsFmtAmt(tS),fbsFmtQty(T.sQ),fbsFmtAmt(tC),fbsFmtQty(T.cQ)]; })()], footStyles:{fillColor:[230,230,240],textColor:[0,0,0]},
     columnStyles:{0:{halign:'center'},3:{halign:'right'},4:{halign:'right'},5:{halign:'right'},6:{halign:'right'},7:{halign:'right'},8:{halign:'right'},9:{halign:'right'},10:{halign:'right'}}});
   const pl=fbsData.purchases.filter(p=>p.month===v.m);
   if(pl.length){
