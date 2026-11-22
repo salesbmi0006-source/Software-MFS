@@ -295,6 +295,8 @@ tr.lg-partial td:first-child{box-shadow:inset 4px 0 0 #f5a623;}
 .toggle input:checked+.toggle-slider:before{transform:translateX(22px);}
 /* HS warning */
 .hs-warn{color:var(--neon3);font-size:12px;cursor:pointer;}
+.hs-badge{display:inline-block;margin-left:5px;padding:1px 7px;border-radius:10px;background:rgba(255,45,120,.15);border:1px solid rgba(255,45,120,.55);color:var(--neon3);font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;animation:hsPulse 1.8s ease-in-out infinite;}
+@keyframes hsPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,45,120,.5);}50%{box-shadow:0 0 0 4px rgba(255,45,120,0);}}
 /* Hover quick view */
 .quick-view-btn{cursor:pointer;color:var(--neon);font-size:11px;white-space:nowrap;}
 .quick-view-btn:hover{text-shadow:0 0 6px var(--neon);}
@@ -1396,6 +1398,18 @@ tr.lg-partial td:first-child{box-shadow:inset 4px 0 0 #f5a623;}
     <div class="modal-footer">
       <button class="btn btn-red btn-sm" id="fbs-e-del" onclick="fbsDeleteItem()">🗑 Delete</button>
       <button class="btn btn-green" onclick="fbsSaveItemEdit()">💾 Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- DC HS Code alert modal (v113) -->
+<div class="modal-overlay" id="dcHsAlertModal">
+  <div class="modal" style="max-width:720px;">
+    <div class="modal-header"><h3>⚠️ HS Code Alert</h3><button class="close-btn" onclick="closeModal('dcHsAlertModal')">✕</button></div>
+    <div class="modal-body" id="dc-hsa-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-yellow" id="dc-hsa-edit">✏️ DC Edit (HS Code change)</button>
+      <button class="btn btn-neon" onclick="closeModal('dcHsAlertModal')">Close</button>
     </div>
   </div>
 </div>
@@ -8280,7 +8294,7 @@ function renderRecords(){
     const basic = getDCBasic(rec);
     const taxAmt = total - basic;
     const totalQty = (rec.items||[]).reduce((s,it)=>s+parseFloat(it.qty||0),0);
-    const hasHSWarn = (rec.items||[]).some(it=>!it.hscode);
+    const hsProbs = rec.cancelled ? [] : dcHsProblems(rec);
     const hasPay = cheques.some(c=>(c.invoices||[]).includes(rec.invNo)||c.invNo===rec.invNo);
     const isSelected = selectedIds.has(idx);
     const trClass = isSelected ? 'selected':'';
@@ -8290,7 +8304,7 @@ function renderRecords(){
       <td><input type="checkbox" ${isSelected?'checked':''} onchange="toggleSelect(${idx},this)" onclick="event.stopPropagation()"></td>
       <td style="color:var(--text3);font-size:11px;">${start+i+1}</td>
       <td style="white-space:nowrap;">${fmtDate(rec.date)}</td>
-      <td><strong style="color:var(--neon);">${rec.dcNo||'-'}</strong>${hasHSWarn?'<span class="hs-warn" title="Missing HS code!"> ⚠️</span>':''}</td>
+      <td><strong style="color:var(--neon);">${rec.dcNo||'-'}</strong>${hsProbs.length?`<span class="hs-badge" onclick="event.stopPropagation();dcHsAlertOpen(${idx})" title="${dcHsProblemTitle(hsProbs)}">⚠️ HS ${hsProbs.length}</span>`:''}</td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${rec.partyName||''}">${rec.partyName||'-'}</td>
       <td>${rec.poNo||'-'}</td>
       <td><strong style="color:var(--neon4);">${rec.invNo||'-'}</strong></td>
@@ -8902,6 +8916,16 @@ async function saveDC(){
   {
     const noNote = items.find(it=>(parseFloat(it.rejQty)||0)>0 && !String(it.rejNote||'').trim());
     if(noNote){ toast(`"${noNote.desc}": reject note likhna lazmi hai (kya reject hua / wajah)`,'warning'); return; }
+  }
+  // v113: HS code alert — blocking only by choice (OK = save, Cancel = go back and fix)
+  {
+    const probs = dcHsProblems({items:items});
+    if(probs.length){
+      const lines = probs.slice(0,12).map(p=>'• '+(p.desc||'item')+' — '+dcHsProblemText(p)).join('\n');
+      const more = probs.length>12 ? '\n… aur '+(probs.length-12)+' aur' : '';
+      const ok = confirm('⚠️ HS CODE ALERT!\n\n'+lines+more+'\n\nOK = Save kar do (DC list mein ⚠️ HS sign dikhta rahega, baad mein add/change kar sakte hain)\nCancel = wapis ja kar abhi theek karein');
+      if(!ok) return;
+    }
   }
   // Qty history (pehle total itna tha -> ab itna hai) — compared against the saved version of this DC
   const _qtyChanges = applyQtyLogs(items, (editingDcIdx!==null && db[editingDcIdx]) ? (db[editingDcIdx].items||[]) : []);
@@ -17646,6 +17670,73 @@ function fbsExportPdf(){
     doc.autoTable({startY:y+6, theme:'grid', styles:{fontSize:8,cellPadding:3}, headStyles:{fillColor:[30,30,70]}, head:[['Date','HS Code','UOM','Amount','Qty','Note']], body:pb});
   }
   doc.save('FBR_Stock_Report_'+v.m+'.pdf');
+}
+
+// ==================== DC HS CODE ALERT (v113) ====================
+// A DC line is "short" when its HS code is missing, not in the FBR Stock list, or that HS exists
+// only at a different Tax % (e.g. 9405.1190 present at 25% but the DC line is 18%).
+function dcHsProblems(rec){
+  const out=[];
+  try{
+    if(typeof fbsData==='undefined'||!fbsData) loadFbsData();
+    const master=(fbsData&&fbsData.master)||[];
+    (rec.items||[]).forEach((it,i)=>{
+      if(!(parseFloat(it.qty)>0)) return;
+      const d=fbsHsDigits(it.hscode);
+      const base={i:i, desc:it.desc||'', hs:it.hscode||'', uom:it.uom||'', tax:it.tax, qty:it.qty};
+      if(!d){ out.push(Object.assign(base,{kind:'missing'})); return; }
+      const rows=master.filter(m=>fbsHsDigits(m.hs)===d);
+      if(!rows.length){ out.push(Object.assign(base,{kind:'notinstock'})); return; }
+      if(it.tax!==undefined&&it.tax!==''&&!rows.some(m=>fbsNum(m.tax)===fbsNum(it.tax))) out.push(Object.assign(base,{kind:'taxmissing', have:rows.map(m=>fbsNum(m.tax)+'%').filter((v,k,a)=>a.indexOf(v)===k).join(', ')}));
+    });
+  }catch(e){ console.error('dcHsProblems',e); }
+  return out;
+}
+function dcHsProblemText(p){
+  if(p.kind==='missing') return 'HS Code likha nahi';
+  if(p.kind==='notinstock') return 'HS '+p.hs+' FBR Stock list mein nahi hai';
+  return 'HS '+p.hs+' list mein sirf '+p.have+' par hai, is DC mein '+fbsNum(p.tax)+'% hai';
+}
+function dcHsProblemTitle(probs){
+  return probs.map(p=>(p.desc||'item')+': '+dcHsProblemText(p)).join(' | ').replace(/"/g,'&quot;')+' — click karein';
+}
+function dcHsAlertOpen(idx){
+  const rec=db[idx]; if(!rec) return;
+  const probs=dcHsProblems(rec);
+  const body=fbsEl('dc-hsa-body');
+  let h='<div style="font-size:12px;margin-bottom:8px;">DC <b style="color:var(--neon);">'+fbsEsc(rec.dcNo||'-')+'</b> — '+fbsEsc(rec.partyName||'')+'</div>';
+  if(!probs.length) h+='<div class="fbs-box fbs-okbox">✅ Is DC ke sab HS code theek hain (FBR Stock list mein maujood).</div>';
+  else {
+    h+='<div class="fbs-box fbs-warnbox">In items ka HS code FBR Stock list mein pura nahi hai. Ya to HS code list mein add kar lein, ya DC edit karke HS code change kar dein.</div>'
+      +'<div class="tbl-wrap"><table class="fbs-tbl no-mobile-card"><thead><tr><th>Item</th><th>HS Code</th><th>Tax</th><th>Masla</th><th></th></tr></thead><tbody>'
+      +probs.map((p,k)=>'<tr><td style="white-space:normal;min-width:160px;">'+fbsEsc(p.desc)+'</td><td class="fbs-hs">'+(p.hs?fbsEsc(p.hs):'<span class="red">Missing</span>')+'</td><td style="text-align:center;">'+(p.tax!==undefined&&p.tax!==''?fbsNum(p.tax)+'%':'-')+'</td><td style="white-space:normal;">'+fbsEsc(dcHsProblemText(p))+'</td>'
+      +'<td>'+(p.kind==='missing'?'':'<button class="btn btn-green btn-xs" onclick="dcHsQuickAdd('+idx+','+k+')">➕ FBR Stock mein add</button>')+'</td></tr>').join('')
+      +'</tbody></table></div>';
+  }
+  body.innerHTML=h;
+  fbsEl('dc-hsa-edit').onclick=function(){ closeModal('dcHsAlertModal'); editDC(idx); };
+  openModal('dcHsAlertModal');
+}
+function dcHsQuickAdd(idx,k){
+  const rec=db[idx]; if(!rec) return;
+  const p=dcHsProblems(rec)[k]; if(!p||!p.hs) return;
+  const hs=fbsHsFmt(p.hs);
+  if(fbsHsDigits(hs).length!==8){ toast('HS Code 8 digits ka nahi hai — DC edit karke theek karein','warning'); return; }
+  const dcU=(fbsUomKey(p.uom)==='pcs')?'Nos, Pcs':(p.uom||'Nos, Pcs');
+  const sameU=fbsData.master.find(x=>fbsHsDigits(x.hs)===fbsHsDigits(hs)&&fbsUomKey(x.uom)===fbsUomKey(p.uom));
+  const uom=sameU?sameU.uom:dcU, tax=fbsNum(p.tax);
+  if(fbsData.master.some(x=>fbsHsDigits(x.hs)===fbsHsDigits(hs)&&fbsUomKey(x.uom)===fbsUomKey(uom)&&fbsNum(x.tax)===tax)){ toast('Ye HS Code + UOM + Tax % pehle se list mein hai','info'); return; }
+  const last=fbsLastSaved();
+  let start=/^\d{4}-\d{2}$/.test(rec.invDate||'')?rec.invDate:String(rec.date||'').slice(0,7);
+  if(!/^\d{4}-\d{2}$/.test(start)) start=fbsNowMonth();
+  let shifted=false;
+  if(last&&start<=last){ start=fbsNextMonth(last); shifted=true; }
+  fbsData.master.unshift({id:fbsUid(),hs:hs,uom:uom,tax:tax,startMonth:start,openQty:0,openAmt:0,addedAt:Date.now()});
+  saveFbsData(); fbsAudit('create','FBR Stock HS code added from DC alert: '+hs+' '+uom+' '+tax+'%');
+  toast('✅ '+hs+' ('+tax+'%) FBR Stock mein add ho gaya — start: '+fbsMonthLabel(start)+(shifted?' (pichle mahine saved hain). FBR Stock tab mein Opening check karein.':'. FBR Stock tab mein Opening check karein.'),'success');
+  try{ renderRecords(); }catch(e){}
+  try{ if(fbsUi.month) renderFbsTab(); }catch(e){}
+  dcHsAlertOpen(idx);
 }
 
 // ==================== HS CODE TAX RATE BREAKDOWN ====================
