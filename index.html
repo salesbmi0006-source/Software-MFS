@@ -5072,13 +5072,12 @@ Switch Socket"></textarea>
       <div class="form-group"><label>Date *</label><input type="date" id="dc-date"></div>
       <div class="form-group"><label>DC No *</label><input type="text" id="dc-dcno" placeholder="e.g. 1401/1675" onblur="checkDuplicateDC()"><div id="dc-dup-warn" style="color:var(--neon3);font-size:11px;display:none;">⚠️ Duplicate DC number!</div></div>
       <div class="form-group"><label>Invoice No</label><input type="text" id="dc-invno" placeholder="Invoice number"></div>
-      <div class="form-group"><label>Invoice Month</label><input type="month" id="dc-invdate" oninput="dcInvDayClamp()"></div>
-      <div class="form-group" style="max-width:110px;"><label>Invoice Day</label><input type="number" id="dc-invday" min="1" max="31" step="1" placeholder="Day (1-31)" oninput="dcInvDayClamp()" title="Invoice kis din (tarikh) ko bana — Month ke saath"></div>
+      <div class="form-group"><label>Invoice Date</label><input type="date" id="dc-invdate" title="Invoice ki poori tarikh (din-mahina-saal)"></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Party Name *</label><input type="text" id="dc-party" list="party-list" placeholder="Select or type party name"><datalist id="party-list"></datalist><datalist id="employee-list"></datalist></div>
+      <div class="form-group"><label>Party Name *</label><input type="text" id="dc-party" list="party-list" oninput="dcRefreshUnitList()" onchange="dcRefreshUnitList()" placeholder="Select or type party name"><datalist id="party-list"></datalist><datalist id="employee-list"></datalist></div>
       <datalist id="desc-master-list"></datalist>
-      <div class="form-group"><label>Unit Name</label><input type="text" id="dc-unit" placeholder="Unit/Branch"></div>
+      <div class="form-group"><label>Unit Name</label><input type="text" id="dc-unit" list="dc-unit-list" placeholder="Unit/Branch" autocomplete="off"><datalist id="dc-unit-list"></datalist></div>
       <div class="form-group"><label>PO No</label><div style="display:flex;gap:6px;"><input type="text" id="dc-pono" placeholder="Purchase Order No" style="flex:1;"><button type="button" class="btn btn-neon btn-xs" onclick="openPOPickerFromDC()" title="Auto-fill party & items from this PO">📋 Load from PO</button></div></div>
     </div>
     <div class="form-row">
@@ -7620,17 +7619,24 @@ function sortDropdownHtml(id, onchangeFn, defaultVal){
   </select>`;
 }
 // v114: Invoice Day (optional). invDate stays 'YYYY-MM' (reports/filters unchanged), invDay = 'DD'.
-function dcInvDayClamp(){
-  const m=document.getElementById('dc-invdate'), d=document.getElementById('dc-invday'); if(!m||!d||d.value==='') return;
-  let v=parseInt(d.value,10); if(isNaN(v)||v<1){ d.value=''; return; }
-  let max=31; if(/^\d{4}-\d{2}$/.test(m.value||'')){ const y=+m.value.slice(0,4), mo=+m.value.slice(5,7); max=new Date(y,mo,0).getDate(); }
-  if(v>max) v=max; d.value=String(v);
+// Unit Name suggestions: units already used on this party's DCs (all units if party box is empty)
+function dcRefreshUnitList(){
+  const dl=document.getElementById('dc-unit-list'); if(!dl) return;
+  const party=(document.getElementById('dc-party')?.value||'').trim();
+  const set=new Set();
+  (db||[]).forEach(r=>{
+    if(party && r.partyName!==party) return;
+    const u=String(r.unitName||'').trim(); if(u && u!=='undefined') set.add(u);
+  });
+  try{ (purchaseOrders||[]).forEach(p=>{ if((!party||p.supplier===party) && p.unit) set.add(String(p.unit).trim()); }); }catch(e){}
+  dl.innerHTML=[...set].sort((a,b)=>a.localeCompare(b)).map(u=>`<option value="${String(u).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">`).join('');
 }
-function dcInvDayValue(){
-  const d=document.getElementById('dc-invday'), m=document.getElementById('dc-invdate');
-  if(!d||!m||!m.value) return '';
-  const v=parseInt(d.value,10); if(isNaN(v)||v<1) return '';
-  return String(Math.min(v,31)).padStart(2,'0');
+function dcInvDateParts(){
+  const e=document.getElementById('dc-invdate'); const v=(e&&e.value)||'';
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(v)) return {month:'',day:''};
+  const month=v.slice(0,7);
+  if(e.dataset.legacy && v===e.dataset.legacy+'-01') return {month,day:''};
+  return {month,day:v.slice(8,10)};
 }
 function invFullDate(rec){ if(!rec||!rec.invDate) return ''; return rec.invDay?(rec.invDate+'-'+String(rec.invDay).padStart(2,'0')):rec.invDate; }
 function fmtDate(d){ if(!d) return ''; try{ return new Date(d).toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'}); }catch{return d;} }
@@ -8514,7 +8520,8 @@ function openModal_addDc(){
   ['dc-freight','dc-freight-by','dc-freight-note'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
   updateFreightPreview();
   document.getElementById('dc-invdate').value='';
-  { const _d=document.getElementById('dc-invday'); if(_d) _d.value=''; }
+  document.getElementById('dc-invdate').dataset.legacy='';
+  dcRefreshUnitList();
   document.getElementById('dc-party').value='';
   document.getElementById('dc-ready').checked=false;
   document.getElementById('dc-cancelled').checked=false;
@@ -8536,10 +8543,14 @@ function _editDCOpen(idx){
   document.getElementById('dc-date').value=rec.date||'';
   document.getElementById('dc-dcno').value=rec.dcNo||'';
   document.getElementById('dc-invno').value=rec.invNo||'';
-  document.getElementById('dc-invdate').value=rec.invDate||'';
-  { const _d=document.getElementById('dc-invday'); if(_d) _d.value = rec.invDay ? String(parseInt(rec.invDay,10)||'') : ''; }
+  { // invDate stored as 'YYYY-MM' (+ invDay 'DD'); old month-only records open as 1st and stay month-only unless changed
+    const _e=document.getElementById('dc-invdate');
+    _e.value = rec.invDate ? (rec.invDate+'-'+(rec.invDay?String(rec.invDay).padStart(2,'0'):'01')) : '';
+    _e.dataset.legacy = (rec.invDate && !rec.invDay) ? rec.invDate : '';
+  }
   document.getElementById('dc-party').value=rec.partyName||'';
   document.getElementById('dc-unit').value=rec.unitName||'';
+  dcRefreshUnitList();
   document.getElementById('dc-pono').value=rec.poNo||'';
   document.getElementById('dc-note').value=rec.note||'';
   // Freight: top-level field is the source of truth; older records that only had
@@ -8601,7 +8612,7 @@ function addItemRow(it=null){
   tr.dataset.rowid = rowId;
   tr.dataset.iid = (it&&it.iid)?it.iid:uid();
   tr.innerHTML = `
-    <td><input type="text" value="${desc}" placeholder="Description" list="desc-master-list" oninput="updateGrandTotal();dcAutoFillHsCode(this)" onchange="dcAutoFillHsCode(this)" style="min-width:180px;"></td>
+    <td><input type="text" value="${desc}" placeholder="Description" list="desc-master-list" oninput="updateGrandTotal();dcAutoFillHsCode(this);dcAutoFillRate(this)" onchange="dcAutoFillHsCode(this);dcAutoFillRate(this)" style="min-width:180px;"></td>
     <td><input type="text" value="${hscode}" placeholder="HS Code" oninput="formatHsCodeInput(this)" style="width:110px;"></td>
     <td><select onchange="updateGrandTotal()" style="width:70px;">
       ${['Pcs','Nos','Sets','Kg','Mtr','Box','Rolls','Lot','Units','Ltr','Bags','Sheets'].map(u=>`<option ${u===uom?'selected':''}>${u}</option>`).join('')}
@@ -8618,7 +8629,7 @@ function addItemRow(it=null){
       ${it?qtyItemHistHTML(it):''}
     </td>
     <td class="item-net" style="font-weight:800;color:var(--neon4);font-size:12px;">${_qn(net)}${rej>0?`<div style="font-size:9px;font-weight:600;color:var(--danger);">${_qn(origQ)} − ${_qn(rej)}</div>`:''}</td>
-    <td><input type="number" class="it-rate" value="${rate}" placeholder="0.00" oninput="calcRow(this);updateGrandTotal()" style="width:90px;"></td>
+    <td><input type="number" class="it-rate" value="${rate}" placeholder="0.00" oninput="this.dataset.auto='0';calcRow(this);updateGrandTotal()" style="width:90px;"></td>
     <td><input type="number" class="it-tax" value="${tax}" placeholder="18" oninput="calcRow(this);updateGrandTotal()" style="width:55px;"></td>
     <td class="item-basic" style="color:var(--neon4);font-size:11px;">${fmt(basic)}</td>
     <td class="item-taxamt" style="color:var(--neon5);font-size:11px;">${fmt(taxAmt)}</td>
@@ -8671,6 +8682,36 @@ function findHsCodeForDesc(desc, partyName){
 }
 // Called from the DC item row's Description field (oninput + onchange) to keep
 // the HS Code box in sync automatically as the user types or picks a suggestion.
+// Rate auto-fill: same party's most recent rate for this exact description (same Unit preferred).
+// Fills only an empty rate box or one that was itself auto-filled; a rate you typed is never overwritten.
+function findRateForDesc(desc, partyName, unitName){
+  const n=normDesc(desc); if(!n||!partyName) return null;
+  let best=null;
+  (db||[]).forEach((rec,i)=>{
+    if(rec.partyName!==partyName || rec.voidOnly) return;
+    if(typeof editingDcIdx!=='undefined' && editingDcIdx!==null && i===editingDcIdx) return;
+    (rec.items||[]).forEach(it=>{
+      if(!it || normDesc(it.desc)!==n) return;
+      const rate=parseFloat(it.rate); if(!(rate>0)) return;
+      const su = unitName && String(rec.unitName||'').trim().toLowerCase()===unitName.toLowerCase() ? 1 : 0;
+      const k=[su, rec.date||'', i];
+      if(!best || k[0]>best.k[0] || (k[0]===best.k[0] && (k[1]>best.k[1] || (k[1]===best.k[1] && k[2]>best.k[2])))) best={k, rate:it.rate};
+    });
+  });
+  return best?best.rate:null;
+}
+function dcAutoFillRate(inputEl){
+  const tr=inputEl.closest('tr'); if(!tr) return;
+  const rateEl=tr.querySelector('.it-rate'); if(!rateEl) return;
+  if(rateEl.value!=='' && rateEl.dataset.auto!=='1') return;
+  const desc=inputEl.value.trim(); if(!desc) return;
+  const party=(document.getElementById('dc-party')?.value||'').trim();
+  const unit=(document.getElementById('dc-unit')?.value||'').trim();
+  const r=findRateForDesc(desc, party, unit);
+  if(r===null) return;
+  rateEl.value=String(parseFloat(r)); rateEl.dataset.auto='1';
+  calcRow(rateEl); updateGrandTotal();
+}
 function dcAutoFillHsCode(inputEl){
   const tr = inputEl.closest('tr');
   if(!tr) return;
@@ -8937,9 +8978,6 @@ async function saveDC(){
   if(!date||!dcNo||!party){toast('Date, DC No, and Party are required!','warning');return;}
   const items = getItemsFromTable();
   if(!items.length){toast('Add at least one item!','warning');return;}
-  if((document.getElementById('dc-invday')?.value||'').trim() && !document.getElementById('dc-invdate').value){
-    toast('Invoice Day likhne se pehle Invoice Month select karein','warning'); return;
-  }
   {
     const badRej = items.find(it=>(parseFloat(it.rejQty)||0) > (parseFloat(it.origQty)||0));
     if(badRej){ toast(`"${badRej.desc}": reject qty (${badRej.rejQty}) DC qty (${badRej.origQty}) se zyada nahi ho sakti`,'warning'); return; }
@@ -9043,8 +9081,8 @@ async function saveDC(){
   }
   const rec = {
     date, dcNo, invNo:document.getElementById('dc-invno').value.trim(),
-    invDate:document.getElementById('dc-invdate').value,
-    invDay:dcInvDayValue(),
+    invDate:dcInvDateParts().month,
+    invDay:dcInvDateParts().day,
     partyName:party, unitName:document.getElementById('dc-unit').value.trim(),
     poNo:document.getElementById('dc-pono').value.trim(),
     items, cancelled:document.getElementById('dc-cancelled').checked||document.getElementById('dc-void').checked,
