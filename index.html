@@ -5072,7 +5072,8 @@ Switch Socket"></textarea>
       <div class="form-group"><label>Date *</label><input type="date" id="dc-date"></div>
       <div class="form-group"><label>DC No *</label><input type="text" id="dc-dcno" placeholder="e.g. 1401/1675" onblur="checkDuplicateDC()"><div id="dc-dup-warn" style="color:var(--neon3);font-size:11px;display:none;">⚠️ Duplicate DC number!</div></div>
       <div class="form-group"><label>Invoice No</label><input type="text" id="dc-invno" placeholder="Invoice number"></div>
-      <div class="form-group"><label>Invoice Month</label><input type="month" id="dc-invdate"></div>
+      <div class="form-group"><label>Invoice Month</label><input type="month" id="dc-invdate" oninput="dcInvDayClamp()"></div>
+      <div class="form-group" style="max-width:110px;"><label>Invoice Day</label><input type="number" id="dc-invday" min="1" max="31" step="1" placeholder="Day (1-31)" oninput="dcInvDayClamp()" title="Invoice kis din (tarikh) ko bana — Month ke saath"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Party Name *</label><input type="text" id="dc-party" list="party-list" placeholder="Select or type party name"><datalist id="party-list"></datalist><datalist id="employee-list"></datalist></div>
@@ -7618,6 +7619,20 @@ function sortDropdownHtml(id, onchangeFn, defaultVal){
     <option value="desc" ${defaultVal==='desc'?'selected':''}>Number Descending</option>
   </select>`;
 }
+// v114: Invoice Day (optional). invDate stays 'YYYY-MM' (reports/filters unchanged), invDay = 'DD'.
+function dcInvDayClamp(){
+  const m=document.getElementById('dc-invdate'), d=document.getElementById('dc-invday'); if(!m||!d||d.value==='') return;
+  let v=parseInt(d.value,10); if(isNaN(v)||v<1){ d.value=''; return; }
+  let max=31; if(/^\d{4}-\d{2}$/.test(m.value||'')){ const y=+m.value.slice(0,4), mo=+m.value.slice(5,7); max=new Date(y,mo,0).getDate(); }
+  if(v>max) v=max; d.value=String(v);
+}
+function dcInvDayValue(){
+  const d=document.getElementById('dc-invday'), m=document.getElementById('dc-invdate');
+  if(!d||!m||!m.value) return '';
+  const v=parseInt(d.value,10); if(isNaN(v)||v<1) return '';
+  return String(Math.min(v,31)).padStart(2,'0');
+}
+function invFullDate(rec){ if(!rec||!rec.invDate) return ''; return rec.invDay?(rec.invDate+'-'+String(rec.invDay).padStart(2,'0')):rec.invDate; }
 function fmtDate(d){ if(!d) return ''; try{ return new Date(d).toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'}); }catch{return d;} }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 // ==================== QTY REJECTION (DC items) ====================
@@ -7674,15 +7689,25 @@ function nextRejCode(){
 }
 function applyQtyLogs(items, oldItems){
   const user=_curUserName(), ts=new Date().toISOString(), changes=[], today=localDateStr();
-  (items||[]).forEach(it=>{
-    const old=(oldItems||[]).find(o=>o&&o.iid&&o.iid===it.iid);
+  (items||[]).forEach((it,ix)=>{
+    let old=(oldItems||[]).find(o=>o&&o.iid&&o.iid===it.iid);
+    if(!old){ const o2=(oldItems||[])[ix]; if(o2 && !o2.iid && o2.desc===it.desc) old=o2; } // older rows saved without iid
     const log=(old&&Array.isArray(old.qtyLog))?old.qtyLog.slice():[];
     const orig=parseFloat(it.origQty)||0, rej=parseFloat(it.rejQty)||0, net=parseFloat(it.qty)||0;
     const ext=()=>({by:it.rejBy||'', from:it.rejFrom||'', rejDate:it.rejDate||today});
     let entry=null;
     if(old){
       const pO=itemOrigQty(old), pR=itemRejQty(old), pN=parseFloat(old.qty)||0;
-      if(Math.abs(pO-orig)>1e-9||Math.abs(pR-rej)>1e-9){
+      if(pR>1e-9 && rej<=1e-9){
+        // v114: reject qty cleared completely -> rejection AUR uski purani history dono khatam
+        // (koi "wapas" entry nahi). Dobara reject karni ho to naya likh kar add karein (naya code banega).
+        for(let i=log.length-1;i>=0;i--){ if(log[i].kind==='reject') log.splice(i,1); }
+        changes.push(`${it.desc}: reject ${_qn(pR)} khatam (ab ${_qn(net)})`);
+        if(Math.abs(pO-orig)>1e-9){
+          entry=Object.assign({ts,user,kind:'qty-edit',prevOrig:pO,prevRej:0,prevNet:pO,orig,rej:0,net,delta:0,note:''}, ext());
+        }
+      }
+      else if(Math.abs(pO-orig)>1e-9||Math.abs(pR-rej)>1e-9){
         entry=Object.assign({ts,user,kind:(Math.abs(pR-rej)>1e-9)?'reject':'qty-edit',prevOrig:pO,prevRej:pR,prevNet:pN,orig,rej,net,delta:rej-pR,note:it.rejNote||''}, ext());
         // A NEW rejection on an item that already had one: if the date box still shows the old
         // rejection's date, treat it as today's rejection.
@@ -8308,7 +8333,7 @@ function renderRecords(){
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${rec.partyName||''}">${rec.partyName||'-'}</td>
       <td>${rec.poNo||'-'}</td>
       <td><strong style="color:var(--neon4);">${rec.invNo||'-'}</strong></td>
-      <td>${rec.invDate||'-'}</td>
+      <td>${invFullDate(rec)||'-'}</td>
       <td style="text-align:right;">
         <strong style="font-size:12px;">${fmt(total)}</strong>
         <div style="font-size:9px;color:var(--text3);line-height:1.4;">
@@ -8489,6 +8514,7 @@ function openModal_addDc(){
   ['dc-freight','dc-freight-by','dc-freight-note'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
   updateFreightPreview();
   document.getElementById('dc-invdate').value='';
+  { const _d=document.getElementById('dc-invday'); if(_d) _d.value=''; }
   document.getElementById('dc-party').value='';
   document.getElementById('dc-ready').checked=false;
   document.getElementById('dc-cancelled').checked=false;
@@ -8504,12 +8530,14 @@ function editDC(idx){ checkAndOpenWithLock(idx, ()=>_editDCOpen(idx)); }
 function _editDCOpen(idx){
   editingDcIdx = idx;
   const rec = db[idx];
+  if(rejPurgeCleared(rec)){ try{ saveData(); }catch(e){} }
   document.getElementById('dcModalTitle').textContent = '✏️ Edit DC: '+rec.dcNo;
   document.getElementById('dc-edit-id').value=idx;
   document.getElementById('dc-date').value=rec.date||'';
   document.getElementById('dc-dcno').value=rec.dcNo||'';
   document.getElementById('dc-invno').value=rec.invNo||'';
   document.getElementById('dc-invdate').value=rec.invDate||'';
+  { const _d=document.getElementById('dc-invday'); if(_d) _d.value = rec.invDay ? String(parseInt(rec.invDay,10)||'') : ''; }
   document.getElementById('dc-party').value=rec.partyName||'';
   document.getElementById('dc-unit').value=rec.unitName||'';
   document.getElementById('dc-pono').value=rec.poNo||'';
@@ -8909,6 +8937,9 @@ async function saveDC(){
   if(!date||!dcNo||!party){toast('Date, DC No, and Party are required!','warning');return;}
   const items = getItemsFromTable();
   if(!items.length){toast('Add at least one item!','warning');return;}
+  if((document.getElementById('dc-invday')?.value||'').trim() && !document.getElementById('dc-invdate').value){
+    toast('Invoice Day likhne se pehle Invoice Month select karein','warning'); return;
+  }
   {
     const badRej = items.find(it=>(parseFloat(it.rejQty)||0) > (parseFloat(it.origQty)||0));
     if(badRej){ toast(`"${badRej.desc}": reject qty (${badRej.rejQty}) DC qty (${badRej.origQty}) se zyada nahi ho sakti`,'warning'); return; }
@@ -9013,6 +9044,7 @@ async function saveDC(){
   const rec = {
     date, dcNo, invNo:document.getElementById('dc-invno').value.trim(),
     invDate:document.getElementById('dc-invdate').value,
+    invDay:dcInvDayValue(),
     partyName:party, unitName:document.getElementById('dc-unit').value.trim(),
     poNo:document.getElementById('dc-pono').value.trim(),
     items, cancelled:document.getElementById('dc-cancelled').checked||document.getElementById('dc-void').checked,
@@ -9325,7 +9357,7 @@ function addAutoLedger(rec, idx){
   const exists = ledgerData.some(l=>l.invNo===rec.invNo && l.dcNo===rec.dcNo && l.type==='bill');
   if(exists) return;
   const entry = {
-    id:'L'+uid(), partyName:rec.partyName, date:rec.invDate?(rec.invDate+'-01'):rec.date,
+    id:'L'+uid(), partyName:rec.partyName, date:rec.invDate?(rec.invDate+'-'+(rec.invDay?String(rec.invDay).padStart(2,'0'):'01')):rec.date,
     type:'bill', refNo:rec.invNo, invNo:rec.invNo, dcNo:rec.dcNo,
     desc:`Invoice ${rec.invNo} - DC ${rec.dcNo}`,
     amount:getDCTotal(rec), deduction:0, narration:'Auto from DC record',
@@ -9370,7 +9402,7 @@ function syncAutoLedgerFromDC(rec, oldRec){
   if(entry){
     entry.amount = getDCTotal(rec);
     entry.items = rec.items||[];
-    entry.date = rec.invDate?(rec.invDate+'-01'):rec.date;
+    entry.date = rec.invDate?(rec.invDate+'-'+(rec.invDay?String(rec.invDay).padStart(2,'0'):'01')):rec.date;
     entry.invDate = rec.invDate||'';
     entry.poNo = rec.poNo||'';
     entry.partyName = rec.partyName;
@@ -9500,7 +9532,7 @@ function quickView(idx){
     <div><label>Date</label><div class="accent-box">${fmtDate(rec.date)}</div></div>
     <div><label>Party</label><div class="accent-box">${rec.partyName}</div></div>
     <div><label>Status</label><div class="accent-box">${statusBadge(st)}</div></div>
-    <div><label>Invoice</label><div class="accent-box">${rec.invNo||'-'} / ${rec.invDate||'-'}</div></div>
+    <div><label>Invoice</label><div class="accent-box">${rec.invNo||'-'} / ${invFullDate(rec)||'-'}</div></div>
     <div><label>PO No</label><div class="accent-box">${rec.poNo||'-'}</div></div>
   </div>`;
   // If this DC is linked to a PO, surface that PO's contact Person Name (and their
@@ -23226,8 +23258,19 @@ function printReturnReceipt(size){
 // (code, note, rejected-by, source, date). This tab simply READS those events, so it is always in sync
 // with the DCs — nothing is entered twice.
 // Old rejections (made before this feature) get a code + a log entry once, in date order.
+// v114: items whose reject qty is 0 must not keep old reject records (cleared rejections stay cleared)
+function rejPurgeCleared(rec){
+  let ch=false;
+  ((rec&&rec.items)||[]).forEach(it=>{
+    if(!it || itemRejQty(it)>0 || !Array.isArray(it.qtyLog)) return;
+    const keep=it.qtyLog.filter(e=>e.kind!=='reject');
+    if(keep.length!==it.qtyLog.length){ if(keep.length) it.qtyLog=keep; else delete it.qtyLog; ch=true; }
+  });
+  return ch;
+}
 function rejMigrate(){
   let changed = false; const pending = [];
+  (db||[]).forEach(rec=>{ if(rejPurgeCleared(rec)) changed=true; });
   (db||[]).forEach(rec=>(rec.items||[]).forEach(it=>{
     const rej = itemRejQty(it);
     let log = Array.isArray(it.qtyLog) ? it.qtyLog : null;
